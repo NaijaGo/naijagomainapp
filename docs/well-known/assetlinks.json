@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.naijago.naija_go",
+      "sha256_cert_fingerprints": [
+        "82:0C:58:D6:BF:74:C1:F1:B1:C6:2C:F9:17:2F:1E:FF:D7:A5:83:2A:CE:AF:2D:96:94:B5:0B:4E:0F:5C:63:85"
+      ]
+    }
+  }
+]

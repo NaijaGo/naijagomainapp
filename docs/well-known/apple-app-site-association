@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["9M78583J9Z.com.naijago.naijaGo"],
+        "components": [
+          {
+            "/": "/signup*"
+          }
+        ]
+      }
+    ]
+  }
+}
