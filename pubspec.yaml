@@ -1,11 +1,11 @@
 name: naija_go
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.3+16
 
 environment:
-  sdk: '>=3.8.1 <4.0.0'
+  sdk: ">=3.8.1 <4.0.0"
 
 dependencies:
   flutter:
@@ -24,7 +24,7 @@ dependencies:
   flutterwave_standard: ^1.0.7
   geolocator: ^14.0.2
   geocoding: ^4.0.0
-  uuid: ^4.4.0 
+  uuid: ^4.4.0
   socket_io_client: ^2.0.3+1
   file_picker: ^8.0.0+1
   cached_network_image: ^3.2.3
@@ -32,7 +32,7 @@ dependencies:
   lottie: ^2.2.0
   shimmer: ^3.0.0
   crypto: ^3.0.3
-  local_auth: ^2.1.8 
+  local_auth: ^2.1.8
   flutter_secure_storage: ^8.1.0
   photo_view: ^0.15.0
   onesignal_flutter: ^5.1.2
@@ -41,43 +41,42 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0     
-  flutter_launcher_icons: ^0.13.1   # 👈 Added for app icon
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1 # 👈 Added for app icon
 
 flutter:
   uses-material-design: true
 
   assets:
-      - assets/categories/
-      - assets/
-      - assets/academic_text_book.jpg
-      - assets/bg-erased_logo.png
-      - assets/naijago-flier1.jpg
-      - assets/naijago-flier2.jpg
-      - assets/naijago-flier3.jpg
-      - assets/ads1.png
-      - assets/ads2.png
-      - assets/ads3.png
-      - assets/ads4.png
-      - assets/ads5.png
-      - assets/prod_flier1.jpg
-      - assets/prod_flier2.jpg
-      - assets/prod_flier3.jpg
-      - assets/slider_app_five.jpg
-      - assets/slider_app_four.jpg
-      - assets/slider_app_one.jpg
-      - assets/slider_app_seven.jpg
-      - assets/slider_app_six.jpg
-      - assets/Artboard1.jpeg
-      - assets/Artboard2.jpeg
-      - assets/Artboard3.jpeg
-      - assets/Artboard4.jpeg
-      - assets/Artboard5.jpeg
-      - assets/Artboard6.jpeg
-      - assets/Artboard7.jpeg
-      - assets/app_icon.jpg      # 👈 Add your app icon here
-      - assets/naijago-9.jpg # 👈 Add your splash screen image here
-      - .env
+    - assets/categories/
+    - assets/
+    - assets/academic_text_book.jpg
+    - assets/bg-erased_logo.png
+    - assets/naijago-flier1.jpg
+    - assets/naijago-flier2.jpg
+    - assets/naijago-flier3.jpg
+    - assets/ads1.png
+    - assets/ads2.png
+    - assets/ads3.png
+    - assets/ads4.png
+    - assets/ads5.png
+    - assets/prod_flier1.jpg
+    - assets/prod_flier2.jpg
+    - assets/prod_flier3.jpg
+    - assets/slider_app_five.jpg
+    - assets/slider_app_four.jpg
+    - assets/slider_app_one.jpg
+    - assets/slider_app_seven.jpg
+    - assets/slider_app_six.jpg
+    - assets/Artboard1.jpeg
+    - assets/Artboard2.jpeg
+    - assets/Artboard3.jpeg
+    - assets/Artboard4.jpeg
+    - assets/Artboard5.jpeg
+    - assets/Artboard6.jpeg
+    - assets/Artboard7.jpeg
+    - assets/app_icon.jpg # 👈 Add your app icon here
+    - assets/naijago-9.jpg # 👈 Add your splash screen image here
 
 # 👇 App Icon Config
 flutter_icons:
