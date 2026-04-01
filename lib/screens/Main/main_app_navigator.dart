@@ -247,7 +247,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
 
   List<Widget> get _widgetOptions {
     const homeScreen = HomeScreen();
-    const categoriesScreen = CategoriesScreen();
+    const categoriesScreen = CategoriesScreen(showAppBar: false);
 
     final protectedCartScreen = GuestPlaceholderScreen(
       title: 'Shopping Cart',

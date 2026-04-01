@@ -1,10 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../constants.dart'
-    show customerSupportPhoneNumber, customerSupportWhatsAppUrl;
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import 'category_products_screen.dart';
@@ -19,7 +16,9 @@ const Color borderGrey = AppTheme.borderGrey;
 const Color lightGrey = AppTheme.mutedText;
 
 class CategoriesScreen extends StatefulWidget {
-  const CategoriesScreen({super.key});
+  final bool showAppBar;
+
+  const CategoriesScreen({super.key, this.showAppBar = true});
 
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
@@ -34,7 +33,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   final Map<String, GlobalKey> _sidebarKeys = {};
   final GlobalKey _rightPaneViewportKey = GlobalKey();
   String? _activeSection;
-  bool _isAutoScrollingToSection = false;
 
   final Map<String, List<String>> _allCategories = {
     'Home & Office': [
@@ -553,17 +551,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     });
   }
 
-  void _handleSidebarTap(String categoryName) {
-    if (_searchQuery.isNotEmpty) {
-      _clearSearch();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _scrollToSection(categoryName);
-      });
-      return;
-    }
-
-    _scrollToSection(categoryName);
+  void _handleSidebarTap(BuildContext context, String categoryName) {
+    setState(() => _activeSection = categoryName);
+    _handleCategoryTap(context, categoryName, null);
   }
 
   void _showPharmacyOptions(BuildContext context) {
@@ -783,29 +773,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     }
   }
 
-  void _scrollToSection(String categoryName) {
-    final key = _sectionKeys[categoryName];
-    if (key?.currentContext != null) {
-      setState(() => _activeSection = categoryName);
-      _bringSidebarItemIntoView(categoryName);
-      _isAutoScrollingToSection = true;
-      Scrollable.ensureVisible(
-        key!.currentContext!,
-        duration: const Duration(milliseconds: 550),
-        curve: Curves.easeInOut,
-        alignment: 0.0,
-      ).whenComplete(() {
-        _isAutoScrollingToSection = false;
-        _syncActiveSectionFromScroll();
-      });
-    }
-  }
-
   void _syncActiveSectionFromScroll() {
-    if (!mounted ||
-        _searchQuery.isNotEmpty ||
-        _isAutoScrollingToSection ||
-        _filteredCategories.isEmpty) {
+    if (!mounted || _searchQuery.isNotEmpty || _filteredCategories.isEmpty) {
       return;
     }
 
@@ -864,159 +833,44 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  Future<void> _launchSupportUri(Uri uri, String failureMessage) async {
-    try {
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched && mounted) {
-        _showSupportFeedback(failureMessage);
-      }
-    } catch (_) {
-      if (!mounted) return;
-      _showSupportFeedback(failureMessage);
-    }
-  }
-
-  Future<void> _openWhatsAppSupport() async {
-    await _launchSupportUri(
-      Uri.parse(customerSupportWhatsAppUrl),
-      'Unable to open WhatsApp support right now.',
-    );
-  }
-
-  Future<void> _callCustomerSupport() async {
-    await _launchSupportUri(
-      Uri(scheme: 'tel', path: customerSupportPhoneNumber),
-      'Unable to start a support call right now.',
-    );
-  }
-
-  void _showSupportFeedback(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Widget _buildSupportAction({
-    required bool isCompactLayout,
-    required IconData icon,
-    required String label,
-    required Color accent,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Ink(
-          height: isCompactLayout ? 38 : 42,
-          padding: EdgeInsets.symmetric(
-            horizontal: isCompactLayout ? 10 : 12,
-            vertical: isCompactLayout ? 8 : 10,
-          ),
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: accent.withValues(alpha: 0.18)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: isCompactLayout ? 16 : 18, color: accent),
-              SizedBox(width: isCompactLayout ? 8 : 10),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: secondaryBlack,
-                    fontSize: isCompactLayout ? 11.2 : 12.2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSidebarSupportCard(bool isCompactLayout) {
+  Widget _buildSearchBar() {
     return Container(
-      margin: EdgeInsets.fromLTRB(
-        isCompactLayout ? 8 : 10,
-        8,
-        isCompactLayout ? 8 : 10,
-        isCompactLayout ? 10 : 12,
-      ),
-      padding: EdgeInsets.all(isCompactLayout ? 10 : 12),
+      height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFC),
+        color: white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderGrey.withValues(alpha: 0.9)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: isCompactLayout ? 28 : 32,
-                height: isCompactLayout ? 28 : 32,
-                decoration: BoxDecoration(
-                  color: primaryNavy.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.support_agent_rounded,
-                  color: primaryNavy,
-                  size: isCompactLayout ? 16 : 18,
-                ),
-              ),
-              SizedBox(width: isCompactLayout ? 8 : 10),
-              Expanded(
-                child: Text(
-                  'Support',
-                  style: TextStyle(
-                    color: secondaryBlack,
-                    fontSize: isCompactLayout ? 12 : 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+        border: Border.all(color: borderGrey.withValues(alpha: 0.7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
-          SizedBox(height: isCompactLayout ? 6 : 8),
-          Text(
-            isCompactLayout ? 'Need help?' : 'Need help with an order or item?',
-            style: TextStyle(
-              color: lightGrey,
-              fontSize: isCompactLayout ? 10.8 : 11.6,
-              height: 1.4,
+        ],
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          const Icon(Icons.search_rounded, color: lightGrey, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Search categories or products...',
+                hintStyle: TextStyle(color: lightGrey, fontSize: 14),
+                border: InputBorder.none,
+              ),
+              style: const TextStyle(color: secondaryBlack),
             ),
           ),
-          SizedBox(height: isCompactLayout ? 10 : 12),
-          _buildSupportAction(
-            isCompactLayout: isCompactLayout,
-            icon: Ionicons.logo_whatsapp,
-            label: 'WhatsApp',
-            accent: const Color(0xFF25D366),
-            onTap: _openWhatsAppSupport,
-          ),
-          SizedBox(height: isCompactLayout ? 8 : 10),
-          _buildSupportAction(
-            isCompactLayout: isCompactLayout,
-            icon: Icons.call_rounded,
-            label: 'Call support',
-            accent: primaryNavy,
-            onTap: _callCustomerSupport,
-          ),
+          if (_searchQuery.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.clear, color: lightGrey, size: 20),
+              onPressed: _clearSearch,
+            )
+          else
+            const SizedBox(width: 12),
         ],
       ),
     );
@@ -1027,187 +881,177 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompactLayout = screenWidth < 390;
     final sidebarWidth = screenWidth < 360
-        ? 112.0
+        ? 106.0
         : screenWidth < 430
-        ? 122.0
-        : 138.0;
+        ? 118.0
+        : 128.0;
     final sidebarHeaderPadding = EdgeInsets.fromLTRB(
       isCompactLayout ? 10 : 14,
-      isCompactLayout ? 12 : 14,
-      isCompactLayout ? 10 : 14,
       isCompactLayout ? 8 : 10,
+      isCompactLayout ? 8 : 12,
+      isCompactLayout ? 6 : 8,
     );
     final sidebarItemPadding = EdgeInsets.symmetric(
-      horizontal: isCompactLayout ? 6 : 8,
-      vertical: 2,
+      horizontal: isCompactLayout ? 4 : 6,
+      vertical: 1,
     );
-    final sidebarTilePadding = EdgeInsets.symmetric(
-      horizontal: isCompactLayout ? 10 : 12,
-      vertical: isCompactLayout ? 12 : 14,
+    final sidebarTilePadding = EdgeInsets.fromLTRB(
+      isCompactLayout ? 10 : 12,
+      isCompactLayout ? 10 : 12,
+      isCompactLayout ? 8 : 10,
+      isCompactLayout ? 10 : 12,
     );
 
     return Scaffold(
-      backgroundColor: softGrey,
-      appBar: AppBar(
-        backgroundColor: white,
-        foregroundColor: secondaryBlack,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 16,
-        title: Container(
-          height: 46,
-          decoration: BoxDecoration(
-            color: white,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search categories or products...',
-                    hintStyle: const TextStyle(color: lightGrey, fontSize: 14),
-                    prefixIcon: const Icon(Icons.search, color: lightGrey),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 8,
-                    ),
-                  ),
-                  style: const TextStyle(color: secondaryBlack),
+      backgroundColor: white,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: white,
+              foregroundColor: secondaryBlack,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              titleSpacing: 18,
+              title: const Text(
+                'Categories',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 24,
+                  color: secondaryBlack,
                 ),
               ),
-              if (_searchQuery.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.clear, color: lightGrey, size: 20),
-                  onPressed: _clearSearch,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Container(
+                  height: 1,
+                  color: borderGrey.withValues(alpha: 0.7),
                 ),
-            ],
-          ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: borderGrey.withValues(alpha: 0.7)),
-        ),
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: sidebarWidth,
-            decoration: BoxDecoration(
-              color: white,
-              border: Border(
-                right: BorderSide(color: borderGrey.withValues(alpha: 0.7)),
               ),
+            )
+          : null,
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+              child: _buildSearchBar(),
             ),
-            child: Column(
-              children: [
-                Padding(
-                  padding: sidebarHeaderPadding,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Categories',
-                      style: TextStyle(
-                        color: secondaryBlack,
-                        fontSize: isCompactLayout ? 13.5 : 15,
-                        fontWeight: FontWeight.w800,
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: sidebarWidth,
+                    decoration: BoxDecoration(
+                      color: white,
+                      border: Border(
+                        right: BorderSide(
+                          color: borderGrey.withValues(alpha: 0.8),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    controller: _leftPaneController,
-                    padding: const EdgeInsets.only(bottom: 12),
-                    children: [
-                      ..._filteredCategories.map((entry) {
-                        final categoryName = entry.key;
-                        final isActive = _activeSection == categoryName;
-                        final sidebarKey = _sidebarKeys.putIfAbsent(
-                          categoryName,
-                          () => GlobalKey(),
-                        );
-
-                        return Padding(
-                          key: sidebarKey,
-                          padding: sidebarItemPadding,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () => _handleSidebarTap(categoryName),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 220),
-                              constraints: BoxConstraints(
-                                minHeight: isCompactLayout ? 46 : 52,
-                              ),
-                              padding: sidebarTilePadding,
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? primaryNavy.withValues(alpha: 0.08)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Row(
-                                children: [
-                                  if (isActive)
-                                    Container(
-                                      width: 4,
-                                      height: isCompactLayout ? 24 : 28,
-                                      margin: EdgeInsets.only(
-                                        right: isCompactLayout ? 6 : 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: primaryNavy,
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                    ),
-                                  Expanded(
-                                    child: Text(
-                                      categoryName,
-                                      softWrap: true,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: isCompactLayout ? 12.1 : 13.2,
-                                        height: isCompactLayout ? 1.28 : 1.35,
-                                        color: isActive
-                                            ? primaryNavy
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: sidebarHeaderPadding,
+                          child: const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Categories',
+                              style: TextStyle(
+                                color: secondaryBlack,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
-                        );
-                      }),
-                    ],
+                        ),
+                        Expanded(
+                          child: ListView(
+                            controller: _leftPaneController,
+                            padding: const EdgeInsets.only(bottom: 16),
+                            children: [
+                              ..._filteredCategories.map((entry) {
+                                final categoryName = entry.key;
+                                final isActive = _activeSection == categoryName;
+                                final sidebarKey = _sidebarKeys.putIfAbsent(
+                                  categoryName,
+                                  () => GlobalKey(),
+                                );
+
+                                return Padding(
+                                  key: sidebarKey,
+                                  padding: sidebarItemPadding,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () => _handleSidebarTap(
+                                      context,
+                                      categoryName,
+                                    ),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      constraints: BoxConstraints(
+                                        minHeight: isCompactLayout ? 44 : 48,
+                                      ),
+                                      padding: sidebarTilePadding,
+                                      decoration: BoxDecoration(
+                                        color: isActive
+                                            ? primaryNavy.withValues(
+                                                alpha: 0.04,
+                                              )
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border(
+                                          left: BorderSide(
+                                            color: isActive
+                                                ? accentGreen
+                                                : Colors.transparent,
+                                            width: 4,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        categoryName,
+                                        softWrap: true,
+                                        style: TextStyle(
+                                          fontWeight: isActive
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                          fontSize: isCompactLayout
+                                              ? 11.8
+                                              : 12.6,
+                                          height: isCompactLayout ? 1.24 : 1.3,
+                                          color: isActive
+                                              ? secondaryBlack
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                _buildSidebarSupportCard(isCompactLayout),
-              ],
+                  Expanded(
+                    child: Container(
+                      color: softGrey,
+                      key: _rightPaneViewportKey,
+                      child: _searchQuery.isNotEmpty
+                          ? _buildSearchResults()
+                          : _buildCategorySections(),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Container(
-              key: _rightPaneViewportKey,
-              child: _searchQuery.isNotEmpty
-                  ? _buildSearchResults()
-                  : _buildCategorySections(),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1417,13 +1261,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      sectionName,
-                      style: TextStyle(
-                        fontSize: isCompactLayout ? 16.5 : 18,
-                        fontWeight: FontWeight.w800,
-                        color: secondaryBlack,
-                        letterSpacing: -0.2,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () =>
+                          _handleCategoryTap(context, sectionName, null),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          sectionName,
+                          style: TextStyle(
+                            fontSize: isCompactLayout ? 16.5 : 18,
+                            fontWeight: FontWeight.w800,
+                            color: secondaryBlack,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1450,23 +1302,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
             LayoutBuilder(
               builder: (context, constraints) {
-                final isVeryNarrowPane = constraints.maxWidth < 290;
-                final isNarrowPane = constraints.maxWidth < 340;
-                final crossAxisCount = isVeryNarrowPane
-                    ? 1
-                    : isNarrowPane
-                    ? 2
-                    : 3;
-                final tileHeight = isVeryNarrowPane
-                    ? 96.0
-                    : isNarrowPane
-                    ? 164.0
-                    : 156.0;
-                final tileImageSize = isVeryNarrowPane
-                    ? 52.0
-                    : isNarrowPane
-                    ? 64.0
-                    : 62.0;
+                final useThreeColumns = constraints.maxWidth >= 430;
+                final useTwoColumnMobileGrid = !useThreeColumns;
+                final crossAxisCount = useThreeColumns ? 3 : 2;
+                final tileHeight = useThreeColumns
+                    ? 156.0
+                    : isCompactLayout
+                    ? 152.0
+                    : 160.0;
+                final tileImageSize = useThreeColumns
+                    ? 62.0
+                    : isCompactLayout
+                    ? 50.0
+                    : 56.0;
                 final gridSpacing = isCompactLayout ? 10.0 : 14.0;
 
                 return GridView.builder(
@@ -1504,8 +1352,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           ),
                           child: Padding(
                             padding: EdgeInsets.symmetric(
-                              horizontal: isVeryNarrowPane ? 10 : 8,
-                              vertical: isVeryNarrowPane ? 8 : 10,
+                              horizontal: useTwoColumnMobileGrid ? 8 : 8,
+                              vertical: useTwoColumnMobileGrid ? 10 : 10,
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -1529,20 +1377,22 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 const SizedBox(height: 10),
                                 Padding(
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: isVeryNarrowPane ? 2 : 4,
+                                    horizontal: useTwoColumnMobileGrid ? 2 : 4,
                                   ),
                                   child: Text(
                                     subcat,
                                     textAlign: TextAlign.center,
-                                    maxLines: isVeryNarrowPane ? 3 : 2,
+                                    maxLines: useTwoColumnMobileGrid ? 3 : 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: isVeryNarrowPane
-                                          ? 12.8
+                                      fontSize: useTwoColumnMobileGrid
+                                          ? 11.8
                                           : isCompactLayout
                                           ? 11.8
                                           : 12.2,
-                                      height: isVeryNarrowPane ? 1.25 : 1.3,
+                                      height: useTwoColumnMobileGrid
+                                          ? 1.24
+                                          : 1.3,
                                       fontWeight: FontWeight.w600,
                                       color: secondaryBlack,
                                     ),
