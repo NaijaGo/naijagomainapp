@@ -477,15 +477,27 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
   }
 }
 
+Future<void> _loadEnvironmentConfig() async {
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (error) {
+    debugPrint('Unable to load .env configuration: $error');
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: ".env");
+  await _loadEnvironmentConfig();
 
   // Initialize OneSignal early (before runApp)
-  OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
-  // SDK v5.x FIX: Removed 'await' from initialize() since it returns void
-  OneSignal.initialize('76438b8d-4b39-49eb-805c-11eb934f5a66');
+  try {
+    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+    // SDK v5.x FIX: Removed 'await' from initialize() since it returns void
+    OneSignal.initialize('76438b8d-4b39-49eb-805c-11eb934f5a66');
+  } catch (error) {
+    debugPrint('Unable to initialize OneSignal at startup: $error');
+  }
   // CRITICAL FIX: REMOVED permission request from here - moved to NaijaGoApp initState()
 
   runApp(

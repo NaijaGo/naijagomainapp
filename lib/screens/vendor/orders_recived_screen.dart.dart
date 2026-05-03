@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -17,6 +18,7 @@ class VendorOrder {
   final String? buyerEmail;
   final String? buyerPhone;
   final String orderStatus;
+  final String rejectionReason;
   final DateTime createdAt;
   final List<VendorOrderItem> items;
 
@@ -27,6 +29,7 @@ class VendorOrder {
     this.buyerEmail,
     this.buyerPhone,
     required this.orderStatus,
+    this.rejectionReason = '',
     required this.createdAt,
     required this.items,
   });
@@ -46,6 +49,7 @@ class VendorOrder {
       buyerPhone: null, // ✅ Hide phone
       // ✅ Use shipmentStatus instead of orderStatus
       orderStatus: (json['shipmentStatus'] ?? 'processing').toString(),
+      rejectionReason: (json['rejectionReason'] ?? '').toString(),
       createdAt: DateTime.tryParse(
               (json['createdAt'] ?? DateTime.now().toIso8601String()).toString()) ??
           DateTime.now(),
@@ -58,6 +62,7 @@ class VendorOrder {
 
   VendorOrder copyWith({
     String? orderStatus,
+    String? rejectionReason,
   }) {
     return VendorOrder(
       id: id,
@@ -66,6 +71,7 @@ class VendorOrder {
       buyerEmail: buyerEmail,
       buyerPhone: buyerPhone,
       orderStatus: orderStatus ?? this.orderStatus,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
       createdAt: createdAt,
       items: items,
     );
@@ -125,7 +131,7 @@ class VendorStats {
 // ====== Services (New) ======
 class OrdersService {
   static const String _ordersListEndpoint = '/api/orders/vendor';
-  static const String _updateOrderStatusEndpoint = '/api/orders';
+  static const String _shipmentsEndpoint = '/api/orders/shipments';
   // 🔗 NEW: Endpoint for vendor stats
   static const String _vendorStatsEndpoint = '/api/vendor/stats';
 
@@ -183,13 +189,61 @@ class OrdersService {
     }
   }
 
-  Future<void> updateOrderStatus(String orderId, String newStatus) async {
+  Future<void> acceptOrder(String shipmentId) async {
     final token = await _getToken();
     if (token == null) {
       throw Exception('Authentication token not found. Please log in again.');
     }
 
-    final uri = Uri.parse('$baseUrl$_updateOrderStatusEndpoint/$orderId/status');
+    final uri = Uri.parse('$baseUrl$_shipmentsEndpoint/$shipmentId/accept');
+    final resp = await http.put(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json; charset=UTF-8',
+        'Accept': 'application/json',
+      },
+    );
+
+    if (resp.statusCode != 200) {
+      final message = _safeMessage(resp.body) ?? 'Failed to accept order.';
+      throw Exception(message);
+    }
+  }
+
+  Future<void> rejectOrder(String shipmentId, String reason) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw Exception('Authentication token not found. Please log in again.');
+    }
+
+    final uri = Uri.parse('$baseUrl$_shipmentsEndpoint/$shipmentId/reject');
+    final resp = await http.put(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json; charset=UTF-8',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({'reason': reason}),
+    );
+
+    if (resp.statusCode != 200) {
+      final message = _safeMessage(resp.body) ?? 'Failed to reject order.';
+      throw Exception(message);
+    }
+  }
+
+  Future<void> updateOrderStatus(String shipmentId, String newStatus) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw Exception('Authentication token not found. Please log in again.');
+    }
+
+    final endpoint = newStatus == 'delivered'
+        ? '$_shipmentsEndpoint/$shipmentId/deliver'
+        : '$_shipmentsEndpoint/$shipmentId/status-update';
+    final uri = Uri.parse('$baseUrl$endpoint');
     final resp = await http.put(
       uri,
       headers: {
@@ -229,6 +283,9 @@ class _OrdersRecivedScreenState extends State<OrdersRecivedScreen> {
   final OrdersService _ordersService = OrdersService();
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounce;
+  Timer? _pollTimer;
+  bool _hasLoadedInitialOrders = false;
+  final Set<String> _knownOrderIds = {};
 
   List<VendorOrder> _allOrders = [];
   List<VendorOrder> _displayedOrders = [];
@@ -242,40 +299,127 @@ class _OrdersRecivedScreenState extends State<OrdersRecivedScreen> {
   void initState() {
     super.initState();
     _fetchData();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchData(silent: true),
+    );
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     _debounce?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
   // ✅ UPDATED METHOD: Fetch both stats and orders
-  Future<void> _fetchData() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
+  Future<void> _fetchData({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+    }
     try {
       // Fetch stats first
       final stats = await _ordersService.fetchVendorStats();
       // Fetch orders next
-      _allOrders = await _ordersService.fetchOrders();
+      final orders = await _ordersService.fetchOrders();
+      _handleIncomingOrderAlerts(orders);
+      _allOrders = orders;
 
       setState(() {
         _vendorStats = stats;
       });
       _filterOrders();
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      });
+      if (!silent) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (!silent && mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  void _handleIncomingOrderAlerts(List<VendorOrder> orders) {
+    final incoming = orders
+        .where((order) =>
+            !_knownOrderIds.contains(order.id) &&
+            ['processing', 'accepted'].contains(order.orderStatus))
+        .toList();
+
+    _knownOrderIds
+      ..clear()
+      ..addAll(orders.map((order) => order.id));
+
+    if (!_hasLoadedInitialOrders) {
+      _hasLoadedInitialOrders = true;
+      return;
+    }
+
+    if (incoming.isEmpty || !mounted) return;
+    final newest = incoming.first;
+    _playUrgentOrderAlert();
+    _showIncomingOrderDialog(newest);
+  }
+
+  Future<void> _playUrgentOrderAlert() async {
+    try {
+      await SystemSound.play(SystemSoundType.alert);
+      await HapticFeedback.heavyImpact();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await SystemSound.play(SystemSoundType.alert);
+      await HapticFeedback.vibrate();
+    } catch (_) {
+      // Sound and haptic support varies by platform.
+    }
+  }
+
+  Future<void> _showIncomingOrderDialog(VendorOrder order) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final itemCount = order.items.fold<int>(
+          0,
+          (sum, item) => sum + item.quantity,
+        );
+        return AlertDialog(
+          title: const Text('New order received'),
+          content: Text(
+            'A customer just placed a shipment with $itemCount item${itemCount == 1 ? '' : 's'}. Accept it now if you can fulfil it.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Later'),
+            ),
+            OutlinedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _rejectOrderWithReason(order);
+              },
+              child: const Text('Reject'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _acceptOrder(order);
+              },
+              child: const Text('Accept'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _filterOrders() {
@@ -319,6 +463,97 @@ class _OrdersRecivedScreenState extends State<OrdersRecivedScreen> {
       });
       _showSnack(e.toString().replaceFirst('Exception: ', ''), isError: true);
     }
+  }
+
+  Future<void> _acceptOrder(VendorOrder order) async {
+    final oldStatus = order.orderStatus;
+    final idx = _displayedOrders.indexWhere((o) => o.id == order.id);
+    if (idx != -1) {
+      setState(() {
+        _displayedOrders[idx] = order.copyWith(orderStatus: 'accepted');
+      });
+    }
+
+    try {
+      await _ordersService.acceptOrder(order.id);
+      _showSnack('Order accepted. Start preparing it now.');
+      _fetchData();
+    } catch (e) {
+      if (idx != -1) {
+        setState(() {
+          _displayedOrders[idx] = order.copyWith(orderStatus: oldStatus);
+        });
+      }
+      _showSnack(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    }
+  }
+
+  Future<void> _rejectOrderWithReason(VendorOrder order) async {
+    final reason = await _showRejectReasonDialog();
+    if (reason == null || reason.trim().isEmpty) return;
+
+    final oldStatus = order.orderStatus;
+    final idx = _displayedOrders.indexWhere((o) => o.id == order.id);
+    if (idx != -1) {
+      setState(() {
+        _displayedOrders[idx] = order.copyWith(
+          orderStatus: 'rejected',
+          rejectionReason: reason,
+        );
+      });
+    }
+
+    try {
+      await _ordersService.rejectOrder(order.id, reason);
+      _showSnack('Order rejected with reason.');
+      _fetchData();
+    } catch (e) {
+      if (idx != -1) {
+        setState(() {
+          _displayedOrders[idx] = order.copyWith(orderStatus: oldStatus);
+        });
+      }
+      _showSnack(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    }
+  }
+
+  Future<String?> _showRejectReasonDialog() async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reject order'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 3,
+            maxLength: 300,
+            decoration: const InputDecoration(
+              labelText: 'Reason',
+              hintText: 'Example: Item is out of stock',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.length < 5) return;
+                Navigator.of(context).pop(value);
+              },
+              child: const Text('Reject order'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    return reason;
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -382,6 +617,8 @@ class _OrdersRecivedScreenState extends State<OrdersRecivedScreen> {
                       return _OrderTile(
                         order: order,
                         onUpdateStatus: _updateOrderStatus,
+                        onAccept: _acceptOrder,
+                        onReject: _rejectOrderWithReason,
                       );
                     },
                   ),
@@ -396,7 +633,8 @@ class _OrdersRecivedScreenState extends State<OrdersRecivedScreen> {
 
   Widget _buildHero() {
     final pendingActions = _allOrders
-        .where((order) => order.orderStatus != 'delivered' && order.orderStatus != 'cancelled')
+        .where((order) => !['delivered', 'cancelled', 'rejected']
+            .contains(order.orderStatus))
         .length;
 
     return Padding(
@@ -484,11 +722,12 @@ class _OrdersRecivedScreenState extends State<OrdersRecivedScreen> {
   Widget _buildFilters() {
     final statuses = const [
       ['all', 'All'],
-      ['pending', 'Pending'],
+      ['accepted', 'Accepted'],
       ['processing', 'Processing'],
       ['ready_for_pickup', 'Ready for Pickup'],
       ['out_for_delivery', 'Out for Delivery'],
       ['delivered', 'Delivered'],
+      ['rejected', 'Rejected'],
       ['cancelled', 'Cancelled'],
     ];
 
@@ -582,16 +821,24 @@ class _StatCard extends StatelessWidget {
 class _OrderTile extends StatelessWidget {
   final VendorOrder order;
   final Future<void> Function(VendorOrder order, String newStatus) onUpdateStatus;
+  final Future<void> Function(VendorOrder order) onAccept;
+  final Future<void> Function(VendorOrder order) onReject;
 
   const _OrderTile({
     required this.order,
     required this.onUpdateStatus,
+    required this.onAccept,
+    required this.onReject,
   });
 
   Color _getBadgeColor(String status) {
     switch (status) {
       case 'delivered':
         return VendorUi.success;
+      case 'accepted':
+        return VendorUi.blue;
+      case 'rejected':
+        return VendorUi.danger;
       case 'ready_for_pickup':
         return VendorUi.blue;
       case 'out_for_delivery':
@@ -710,6 +957,28 @@ class _OrderTile extends StatelessWidget {
               child: _OrderItemRow(item: item),
             ),
           ),
+          if (order.orderStatus == 'rejected' &&
+              order.rejectionReason.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: VendorUi.danger.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: VendorUi.danger.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Text(
+                'Rejected: ${order.rejectionReason}',
+                style: const TextStyle(
+                  color: VendorUi.danger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Divider(height: 1),
@@ -747,7 +1016,12 @@ class _OrderTile extends StatelessWidget {
                   ),
                 ],
               ),
-              _ActionsMenu(order: order, onUpdateStatus: onUpdateStatus),
+              _ActionsMenu(
+                order: order,
+                onUpdateStatus: onUpdateStatus,
+                onAccept: onAccept,
+                onReject: onReject,
+              ),
             ],
           ),
         ],
@@ -887,14 +1161,25 @@ class _ProductAvatar extends StatelessWidget {
 class _ActionsMenu extends StatelessWidget {
   final VendorOrder order;
   final Future<void> Function(VendorOrder order, String newStatus) onUpdateStatus;
+  final Future<void> Function(VendorOrder order) onAccept;
+  final Future<void> Function(VendorOrder order) onReject;
 
-  const _ActionsMenu({required this.order, required this.onUpdateStatus});
+  const _ActionsMenu({
+    required this.order,
+    required this.onUpdateStatus,
+    required this.onAccept,
+    required this.onReject,
+  });
 
   @override
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> menuItems = [];
 
     if (order.orderStatus == 'processing') {
+      menuItems.add({'label': 'Accept Order', 'value': 'accept', 'icon': Icons.check_circle_outline});
+      menuItems.add({'label': 'Reject with Reason', 'value': 'reject', 'icon': Icons.cancel_outlined});
+    }
+    if (order.orderStatus == 'accepted') {
       menuItems.add({'label': 'Ready for Pickup', 'value': 'ready_for_pickup', 'icon': Icons.inventory_2_outlined});
       menuItems.add({'label': 'Out for Delivery', 'value': 'out_for_delivery', 'icon': Icons.local_shipping_outlined});
     }
@@ -904,8 +1189,9 @@ class _ActionsMenu extends StatelessWidget {
     if (order.orderStatus == 'out_for_delivery') {
       menuItems.add({'label': 'Mark Delivered', 'value': 'delivered', 'icon': Icons.check_circle_outline});
     }
-    if (order.orderStatus != 'cancelled' && order.orderStatus != 'delivered') {
-      menuItems.add({'label': 'Mark Cancelled', 'value': 'cancelled', 'icon': Icons.cancel_outlined});
+    if (!['processing', 'cancelled', 'delivered', 'rejected']
+        .contains(order.orderStatus)) {
+      menuItems.add({'label': 'Reject with Reason', 'value': 'reject', 'icon': Icons.cancel_outlined});
     }
 
     if (menuItems.isEmpty) {
@@ -925,7 +1211,17 @@ class _ActionsMenu extends StatelessWidget {
           size: 18,
         ),
       ),
-      onSelected: (value) => onUpdateStatus(order, value),
+      onSelected: (value) {
+        if (value == 'accept') {
+          onAccept(order);
+          return;
+        }
+        if (value == 'reject') {
+          onReject(order);
+          return;
+        }
+        onUpdateStatus(order, value);
+      },
       itemBuilder: (context) => menuItems
           .map((m) => PopupMenuItem<String>(
                 value: m['value'] as String,

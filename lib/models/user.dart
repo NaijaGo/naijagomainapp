@@ -6,6 +6,7 @@ class User {
   final String lastName;
   final String email;
   final String phoneNumber;
+  final String alternatePhoneNumber;
   final bool isEmailVerified;
   final bool isDeviceVerified;
   final String? deviceFingerprint;
@@ -19,6 +20,12 @@ class User {
   final DateTime? vendorRejectionDate;
   final String? businessName;
   final List<String> businessCategories;
+  final String? businessLogoUrl;
+  final String? businessWhatsAppNumber;
+  final String? businessSupportPhone;
+  final double deliveryRadiusKm;
+  final int prepTimeMinutes;
+  final bool isTemporarilyClosed;
   final int totalProducts;
   final int productsSold;
   final int productsUnsold;
@@ -33,6 +40,7 @@ class User {
 
   // Common fields
   final List<dynamic> notifications;
+  final Map<String, bool> notificationPreferences;
   final DateTime createdAt;
 
   User({
@@ -41,6 +49,7 @@ class User {
     required this.lastName,
     required this.email,
     required this.phoneNumber,
+    this.alternatePhoneNumber = '',
     required this.isEmailVerified,
     required this.isDeviceVerified,
     this.deviceFingerprint,
@@ -52,6 +61,12 @@ class User {
     this.vendorRejectionDate,
     this.businessName,
     this.businessCategories = const [],
+    this.businessLogoUrl,
+    this.businessWhatsAppNumber,
+    this.businessSupportPhone,
+    this.deliveryRadiusKm = 15,
+    this.prepTimeMinutes = 30,
+    this.isTemporarilyClosed = false,
     required this.totalProducts,
     required this.productsSold,
     required this.productsUnsold,
@@ -62,6 +77,13 @@ class User {
     this.savedItems = const [],
     this.deliveryAddresses = const [],
     this.notifications = const [],
+    this.notificationPreferences = const {
+      'orderUpdates': true,
+      'appOrderAlerts': true,
+      'whatsappOrderAlerts': true,
+      'promotions': true,
+      'priceAlerts': true,
+    },
     required this.createdAt,
   });
 
@@ -84,12 +106,16 @@ class User {
   }
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final rawNotificationPreferences =
+        json['notificationPreferences'] as Map<String, dynamic>?;
+
     return User(
       id: extractId(json['_id'] ?? json['id']),
       firstName: (json['firstName'] ?? '') as String,
       lastName: (json['lastName'] ?? '') as String,
       email: (json['email'] ?? '') as String,
       phoneNumber: (json['phoneNumber'] ?? '') as String,
+      alternatePhoneNumber: (json['alternatePhoneNumber'] ?? '') as String,
       isEmailVerified: json['isEmailVerified'] as bool? ?? false,
       isDeviceVerified: json['isDeviceVerified'] as bool? ?? false,
       deviceFingerprint: json['deviceFingerprint'] as String?,
@@ -104,6 +130,13 @@ class User {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      businessLogoUrl: json['businessLogoUrl'] as String?,
+      businessWhatsAppNumber: json['businessWhatsAppNumber'] as String?,
+      businessSupportPhone: json['businessSupportPhone'] as String?,
+      deliveryRadiusKm:
+          (json['deliveryRadiusKm'] as num?)?.toDouble() ?? 15.0,
+      prepTimeMinutes: json['prepTimeMinutes'] as int? ?? 30,
+      isTemporarilyClosed: json['isTemporarilyClosed'] as bool? ?? false,
       totalProducts: json['totalProducts'] as int? ?? 0,
       productsSold: json['productsSold'] as int? ?? 0,
       productsUnsold: json['productsUnsold'] as int? ?? 0,
@@ -122,6 +155,19 @@ class User {
               .toList() ??
           [],
       notifications: json['notifications'] as List? ?? [],
+      notificationPreferences: {
+        'orderUpdates':
+            rawNotificationPreferences?['orderUpdates'] as bool? ?? true,
+        'appOrderAlerts':
+            rawNotificationPreferences?['appOrderAlerts'] as bool? ?? true,
+        'whatsappOrderAlerts':
+            rawNotificationPreferences?['whatsappOrderAlerts'] as bool? ??
+                true,
+        'promotions':
+            rawNotificationPreferences?['promotions'] as bool? ?? true,
+        'priceAlerts':
+            rawNotificationPreferences?['priceAlerts'] as bool? ?? true,
+      },
       createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
     );
   }
@@ -133,6 +179,7 @@ class User {
       'lastName': lastName,
       'email': email,
       'phoneNumber': phoneNumber,
+      'alternatePhoneNumber': alternatePhoneNumber,
       'isEmailVerified': isEmailVerified,
       'isDeviceVerified': isDeviceVerified,
       'deviceFingerprint': deviceFingerprint,
@@ -144,6 +191,12 @@ class User {
       'vendorRejectionDate': vendorRejectionDate?.toIso8601String(),
       'businessName': businessName,
       'businessCategories': businessCategories,
+      'businessLogoUrl': businessLogoUrl,
+      'businessWhatsAppNumber': businessWhatsAppNumber,
+      'businessSupportPhone': businessSupportPhone,
+      'deliveryRadiusKm': deliveryRadiusKm,
+      'prepTimeMinutes': prepTimeMinutes,
+      'isTemporarilyClosed': isTemporarilyClosed,
       'totalProducts': totalProducts,
       'productsSold': productsSold,
       'productsUnsold': productsUnsold,
@@ -154,6 +207,7 @@ class User {
       'savedItems': savedItems,
       'deliveryAddresses': deliveryAddresses.map((e) => e.toJson()).toList(),
       'notifications': notifications,
+      'notificationPreferences': notificationPreferences,
       'createdAt': createdAt.toIso8601String(),
     };
   }

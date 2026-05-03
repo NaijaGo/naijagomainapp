@@ -8,6 +8,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../constants.dart'
     hide lightGrey, primaryNavy, secondaryBlack, softGrey, white;
 import '../../models/product.dart';
+import '../../services/customer_location_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import 'product_detail_screen.dart';
@@ -33,11 +34,24 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
   String? _errorMessage;
+  double? _customerLatitude;
+  double? _customerLongitude;
 
   @override
   void initState() {
     super.initState();
-    _fetchFilteredProducts();
+    _loadCustomerLocationAndProducts();
+  }
+
+  Future<void> _loadCustomerLocationAndProducts() async {
+    final location = await CustomerLocationService().getSavedCustomerLocation();
+    if (mounted && location != null) {
+      setState(() {
+        _customerLatitude = location.latitude;
+        _customerLongitude = location.longitude;
+      });
+    }
+    await _fetchFilteredProducts();
   }
 
   Future<void> _fetchFilteredProducts() async {
@@ -46,8 +60,22 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       _errorMessage = null;
     });
 
+    final isRestaurantCategory = widget.category.toLowerCase() == 'restaurant';
+    final query = <String, String>{};
+    if (!isRestaurantCategory) {
+      query['category'] = widget.category;
+    }
+    if (_customerLatitude != null && _customerLongitude != null) {
+      query['lat'] = _customerLatitude!.toString();
+      query['lng'] = _customerLongitude!.toString();
+      query['radiusKm'] = '15';
+    }
+
+    final endpoint = isRestaurantCategory
+        ? '/api/products/restaurants'
+        : '/api/products';
     final Uri url = Uri.parse(
-      '$baseUrl/api/products?category=${Uri.encodeComponent(widget.category)}',
+      '$baseUrl$endpoint?${Uri(queryParameters: query).query}',
     );
 
     try {
@@ -303,10 +331,17 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
 
   Widget _buildProductCard(Product product, int index) {
     final heroTag = 'category-${widget.category}-${product.id}-$index';
+    final isRestaurantItem = product.isRestaurantItem;
+    final isMedicine = product.isMedicine;
     final description = product.description.trim();
     final hasDescription =
         description.isNotEmpty &&
         description.toLowerCase() != product.name.trim().toLowerCase();
+    final foodInformation = product.displayFoodInformation;
+    final distanceLabel = product.distanceAndMinutesLabel(
+      _customerLatitude,
+      _customerLongitude,
+    );
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -411,23 +446,120 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3F6FA),
+                          color: isRestaurantItem
+                              ? const Color(0xFFFFF3E8)
+                              : isMedicine
+                              ? const Color(0xFFEAFBF9)
+                              : const Color(0xFFF3F6FA),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(
-                          product.vendorBusinessName?.isNotEmpty == true
-                              ? product.vendorBusinessName!
-                              : 'Vendor unavailable',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF667085),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isRestaurantItem || isMedicine) ...[
+                              Icon(
+                                isRestaurantItem
+                                    ? Icons.restaurant_menu_rounded
+                                    : Icons.local_pharmacy_outlined,
+                                size: 12,
+                                color: isRestaurantItem
+                                    ? const Color(0xFF9A4B00)
+                                    : const Color(0xFF08756F),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            Flexible(
+                              child: Text(
+                                isRestaurantItem
+                                    ? product.displayRestaurantName
+                                    : product.vendorBusinessName?.isNotEmpty ==
+                                          true
+                                    ? product.vendorBusinessName!
+                                    : 'Vendor unavailable',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isRestaurantItem
+                                      ? const Color(0xFF9A4B00)
+                                      : isMedicine
+                                      ? const Color(0xFF08756F)
+                                      : const Color(0xFF667085),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      if (hasDescription) ...[
+                      if (isRestaurantItem || isMedicine) ...[
+                        const SizedBox(height: 7),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 12,
+                              color: Color(0xFF667085),
+                            ),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                product.displayVendorLocation,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 10.8,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF667085),
+                                  height: 1.2,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (distanceLabel != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.near_me_outlined,
+                                size: 12,
+                                color: Color(0xFF667085),
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  distanceLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10.8,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF667085),
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                      if (isRestaurantItem) ...[
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: Text(
+                            '$foodInformation\nOrder time: ${product.displayOrderWindow}',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF475467),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ] else if (hasDescription) ...[
                         const SizedBox(height: 10),
                         Expanded(
                           child: Text(
@@ -475,7 +607,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
         crossAxisCount: 2,
         crossAxisSpacing: AppSpacing.md,
         mainAxisSpacing: AppSpacing.md,
-        childAspectRatio: 0.60,
+        mainAxisExtent: 352,
       ),
       itemCount: _filteredProducts.length,
       itemBuilder: (context, index) {

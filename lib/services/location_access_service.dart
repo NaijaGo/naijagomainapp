@@ -41,6 +41,8 @@ class LocationAccessResult {
 }
 
 class LocationAccessService {
+  static const String temporaryPreciseLocationPurposeKey = 'delivery_location';
+
   static Future<LocationAccessResult> ensureAccess() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -85,13 +87,33 @@ class LocationAccessService {
     }
   }
 
+  static Future<void> requestPreciseLocationIfNeeded() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+
+    try {
+      final accuracyStatus = await Geolocator.getLocationAccuracy();
+      if (accuracyStatus != LocationAccuracyStatus.reduced) {
+        return;
+      }
+
+      await Geolocator.requestTemporaryFullAccuracy(
+        purposeKey: temporaryPreciseLocationPurposeKey,
+      );
+    } catch (error) {
+      debugPrint('Unable to request temporary precise location: $error');
+    }
+  }
+
   static LocationSettings currentLocationSettings() {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return AppleSettings(
-        accuracy: LocationAccuracy.high,
-        activityType: ActivityType.fitness,
-        pauseLocationUpdatesAutomatically: true,
+        accuracy: LocationAccuracy.bestForNavigation,
+        activityType: ActivityType.otherNavigation,
+        pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: false,
+        allowBackgroundLocationUpdates: false,
       );
     }
 

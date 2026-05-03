@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+import '../../services/analytics_service.dart';
 import '../../widgets/pharmacy_ui.dart';
 
 Future<String?> _getAuthToken() async {
@@ -21,12 +22,14 @@ class ChatScreen extends StatefulWidget {
   final String? sessionId;
   final bool isPharmacistView;
   final String? assignedPharmacistName;
+  final String? initialConsultationTopic;
 
   const ChatScreen({
     super.key,
     this.sessionId,
     this.isPharmacistView = false,
     this.assignedPharmacistName,
+    this.initialConsultationTopic,
   });
 
   @override
@@ -47,6 +50,11 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isTyping = false;
   bool _globalPharmacistOnline = false;
   bool _isBootstrapping = true;
+  bool _sentInitialConsultationTopic = false;
+  bool _isLoadingSubscriptionPlans = false;
+  bool _isPurchasingSubscription = false;
+  List<Map<String, dynamic>> _subscriptionPlans = [];
+  double _walletBalance = 0;
 
   String get _myRole => widget.isPharmacistView ? 'pharmacist' : 'user';
 
@@ -116,7 +124,24 @@ class _ChatScreenState extends State<ChatScreen> {
         final data = jsonDecode(res.body);
         _sessionId = data['_id']?.toString();
         _isAssignedToPharmacist = data['pharmacist'] != null;
+        const AnalyticsService().track(
+          eventType: 'pharmacy_consultation_start',
+          source: 'chat_screen',
+          targetType: 'chat_session',
+          targetId: _sessionId,
+          metadata: {
+            'assignedToPharmacist': _isAssignedToPharmacist,
+          },
+        );
         _connectSocket(token);
+      } else if (res.statusCode == 402) {
+        _addSystemMessage(
+          'Pharmacist chat requires an active subscription or one-time chat pass.',
+        );
+        if (mounted) {
+          setState(() => _isBootstrapping = false);
+        }
+        await _loadSubscriptionPlansAndPrompt(token);
       } else {
         _addSystemMessage(
           'Failed to start chat session. Status: ${res.statusCode}.',
@@ -131,6 +156,261 @@ class _ChatScreenState extends State<ChatScreen> {
         _isBootstrapping = false;
       });
     }
+  }
+
+  Future<void> _loadSubscriptionPlansAndPrompt(String token) async {
+    if (_isLoadingSubscriptionPlans || widget.isPharmacistView) {
+      return;
+    }
+
+    setState(() => _isLoadingSubscriptionPlans = true);
+    try {
+      final plansResponse = await http.get(
+        Uri.parse('$_apiUrl/api/pharmacist/subscription/plans'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final statusResponse = await http.get(
+        Uri.parse('$_apiUrl/api/pharmacist/subscription/status'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (plansResponse.statusCode == 200) {
+        final decoded = jsonDecode(plansResponse.body);
+        final plans = decoded['plans'];
+        _subscriptionPlans = plans is List
+            ? plans
+                  .whereType<Map>()
+                  .map((plan) => Map<String, dynamic>.from(plan))
+                  .toList()
+            : [];
+      }
+
+      if (statusResponse.statusCode == 200) {
+        final decoded = jsonDecode(statusResponse.body);
+        _walletBalance =
+            (decoded['walletBalance'] as num?)?.toDouble() ?? _walletBalance;
+      }
+
+      if (!mounted) return;
+      _showSubscriptionSheet(token);
+    } catch (e) {
+      _addSystemMessage('Could not load pharmacist subscription plans.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingSubscriptionPlans = false);
+      }
+    }
+  }
+
+  Future<void> _purchaseSubscription(String token, String planType) async {
+    if (_isPurchasingSubscription) return;
+
+    setState(() => _isPurchasingSubscription = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$_apiUrl/api/pharmacist/subscription/purchase'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'planType': planType}),
+      );
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        _walletBalance =
+            (data['walletBalance'] as num?)?.toDouble() ?? _walletBalance;
+        if (mounted) {
+          Navigator.of(context).maybePop();
+        }
+        _addSystemMessage('Pharmacist chat access is active. Connecting now.');
+        setState(() => _isBootstrapping = true);
+        await _startChatSessionAndConnect();
+      } else {
+        _addSystemMessage(
+          data['message']?.toString() ??
+              'Unable to purchase pharmacist chat access.',
+        );
+      }
+    } catch (e) {
+      _addSystemMessage('Network error while purchasing pharmacist access.');
+    } finally {
+      if (mounted) {
+        setState(() => _isPurchasingSubscription = false);
+      }
+    }
+  }
+
+  void _showSubscriptionSheet(String token) {
+    if (_subscriptionPlans.isEmpty) {
+      _addSystemMessage('No pharmacist subscription plan is currently active.');
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+              decoration: BoxDecoration(
+                color: PharmacyUi.surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: PharmacyUi.border),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Choose pharmacist access',
+                      style: TextStyle(
+                        color: PharmacyUi.deepNavy,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Wallet balance: ${_formatNaira(_walletBalance)}',
+                      style: const TextStyle(
+                        color: PharmacyUi.mutedText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ..._subscriptionPlans.map((plan) {
+                      final planType = plan['planType']?.toString() ?? '';
+                      final price = (plan['price'] as num?)?.toDouble() ?? 0;
+                      final durationDays =
+                          (plan['durationDays'] as num?)?.toInt() ?? 0;
+                      final canAfford = _walletBalance >= price;
+                      final label = plan['label']?.toString() ?? planType;
+                      final subtitle = planType == 'one_time'
+                          ? 'One consultation session'
+                          : '$durationDays days of pharmacist chat access';
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: PharmacyUi.card,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: PharmacyUi.border,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    label,
+                                    style: const TextStyle(
+                                      color: PharmacyUi.deepNavy,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    subtitle,
+                                    style: const TextStyle(
+                                      color: PharmacyUi.mutedText,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  _formatNaira(price),
+                                  style: const TextStyle(
+                                    color: PharmacyUi.teal,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                SizedBox(
+                                  height: 34,
+                                  child: ElevatedButton(
+                                    onPressed: (!canAfford ||
+                                            _isPurchasingSubscription)
+                                        ? null
+                                        : () async {
+                                            setSheetState(() {
+                                              _isPurchasingSubscription = true;
+                                            });
+                                            await _purchaseSubscription(
+                                              token,
+                                              planType,
+                                            );
+                                            if (mounted) {
+                                              setSheetState(() {
+                                                _isPurchasingSubscription =
+                                                    false;
+                                              });
+                                            }
+                                          },
+                                    style: ElevatedButton.styleFrom(
+                                      elevation: 0,
+                                      backgroundColor: PharmacyUi.deepNavy,
+                                      foregroundColor: PharmacyUi.card,
+                                      disabledBackgroundColor:
+                                          PharmacyUi.mutedText.withValues(
+                                            alpha: .18,
+                                          ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      canAfford ? 'Buy' : 'Top up',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatNaira(double value) {
+    final rounded = value.round().toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < rounded.length; i++) {
+      final remaining = rounded.length - i;
+      buffer.write(rounded[i]);
+      if (remaining > 1 && remaining % 3 == 1) {
+        buffer.write(',');
+      }
+    }
+    return '₦$buffer';
   }
 
   void _connectSocket(String token) {
@@ -148,7 +428,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socket!.onConnect((_) {
       if (_sessionId == null) {
-        _addSystemMessage('Could not join consultation because the session ID is missing.');
+        _addSystemMessage(
+          'Could not join consultation because the session ID is missing.',
+        );
         if (mounted) {
           setState(() {
             _isBootstrapping = false;
@@ -161,7 +443,9 @@ class _ChatScreenState extends State<ChatScreen> {
         'join_chat',
         {'sessionId': _sessionId},
         ack: (response) {
-          final Map<String, dynamic> data = response.isNotEmpty ? response[0] : {};
+          final Map<String, dynamic> data = response.isNotEmpty
+              ? response[0]
+              : {};
           if (data['success'] == true) {
             final List<dynamic> messages = data['messages'] ?? [];
             final session = data['session'] ?? {};
@@ -182,9 +466,10 @@ class _ChatScreenState extends State<ChatScreen> {
               widget.isPharmacistView
                   ? 'You joined this consultation as the assigned pharmacist.'
                   : _isAssignedToPharmacist
-                      ? 'Chat history loaded. A pharmacist is now supporting this conversation.'
-                      : 'Chat history loaded. The AI assistant is currently supporting you.',
+                  ? 'Chat history loaded. A pharmacist is now supporting this conversation.'
+                  : 'Chat history loaded. The AI assistant is currently supporting you.',
             );
+            _sendInitialConsultationTopicIfNeeded();
           } else {
             _addSystemMessage(
               'Failed to join chat room: ${data['error'] ?? 'Unknown error'}',
@@ -299,17 +584,71 @@ class _ChatScreenState extends State<ChatScreen> {
       'send_chat_message',
       {'sessionId': _sessionId, 'text': text},
       ack: (response) {
-        final Map<String, dynamic> data = response.isNotEmpty ? response[0] : {};
+        final Map<String, dynamic> data = response.isNotEmpty
+            ? response[0]
+            : {};
 
         if (!mounted) return;
         setState(() {
-          if (data['success'] == true && data['aiReply'] != null && !widget.isPharmacistView) {
+          if (data['success'] == true &&
+              data['aiReply'] != null &&
+              !widget.isPharmacistView) {
             _appendMessageIfNew(_formatSocketMessage(data['aiReply']));
           } else if (data['success'] != true) {
             _messages.add({
               'from': 'system',
               'text': 'Message failed to send.',
               'id': 'local-fail-${DateTime.now().millisecondsSinceEpoch}',
+            });
+          }
+          _isTyping = false;
+        });
+        _scrollToBottom();
+      },
+    );
+  }
+
+  void _sendInitialConsultationTopicIfNeeded() {
+    final topic = widget.initialConsultationTopic?.trim();
+    if (widget.isPharmacistView ||
+        _sentInitialConsultationTopic ||
+        topic == null ||
+        topic.isEmpty ||
+        _sessionId == null ||
+        _socket?.connected != true) {
+      return;
+    }
+
+    _sentInitialConsultationTopic = true;
+    final text = 'I need pharmacist guidance for: $topic';
+
+    setState(() {
+      _appendMessageIfNew({
+        'from': _myRole,
+        'text': text,
+        'id': 'local-topic-${DateTime.now().millisecondsSinceEpoch}',
+      });
+      _isTyping = true;
+    });
+    _scrollToBottom();
+
+    _socket!.emitWithAck(
+      'send_chat_message',
+      {'sessionId': _sessionId, 'text': text},
+      ack: (response) {
+        final Map<String, dynamic> data = response.isNotEmpty
+            ? response[0]
+            : {};
+        if (!mounted) return;
+        setState(() {
+          if (data['success'] == true && data['aiReply'] != null) {
+            _appendMessageIfNew(_formatSocketMessage(data['aiReply']));
+          } else if (data['success'] != true) {
+            _messages.add({
+              'from': 'system',
+              'text':
+                  'Consultation topic could not be sent automatically. Please type your medicine question.',
+              'id': 'local-topic-fail-${DateTime.now().millisecondsSinceEpoch}',
             });
           }
           _isTyping = false;
@@ -363,34 +702,43 @@ class _ChatScreenState extends State<ChatScreen> {
     final senderLabel = isPharmacist
         ? 'Pharmacist'
         : isAI
-            ? 'AI Assistant'
-            : widget.isPharmacistView
-                ? 'Customer'
-                : '';
+        ? 'AI Assistant'
+        : widget.isPharmacistView
+        ? 'Customer'
+        : '';
 
     final Color bubbleColor = isMine
         ? (widget.isPharmacistView ? PharmacyUi.teal : PharmacyUi.deepNavy)
         : isPharmacist
-            ? PharmacyUi.mint
-            : isAI
-                ? const Color(0xFFE9EEF7)
-                : PharmacyUi.card;
+        ? PharmacyUi.mint
+        : isAI
+        ? const Color(0xFFE9EEF7)
+        : PharmacyUi.card;
 
     final Color textColor = isMine ? PharmacyUi.card : PharmacyUi.deepNavy;
     final Border? border = isMine
         ? null
         : Border.all(
-            color: isPharmacist ? PharmacyUi.teal.withValues(alpha: 0.18) : PharmacyUi.border,
+            color: isPharmacist
+                ? PharmacyUi.teal.withValues(alpha: 0.18)
+                : PharmacyUi.border,
           );
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
-        crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           if (senderLabel.isNotEmpty && !isMine)
             Padding(
-              padding: const EdgeInsets.only(top: 8, left: 12, right: 12, bottom: 2),
+              padding: const EdgeInsets.only(
+                top: 8,
+                left: 12,
+                right: 12,
+                bottom: 2,
+              ),
               child: Text(
                 senderLabel,
                 style: TextStyle(
@@ -418,11 +766,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             child: Text(
               msg['text'],
-              style: TextStyle(
-                color: textColor,
-                fontSize: 15,
-                height: 1.35,
-              ),
+              style: TextStyle(color: textColor, fontSize: 15, height: 1.35),
             ),
           ),
         ],
@@ -490,7 +834,10 @@ class _ChatScreenState extends State<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(999),
@@ -550,7 +897,9 @@ class _ChatScreenState extends State<ChatScreen> {
             height: 16,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: widget.isPharmacistView ? PharmacyUi.teal : PharmacyUi.deepNavy,
+              color: widget.isPharmacistView
+                  ? PharmacyUi.teal
+                  : PharmacyUi.deepNavy,
             ),
           ),
           const SizedBox(width: 10),
@@ -558,8 +907,8 @@ class _ChatScreenState extends State<ChatScreen> {
             widget.isPharmacistView
                 ? 'Sending your response...'
                 : _isAssignedToPharmacist
-                    ? 'Pharmacist is typing...'
-                    : 'AI is thinking...',
+                ? 'Pharmacist is typing...'
+                : 'AI is thinking...',
             style: const TextStyle(color: PharmacyUi.mutedText),
           ),
         ],
@@ -603,7 +952,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildComposer() {
     final canSend =
-        _controller.text.trim().isNotEmpty && _socket?.connected == true && !_isBootstrapping;
+        _controller.text.trim().isNotEmpty &&
+        _socket?.connected == true &&
+        !_isBootstrapping;
 
     return SafeArea(
       top: false,
@@ -614,7 +965,10 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 4,
+                ),
                 decoration: PharmacyUi.panelDecoration(radius: 22),
                 child: TextField(
                   controller: _controller,
@@ -682,7 +1036,9 @@ class _ChatScreenState extends State<ChatScreen> {
       data: PharmacyUi.theme,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.isPharmacistView ? 'Live Consultation' : 'Pharmacy Support'),
+          title: Text(
+            widget.isPharmacistView ? 'Live Consultation' : 'Pharmacy Support',
+          ),
         ),
         body: SafeArea(
           child: Column(

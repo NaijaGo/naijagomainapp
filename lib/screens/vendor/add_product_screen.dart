@@ -3,8 +3,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:io';
 import '../../constants.dart';
+import '../../services/address_resolution_service.dart';
+import '../../services/location_access_service.dart';
 import '../../widgets/vendor_ui.dart';
 
 class AddProductScreen extends StatefulWidget {
@@ -19,7 +22,18 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _stockQuantityController = TextEditingController();
+  final TextEditingController _stockQuantityController =
+      TextEditingController();
+  final TextEditingController _restaurantNameController =
+      TextEditingController();
+  final TextEditingController _foodInformationController =
+      TextEditingController();
+  final TextEditingController _productLocationAddressController =
+      TextEditingController();
+  final TextEditingController _productLatitudeController =
+      TextEditingController();
+  final TextEditingController _productLongitudeController =
+      TextEditingController();
 
   // SEARCH CONTROLLER
   final TextEditingController _searchController = TextEditingController();
@@ -111,6 +125,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
       'Fresh Produce',
       'Dairy & Eggs',
       'Seafood',
+    ],
+    'Restaurant': [
+      'Meals',
+      'Fast Food',
+      'Local Dishes',
+      'Pastries',
+      'Drinks',
+      'Catering',
     ],
     'Automobiles': [
       'Car Care',
@@ -211,20 +233,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
       'Wind Instruments',
       'Audio Equipment',
     ],
-    'Arts & Crafts': [
-      'Painting',
-      'Beading & Jewelry Making',
-      'Clay & Pottery',
-    ],
-    'Agriculture': [
-      'Fertilizers',
-      'Pesticides',
-    ],
-    'Jewelry & Watches': [
-      'Fine Jewelry',
-      'Fashion Jewelry',
-      'Wrist Watches',
-    ],
+    'Arts & Crafts': ['Painting', 'Beading & Jewelry Making', 'Clay & Pottery'],
+    'Agriculture': ['Fertilizers', 'Pesticides'],
+    'Jewelry & Watches': ['Fine Jewelry', 'Fashion Jewelry', 'Wrist Watches'],
     'Toys & Games': [
       'Dolls',
       'Educational Toys',
@@ -249,14 +260,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
       'Kitchen Utensils',
       'Food Packaging',
     ],
-    'Travel & Tourism': [
-      'Travel Accessories',
-      'Luggage',
-      'Hotel Supplies',
-    ],
-    'Wedding & Events': [
-      'Wedding Attire',
-    ],
+    'Travel & Tourism': ['Travel Accessories', 'Luggage', 'Hotel Supplies'],
+    'Wedding & Events': ['Wedding Attire'],
   };
 
   // NEW: Categories that REQUIRE size selection
@@ -319,6 +324,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   bool _isFlashSale = false;
+  bool _isApprovedPharmacist = false;
+  bool _requiresPrescription = false;
+  bool _requiresPharmacistApproval = false;
+  bool _isOverTheCounter = true;
+  TimeOfDay _orderStartTime = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay _orderEndTime = const TimeOfDay(hour: 19, minute: 0);
   static const int _maxExtraImages = 10;
 
   // For search functionality
@@ -332,6 +343,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _searchController.addListener(_onSearchChanged);
     // Initialize with one custom size
     _customSizes.add(_customSize);
+    _loadPharmacistStatus();
   }
 
   @override
@@ -340,8 +352,99 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _descriptionController.dispose();
     _priceController.dispose();
     _stockQuantityController.dispose();
+    _restaurantNameController.dispose();
+    _foodInformationController.dispose();
+    _productLocationAddressController.dispose();
+    _productLatitudeController.dispose();
+    _productLongitudeController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPharmacistStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedUser = prefs.getString('user');
+      if (cachedUser != null) {
+        final cachedData = jsonDecode(cachedUser) as Map<String, dynamic>;
+        _applyPharmacistStatus(cachedData);
+      }
+
+      final token = prefs.getString('jwt_token');
+      if (token == null) return;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/auth/me'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        await prefs.setString('user', response.body);
+        _applyPharmacistStatus(data);
+      }
+    } catch (e) {
+      debugPrint('Unable to load pharmacist status: $e');
+    }
+  }
+
+  void _applyPharmacistStatus(Map<String, dynamic> userData) {
+    final isPharmacist = userData['isPharmacist'] == true;
+    final pharmacistStatus =
+        (userData['pharmacistStatus'] ?? (isPharmacist ? 'approved' : 'none'))
+            .toString()
+            .toLowerCase();
+
+    if (!mounted) return;
+    setState(() {
+      _isApprovedPharmacist = isPharmacist || pharmacistStatus == 'approved';
+    });
+  }
+
+  bool _isMedicineCategory(String? category) {
+    final normalized = category?.toLowerCase() ?? '';
+    return normalized.contains('medicine') ||
+        normalized.contains('pharmacy') ||
+        normalized.contains('drug');
+  }
+
+  bool _isRestaurantCategory(String? category) {
+    final normalized = category?.toLowerCase() ?? '';
+    if (normalized.contains('restaurant equipment')) return false;
+    return normalized == 'restaurant' ||
+        normalized.startsWith('restaurant >') ||
+        normalized.contains('meal') ||
+        normalized.contains('fast food') ||
+        normalized.contains('local dishes') ||
+        normalized.contains('pastries') ||
+        normalized.contains('drinks') ||
+        normalized.contains('catering');
+  }
+
+  String _formatTimeOfDay(TimeOfDay value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  Future<void> _pickOrderTime({required bool isStart}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isStart ? _orderStartTime : _orderEndTime,
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      if (isStart) {
+        _orderStartTime = picked;
+      } else {
+        _orderEndTime = picked;
+      }
+    });
   }
 
   // NEW: Check if selected category needs size
@@ -359,27 +462,27 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
     // Extract subcategory from "Main Category > Subcategory" format
     final subcategory = category.split(' > ').last;
-    
+
     final requiresSize = _sizeRequiredCategories.contains(subcategory);
     final optionalSize = _sizeOptionalCategories.contains(subcategory);
-    
+
     setState(() {
       _showSizeSection = requiresSize || optionalSize;
       _isSizeRequired = requiresSize;
       _selectedSizeType = null;
       _selectedSizes.clear();
       _showCustomSizeFields = false;
-      
+
       // Auto-select size type based on category
       if (requiresSize || optionalSize) {
         if (subcategory == 'Footwear') {
           _selectedSizeType = 'shoes';
         } else if (subcategory == 'Watches') {
           _selectedSizeType = 'watches';
-        } else if (subcategory.contains('Apparel') || 
-                   subcategory.contains('Fashion') || 
-                   subcategory == 'Sportswear' ||
-                   subcategory == 'Wedding Attire') {
+        } else if (subcategory.contains('Apparel') ||
+            subcategory.contains('Fashion') ||
+            subcategory == 'Sportswear' ||
+            subcategory == 'Wedding Attire') {
           _selectedSizeType = 'clothing';
         } else if (subcategory == 'Pet Clothing') {
           _selectedSizeType = 'pet';
@@ -409,12 +512,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   // NEW: Add a new custom size field
   void _addCustomSize() {
     setState(() {
-      _customSizes.add({
-        'length': '',
-        'width': '',
-        'height': '',
-        'unit': 'cm',
-      });
+      _customSizes.add({'length': '', 'width': '', 'height': '', 'unit': 'cm'});
     });
   }
 
@@ -473,7 +571,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
               // Show count of selected sizes
               if (_selectedSizes.isNotEmpty || _showCustomSizeFields)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(12),
@@ -491,9 +592,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 ),
             ],
           ),
-          
+
           const SizedBox(height: 10),
-          
+
           // Help text
           Padding(
             padding: const EdgeInsets.only(bottom: 15.0),
@@ -501,19 +602,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
               'Select all sizes available for this product. Buyers will choose from these options.',
               style: TextStyle(
                 fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic,
               ),
             ),
           ),
-          
+
           // Size Type Selection
           DropdownButtonFormField<String>(
             initialValue: _selectedSizeType,
             decoration: InputDecoration(
               labelText: 'Size Type',
               labelStyle: TextStyle(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.7),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -526,7 +631,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 _buildSizeTypeItem('shoes', '👟 Shoes'),
               if (_selectedCategory?.contains('Watches') ?? false)
                 _buildSizeTypeItem('watches', '⌚ Watches'),
-              if (_selectedCategory?.contains('Apparels & Accessories') ?? false)
+              if (_selectedCategory?.contains('Apparels & Accessories') ??
+                  false)
                 _buildSizeTypeItem('baby', '👶 Baby Clothing'),
               if (_selectedCategory?.contains('Pet Clothing') ?? false)
                 _buildSizeTypeItem('pet', '🐾 Pet Clothing'),
@@ -540,19 +646,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 _showCustomSizeFields = value == 'custom';
               });
             },
-            validator: _isSizeRequired ? (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please select a size type';
-              }
-              return null;
-            } : null,
+            validator: _isSizeRequired
+                ? (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a size type';
+                    }
+                    return null;
+                  }
+                : null,
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Standard Size Selection - MULTIPLE SELECTION
-          if (_selectedSizeType != null && 
-              _selectedSizeType != 'custom' && 
+          if (_selectedSizeType != null &&
+              _selectedSizeType != 'custom' &&
               !_showCustomSizeFields)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -575,19 +683,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           TextButton(
                             onPressed: () {
                               setState(() {
-                                if (_selectedSizes.length == _getSizeOptions(_selectedSizeType).length) {
+                                if (_selectedSizes.length ==
+                                    _getSizeOptions(_selectedSizeType).length) {
                                   _selectedSizes.clear();
                                 } else {
-                                  _selectedSizes = Set.from(_getSizeOptions(_selectedSizeType));
+                                  _selectedSizes = Set.from(
+                                    _getSizeOptions(_selectedSizeType),
+                                  );
                                 }
                               });
                             },
                             style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               minimumSize: Size.zero,
                             ),
                             child: Text(
-                              _selectedSizes.length == _getSizeOptions(_selectedSizeType).length
+                              _selectedSizes.length ==
+                                      _getSizeOptions(_selectedSizeType).length
                                   ? 'Clear All'
                                   : 'Select All',
                               style: TextStyle(
@@ -601,7 +715,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                
+
                 // Size selection grid with checkboxes
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -622,7 +736,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           height: 45,
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.9)
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.9)
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
@@ -634,10 +750,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
-                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.2),
                                       blurRadius: 4,
                                       offset: const Offset(0, 2),
-                                    )
+                                    ),
                                   ]
                                 : null,
                           ),
@@ -651,7 +770,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                     fontWeight: FontWeight.w600,
                                     color: isSelected
                                         ? Colors.white
-                                        : Theme.of(context).colorScheme.onSurface,
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
                                   ),
                                 ),
                               ),
@@ -669,7 +790,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                     child: Icon(
                                       Icons.check,
                                       size: 12,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
                                   ),
                                 ),
@@ -680,18 +803,22 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     }).toList(),
                   ),
                 ),
-                
+
                 const SizedBox(height: 10),
-                
+
                 // Selected sizes preview
                 if (_selectedSizes.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1),
                       ),
                     ),
                     child: Column(
@@ -712,7 +839,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           children: _selectedSizes.map((size) {
                             return Chip(
                               label: Text(size),
-                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
                               labelStyle: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -725,21 +854,18 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ],
                     ),
                   ),
-                
+
                 if (_isSizeRequired && _selectedSizes.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
                       '⚠️ Please select at least one size for this product',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.red, fontSize: 12),
                     ),
                   ),
               ],
             ),
-          
+
           // Custom Size Fields - MULTIPLE
           if (_showCustomSizeFields)
             Column(
@@ -762,22 +888,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Add Another'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.1),
                         foregroundColor: Theme.of(context).colorScheme.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         elevation: 0,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 15),
-                
+
                 // Multiple custom size fields
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _customSizes.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 16),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 16),
                   itemBuilder: (context, index) {
                     final size = _customSizes[index];
                     return Container(
@@ -804,7 +936,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   'Custom Size #${index + 1}',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                   ),
                                 ),
                                 const Spacer(),
@@ -821,9 +955,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   ),
                               ],
                             ),
-                          
+
                           const SizedBox(height: 12),
-                          
+
                           Row(
                             children: [
                               Expanded(
@@ -838,12 +972,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   keyboardType: TextInputType.number,
                                   onChanged: (value) =>
                                       _updateCustomSize(index, 'length', value),
-                                  validator: _isSizeRequired ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return null;
-                                  } : null,
+                                  validator: _isSizeRequired
+                                      ? (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Required';
+                                          }
+                                          return null;
+                                        }
+                                      : null,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -859,12 +995,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   keyboardType: TextInputType.number,
                                   onChanged: (value) =>
                                       _updateCustomSize(index, 'width', value),
-                                  validator: _isSizeRequired ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return null;
-                                  } : null,
+                                  validator: _isSizeRequired
+                                      ? (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Required';
+                                          }
+                                          return null;
+                                        }
+                                      : null,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -880,19 +1018,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                   keyboardType: TextInputType.number,
                                   onChanged: (value) =>
                                       _updateCustomSize(index, 'height', value),
-                                  validator: _isSizeRequired ? (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return null;
-                                  } : null,
+                                  validator: _isSizeRequired
+                                      ? (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Required';
+                                          }
+                                          return null;
+                                        }
+                                      : null,
                                 ),
                               ),
                             ],
                           ),
-                          
+
                           const SizedBox(height: 10),
-                          
+
                           DropdownButtonFormField<String>(
                             initialValue: size['unit'],
                             decoration: InputDecoration(
@@ -902,10 +1042,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               ),
                             ),
                             items: ['cm', 'inch', 'mm', 'm']
-                                .map((unit) => DropdownMenuItem(
-                                      value: unit,
-                                      child: Text(unit.toUpperCase()),
-                                    ))
+                                .map(
+                                  (unit) => DropdownMenuItem(
+                                    value: unit,
+                                    child: Text(unit.toUpperCase()),
+                                  ),
+                                )
                                 .toList(),
                             onChanged: (value) =>
                                 _updateCustomSize(index, 'unit', value ?? 'cm'),
@@ -915,15 +1057,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     );
                   },
                 ),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // Custom sizes summary
                 if (_customSizes.length > 1)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -948,13 +1092,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
               ],
             ),
-          
+
           // Size Help Text
           const SizedBox(height: 15),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+              color: Theme.of(
+                context,
+              ).colorScheme.secondary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -1000,11 +1146,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   DropdownMenuItem<String> _buildSizeTypeItem(String value, String label) {
     return DropdownMenuItem(
       value: value,
-      child: Row(
-        children: [
-          Text(label),
-        ],
-      ),
+      child: Row(children: [Text(label)]),
     );
   }
 
@@ -1021,7 +1163,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   // NEW: Prepare size data for API submission (now supports multiple)
   Map<String, dynamic>? _getSizeData() {
-    if (!_showSizeSection || 
+    if (!_showSizeSection ||
         (_selectedSizeType == null && !_showCustomSizeFields) ||
         (_selectedSizes.isEmpty && _customSizes.isEmpty)) {
       return null;
@@ -1062,23 +1204,24 @@ class _AddProductScreenState extends State<AddProductScreen> {
   void _onSearchChanged() {
     setState(() {
       _searchQuery = _searchController.text.toLowerCase().trim();
-      
+
       if (_searchQuery.isEmpty) {
         _filteredCategories = _allCategories.entries.toList();
       } else {
-        _filteredCategories = _allCategories.entries
-            .where((entry) {
-              bool mainCategoryMatches = entry.key.toLowerCase().contains(_searchQuery);
-              bool subCategoryMatches = entry.value.any(
-                (subcat) => subcat.toLowerCase().contains(_searchQuery)
-              );
-              bool combinedMatches = entry.value.any(
-                (subcat) => "${entry.key} > $subcat".toLowerCase().contains(_searchQuery)
-              );
-              
-              return mainCategoryMatches || subCategoryMatches || combinedMatches;
-            })
-            .toList();
+        _filteredCategories = _allCategories.entries.where((entry) {
+          bool mainCategoryMatches = entry.key.toLowerCase().contains(
+            _searchQuery,
+          );
+          bool subCategoryMatches = entry.value.any(
+            (subcat) => subcat.toLowerCase().contains(_searchQuery),
+          );
+          bool combinedMatches = entry.value.any(
+            (subcat) =>
+                "${entry.key} > $subcat".toLowerCase().contains(_searchQuery),
+          );
+
+          return mainCategoryMatches || subCategoryMatches || combinedMatches;
+        }).toList();
       }
     });
   }
@@ -1090,6 +1233,48 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _searchQuery = '';
       _filteredCategories = _allCategories.entries.toList();
     });
+  }
+
+  Future<void> _useCurrentProductOriginLocation() async {
+    final locationAccess = await LocationAccessService.ensureAccess();
+    if (!locationAccess.granted) {
+      if (mounted) {
+        await LocationAccessService.presentIssue(context, locationAccess);
+      }
+      return;
+    }
+
+    try {
+      await LocationAccessService.requestPreciseLocationIfNeeded();
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: LocationAccessService.currentLocationSettings(),
+      );
+
+      String address = 'Current pickup location';
+      try {
+        final resolved = await AddressResolutionService.resolveFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        address = resolved.formattedAddress;
+      } catch (error) {
+        debugPrint('Product origin reverse geocoding failed: $error');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _productLocationAddressController.text = address;
+        _productLatitudeController.text = position.latitude.toStringAsFixed(6);
+        _productLongitudeController.text = position.longitude.toStringAsFixed(
+          6,
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to get pickup location: $error')),
+      );
+    }
   }
 
   // Enhanced category dropdown items
@@ -1120,22 +1305,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           hintText: 'Search categories...',
                           hintStyle: TextStyle(color: Colors.grey[600]),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary, size: 20),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 20,
+                          ),
                         ),
                         style: const TextStyle(fontSize: 14),
                       ),
                     ),
                     if (_searchQuery.isNotEmpty)
                       IconButton(
-                        icon: Icon(Icons.clear, color: Colors.grey[600], size: 20),
+                        icon: Icon(
+                          Icons.clear,
+                          color: Colors.grey[600],
+                          size: 20,
+                        ),
                         onPressed: _clearSearch,
                       ),
                   ],
                 ),
               ),
               const SizedBox(height: 8),
-              
+
               if (_searchQuery.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -1187,9 +1383,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
             value: null,
             enabled: false,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+              padding: const EdgeInsets.symmetric(
+                vertical: 8.0,
+                horizontal: 12.0,
+              ),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
                 border: Border(
                   left: BorderSide(
@@ -1200,8 +1401,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.category_outlined,
-                      color: Theme.of(context).colorScheme.primary, size: 18),
+                  Icon(
+                    Icons.category_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1214,9 +1418,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -1242,8 +1451,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 padding: const EdgeInsets.only(left: 36.0, top: 6, bottom: 6),
                 child: Row(
                   children: [
-                    Icon(Icons.arrow_right_alt,
-                        color: Theme.of(context).colorScheme.secondary, size: 16),
+                    Icon(
+                      Icons.arrow_right_alt,
+                      color: Theme.of(context).colorScheme.secondary,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1255,12 +1467,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                     ),
                     if ("$section > $sub" == _selectedCategory)
-                      Icon(Icons.check,
-                          color: Theme.of(context).colorScheme.primary, size: 16),
+                      Icon(
+                        Icons.check,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 16,
+                      ),
                     // NEW: Show size icon if category needs size
                     if (_sizeRequiredCategories.contains(sub))
-                      Icon(Icons.straighten,
-                          color: Colors.orange, size: 14),
+                      Icon(Icons.straighten, color: Colors.orange, size: 14),
                   ],
                 ),
               ),
@@ -1305,8 +1519,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.check_circle,
-                  color: Theme.of(context).colorScheme.primary, size: 18),
+              Icon(
+                Icons.check_circle,
+                color: Theme.of(context).colorScheme.primary,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Selected Category:',
@@ -1319,7 +1536,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
               if (_sizeRequiredCategories.contains(parts[1]))
                 Container(
                   margin: const EdgeInsets.only(left: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange,
                     borderRadius: BorderRadius.circular(4),
@@ -1345,7 +1565,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primary,
                   borderRadius: BorderRadius.circular(6),
@@ -1360,8 +1583,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.arrow_forward_ios,
-                  color: Theme.of(context).colorScheme.primary, size: 14),
+              Icon(
+                Icons.arrow_forward_ios,
+                color: Theme.of(context).colorScheme.primary,
+                size: 14,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1381,9 +1607,493 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
+  Widget _buildMedicineAccessSection() {
+    if (!_isMedicineCategory(_selectedCategory)) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _isApprovedPharmacist
+            ? VendorUi.whiteBackground
+            : VendorUi.danger.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isApprovedPharmacist ? VendorUi.border : VendorUi.danger,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color:
+                      (_isApprovedPharmacist
+                              ? VendorUi.deepNavyBlue
+                              : VendorUi.danger)
+                          .withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.local_pharmacy_outlined,
+                  color: _isApprovedPharmacist
+                      ? VendorUi.deepNavyBlue
+                      : VendorUi.danger,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isApprovedPharmacist
+                          ? 'Medicine access settings'
+                          : 'Pharmacist approval required',
+                      style: TextStyle(
+                        color: _isApprovedPharmacist
+                            ? VendorUi.deepNavyBlue
+                            : VendorUi.danger,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _isApprovedPharmacist
+                          ? 'Choose whether customers can buy this medicine directly or must consult a pharmacist first.'
+                          : 'Only approved pharmacist vendors can publish medicine listings.',
+                      style: const TextStyle(
+                        color: VendorUi.textMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_isApprovedPharmacist) ...[
+            const SizedBox(height: 14),
+            _buildMedicineAccessOption(
+              selected: _isOverTheCounter,
+              title: 'Over-the-counter',
+              subtitle: 'Customers can add this medicine to cart.',
+              onTap: () {
+                setState(() {
+                  _isOverTheCounter = true;
+                  _requiresPrescription = false;
+                  _requiresPharmacistApproval = false;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _buildMedicineAccessOption(
+              selected: !_isOverTheCounter,
+              title: 'Needs pharmacist guidance',
+              subtitle:
+                  'Customers must start a pharmacy consultation before purchase.',
+              onTap: () {
+                setState(() {
+                  _isOverTheCounter = false;
+                  _requiresPharmacistApproval = true;
+                });
+              },
+            ),
+            if (!_isOverTheCounter)
+              CheckboxListTile(
+                value: _requiresPrescription,
+                onChanged: (value) {
+                  setState(() {
+                    _requiresPrescription = value ?? false;
+                    _requiresPharmacistApproval = true;
+                  });
+                },
+                activeColor: VendorUi.deepNavyBlue,
+                title: const Text('Prescription required'),
+                subtitle: const Text(
+                  'Mark this when a pharmacist should verify prescription status.',
+                ),
+                contentPadding: EdgeInsets.zero,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMedicineAccessOption({
+    required bool selected,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected
+              ? VendorUi.deepNavyBlue.withValues(alpha: 0.08)
+              : VendorUi.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? VendorUi.deepNavyBlue : VendorUi.border,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? VendorUi.deepNavyBlue : VendorUi.textMuted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: VendorUi.deepNavyBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: VendorUi.textMuted,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRestaurantOrderingSection() {
+    if (!_isRestaurantCategory(_selectedCategory)) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: VendorUi.whiteBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: VendorUi.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: VendorUi.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.restaurant_menu_rounded,
+                  color: VendorUi.warning,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Restaurant ordering',
+                      style: TextStyle(
+                        color: VendorUi.deepNavyBlue,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Use Restaurant > Meals, Fast Food, Local Dishes, Pastries, Drinks, or Catering so this item appears only in food sections. Default ordering time is 9:00 AM to 7:00 PM.',
+                      style: TextStyle(color: VendorUi.textMuted, height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _restaurantNameController,
+            decoration: _inputDecoration(
+              'Restaurant Name',
+              Theme.of(context).colorScheme,
+            ),
+            validator: (value) {
+              if (_isRestaurantCategory(_selectedCategory) &&
+                  (value == null || value.trim().isEmpty)) {
+                return 'Please enter restaurant name';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _foodInformationController,
+            maxLines: 2,
+            decoration: _inputDecoration(
+              'Food Information (ingredients, portion, prep note)',
+              Theme.of(context).colorScheme,
+            ),
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 420;
+              final startButton = _buildOrderTimeButton(
+                label: 'Order starts',
+                value: _orderStartTime.format(context),
+                onTap: () => _pickOrderTime(isStart: true),
+              );
+              final endButton = _buildOrderTimeButton(
+                label: 'Order ends',
+                value: _orderEndTime.format(context),
+                onTap: () => _pickOrderTime(isStart: false),
+              );
+
+              if (isWide) {
+                return Row(
+                  children: [
+                    Expanded(child: startButton),
+                    const SizedBox(width: 12),
+                    Expanded(child: endButton),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [startButton, const SizedBox(height: 12), endButton],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductOriginLocationSection() {
+    final isFood = _isRestaurantCategory(_selectedCategory);
+    final isMedicine = _isMedicineCategory(_selectedCategory);
+    if (!isFood && !isMedicine) {
+      return const SizedBox.shrink();
+    }
+
+    final title = isFood ? 'Food pickup location' : 'Pharmacy pickup location';
+    final help = isFood
+        ? 'Use this if the food comes from a different kitchen branch. Leave empty to use your vendor business location.'
+        : 'Use this if this medicine comes from a specific pharmacy branch. Leave empty to use your vendor business location.';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: VendorUi.whiteBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: VendorUi.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: (isFood ? VendorUi.warning : VendorUi.success)
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isFood
+                      ? Icons.restaurant_menu_rounded
+                      : Icons.local_pharmacy_outlined,
+                  color: isFood ? VendorUi.warning : VendorUi.success,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: VendorUi.deepNavyBlue,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      help,
+                      style: const TextStyle(
+                        color: VendorUi.textMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _productLocationAddressController,
+            decoration: _inputDecoration(
+              'Pickup Address / Branch Location',
+              Theme.of(context).colorScheme,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton.icon(
+              onPressed: _useCurrentProductOriginLocation,
+              icon: const Icon(Icons.my_location_rounded, size: 18),
+              label: const Text('Use Current Location'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: VendorUi.deepNavyBlue,
+                side: const BorderSide(color: VendorUi.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final latitudeField = TextFormField(
+                controller: _productLatitudeController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                  decimal: true,
+                ),
+                decoration: _inputDecoration(
+                  'Latitude (optional)',
+                  Theme.of(context).colorScheme,
+                ),
+              );
+              final longitudeField = TextFormField(
+                controller: _productLongitudeController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                  decimal: true,
+                ),
+                decoration: _inputDecoration(
+                  'Longitude (optional)',
+                  Theme.of(context).colorScheme,
+                ),
+              );
+
+              if (constraints.maxWidth > 420) {
+                return Row(
+                  children: [
+                    Expanded(child: latitudeField),
+                    const SizedBox(width: 12),
+                    Expanded(child: longitudeField),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  latitudeField,
+                  const SizedBox(height: 12),
+                  longitudeField,
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderTimeButton({
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: VendorUi.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: VendorUi.border),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.schedule_rounded, color: VendorUi.deepNavyBlue),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: VendorUi.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: VendorUi.deepNavyBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.edit_rounded, color: VendorUi.textMuted, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickImages({bool isMain = true}) async {
     final ImagePicker picker = ImagePicker();
-    
+
     setState(() {
       _errorMessage = null;
     });
@@ -1402,18 +2112,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
     } else {
       final List<XFile> images = await picker.pickMultiImage();
       if (!mounted) return;
-      
+
       if (images.isNotEmpty) {
         final remainingSlots = _maxExtraImages - _extraImages.length;
-        final filesToAdd = images.take(remainingSlots).map((xfile) => File(xfile.path)).toList();
-        
+        final filesToAdd = images
+            .take(remainingSlots)
+            .map((xfile) => File(xfile.path))
+            .toList();
+
         setState(() {
           _extraImages.addAll(filesToAdd);
         });
 
         if (images.length > remainingSlots) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Only the first $remainingSlots images were added (Max is $_maxExtraImages).')),
+            SnackBar(
+              content: Text(
+                'Only the first $remainingSlots images were added (Max is $_maxExtraImages).',
+              ),
+            ),
           );
         }
       }
@@ -1425,7 +2142,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _extraImages.removeAt(index);
     });
   }
-  
+
   Future<void> _addProduct() async {
     // NEW: Validate multiple sizes if required
     if (_isSizeRequired) {
@@ -1435,18 +2152,18 @@ class _AddProductScreenState extends State<AddProductScreen> {
         });
         return;
       }
-      
+
       if (_selectedSizeType != 'custom' && _selectedSizes.isEmpty) {
         setState(() {
           _errorMessage = 'Please select at least one size for this product.';
         });
         return;
       }
-      
+
       if (_selectedSizeType == 'custom') {
         for (var customSize in _customSizes) {
-          if (customSize['length'].isEmpty || 
-              customSize['width'].isEmpty || 
+          if (customSize['length'].isEmpty ||
+              customSize['width'].isEmpty ||
               customSize['height'].isEmpty) {
             setState(() {
               _errorMessage = 'Please fill all custom dimension fields.';
@@ -1460,6 +2177,22 @@ class _AddProductScreenState extends State<AddProductScreen> {
     if (!_formKey.currentState!.validate() || _selectedCategory == null) {
       setState(() {
         _errorMessage = 'Please complete all required form fields.';
+      });
+      return;
+    }
+
+    if (_isMedicineCategory(_selectedCategory) && !_isApprovedPharmacist) {
+      setState(() {
+        _errorMessage =
+            'Medicine listings are only available to approved pharmacist vendors.';
+      });
+      return;
+    }
+
+    if (_isRestaurantCategory(_selectedCategory) &&
+        _restaurantNameController.text.trim().isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter the restaurant name for this food item.';
       });
       return;
     }
@@ -1503,6 +2236,42 @@ class _AddProductScreenState extends State<AddProductScreen> {
     request.fields['stockQuantity'] = stockQuantity.toString();
     request.fields['is_flashsale'] = _isFlashSale.toString();
 
+    final productLocationAddress = _productLocationAddressController.text
+        .trim();
+    final productLatitude = _productLatitudeController.text.trim();
+    final productLongitude = _productLongitudeController.text.trim();
+    if (productLocationAddress.isNotEmpty) {
+      request.fields['productLocationAddress'] = productLocationAddress;
+    }
+    if (productLatitude.isNotEmpty) {
+      request.fields['productLatitude'] = productLatitude;
+    }
+    if (productLongitude.isNotEmpty) {
+      request.fields['productLongitude'] = productLongitude;
+    }
+
+    if (_isMedicineCategory(_selectedCategory)) {
+      request.fields['isOverTheCounter'] = _isOverTheCounter.toString();
+      request.fields['requiresPrescription'] = _requiresPrescription.toString();
+      request.fields['requiresPharmacistApproval'] = _requiresPharmacistApproval
+          .toString();
+      request.fields['medicineAccess'] = _isOverTheCounter
+          ? 'over_the_counter'
+          : _requiresPrescription
+          ? 'prescription'
+          : 'pharmacist_approval';
+    }
+
+    if (_isRestaurantCategory(_selectedCategory)) {
+      request.fields['restaurantName'] = _restaurantNameController.text.trim();
+      request.fields['foodInformation'] =
+          _foodInformationController.text.trim().isNotEmpty
+          ? _foodInformationController.text.trim()
+          : description;
+      request.fields['orderStartTime'] = _formatTimeOfDay(_orderStartTime);
+      request.fields['orderEndTime'] = _formatTimeOfDay(_orderEndTime);
+    }
+
     // NEW: Add multiple size data if available
     final sizeData = _getSizeData();
     if (sizeData != null) {
@@ -1510,19 +2279,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
 
     // 1. Add Main Image
-    request.files.add(await http.MultipartFile.fromPath(
-      'mainImage',
-      _mainImage!.path,
-      filename: _mainImage!.path.split('/').last,
-    ));
-    
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'mainImage',
+        _mainImage!.path,
+        filename: _mainImage!.path.split('/').last,
+      ),
+    );
+
     // 2. Add Extra Images (if any)
     for (var file in _extraImages) {
-      request.files.add(await http.MultipartFile.fromPath(
-        'extraImages',
-        file.path,
-        filename: file.path.split('/').last,
-      ));
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'extraImages',
+          file.path,
+          filename: file.path.split('/').last,
+        ),
+      );
     }
 
     request.headers['Authorization'] = 'Bearer $token';
@@ -1537,7 +2310,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(responseData['message'] ?? 'Product added successfully!'),
+            content: Text(
+              responseData['message'] ?? 'Product added successfully!',
+            ),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -1561,7 +2336,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
         Navigator.of(context).pop(true);
       } else {
         setState(() {
-          _errorMessage = responseData['message'] ?? 'Failed to add product (Status: ${response.statusCode}).';
+          _errorMessage =
+              responseData['message'] ??
+              'Failed to add product (Status: ${response.statusCode}).';
         });
       }
     } catch (e) {
@@ -1609,7 +2386,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -1620,9 +2397,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
           return Scaffold(
             backgroundColor: VendorUi.surface,
-            appBar: AppBar(
-              title: const Text('Add Product'),
-            ),
+            appBar: AppBar(title: const Text('Add Product')),
             body: Align(
               alignment: Alignment.topCenter,
               child: SingleChildScrollView(
@@ -1675,260 +2450,363 @@ class _AddProductScreenState extends State<AddProductScreen> {
                               const SizedBox(height: 24),
 
                               // 1. MAIN IMAGE PICKER (REQUIRED)
-                Text('Main Product Image (Required)', style: TextStyle(fontWeight: FontWeight.bold, color: color.primary)),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () => _pickImages(isMain: true),
-                  child: Container(
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: VendorUi.whiteBackground,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: _mainImage == null ? VendorUi.danger : VendorUi.border,
-                        width: 1,
-                      ),
-                    ),
-                    child: _mainImage != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(17),
-                            child: Image.file(
-                              _mainImage!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                            ),
-                          )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.photo_library, size: 50, color: color.primary),
-                              const SizedBox(height: 10),
                               Text(
-                                'Tap to select Main Image',
-                                style: TextStyle(color: color.onSurface, fontSize: 16),
+                                'Main Product Image (Required)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: color.primary,
+                                ),
                               ),
-                            ],
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                // 2. EXTRA IMAGES GALLERY (OPTIONAL)
-                Text('Extra Images (Optional, max 10)', style: TextStyle(fontWeight: FontWeight.bold, color: color.primary)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: VendorUi.whiteBackground,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: VendorUi.border),
-                  ),
-                  child: Wrap(
-                    spacing: 10.0,
-                    runSpacing: 10.0,
-                    children: [
-                      ..._extraImages.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final file = entry.value;
-                        return Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8.0),
-                              child: Image.file(
-                                file,
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
+                              const SizedBox(height: 8),
+                              GestureDetector(
+                                onTap: () => _pickImages(isMain: true),
+                                child: Container(
+                                  height: 200,
+                                  decoration: BoxDecoration(
+                                    color: VendorUi.whiteBackground,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: _mainImage == null
+                                          ? VendorUi.danger
+                                          : VendorUi.border,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: _mainImage != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            17,
+                                          ),
+                                          child: Image.file(
+                                            _mainImage!,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                          ),
+                                        )
+                                      : Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.photo_library,
+                                              size: 50,
+                                              color: color.primary,
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              'Tap to select Main Image',
+                                              style: TextStyle(
+                                                color: color.onSurface,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
                               ),
-                            ),
-                            Positioned(
-                              right: -5,
-                              top: -5,
-                              child: IconButton(
-                                icon: Icon(Icons.remove_circle, color: Colors.red[700], size: 20),
-                                onPressed: () => _removeExtraImage(index),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
+                              const SizedBox(height: 20),
+
+                              // 2. EXTRA IMAGES GALLERY (OPTIONAL)
+                              Text(
+                                'Extra Images (Optional, max 10)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: color.primary,
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      }),
-                      
-                      // Add button
-                      if (_extraImages.length < _maxExtraImages)
-                        GestureDetector(
-                          onTap: () => _pickImages(isMain: false),
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: VendorUi.surface,
-                              borderRadius: BorderRadius.circular(8.0),
-                              border: Border.all(color: VendorUi.border, width: 1.0),
-                            ),
-                            child: Icon(Icons.add, size: 30, color: color.primary),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(8.0),
+                                decoration: BoxDecoration(
+                                  color: VendorUi.whiteBackground,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: VendorUi.border),
+                                ),
+                                child: Wrap(
+                                  spacing: 10.0,
+                                  runSpacing: 10.0,
+                                  children: [
+                                    ..._extraImages.asMap().entries.map((
+                                      entry,
+                                    ) {
+                                      final index = entry.key;
+                                      final file = entry.value;
+                                      return Stack(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8.0,
+                                            ),
+                                            child: Image.file(
+                                              file,
+                                              width: 80,
+                                              height: 80,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                          Positioned(
+                                            right: -5,
+                                            top: -5,
+                                            child: IconButton(
+                                              icon: Icon(
+                                                Icons.remove_circle,
+                                                color: Colors.red[700],
+                                                size: 20,
+                                              ),
+                                              onPressed: () =>
+                                                  _removeExtraImage(index),
+                                              padding: EdgeInsets.zero,
+                                              constraints:
+                                                  const BoxConstraints(),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }),
 
-                // Product Name
-                TextFormField(
-                  controller: _nameController,
-                  style: TextStyle(color: color.primary),
-                  decoration: _inputDecoration('Product Name', color),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter product name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 15),
+                                    // Add button
+                                    if (_extraImages.length < _maxExtraImages)
+                                      GestureDetector(
+                                        onTap: () => _pickImages(isMain: false),
+                                        child: Container(
+                                          width: 80,
+                                          height: 80,
+                                          decoration: BoxDecoration(
+                                            color: VendorUi.surface,
+                                            borderRadius: BorderRadius.circular(
+                                              8.0,
+                                            ),
+                                            border: Border.all(
+                                              color: VendorUi.border,
+                                              width: 1.0,
+                                            ),
+                                          ),
+                                          child: Icon(
+                                            Icons.add,
+                                            size: 30,
+                                            color: color.primary,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 20),
 
-                // Description
-                TextFormField(
-                  controller: _descriptionController,
-                  maxLines: 3,
-                  style: TextStyle(color: color.primary),
-                  decoration: _inputDecoration('Product Description', color),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter product description';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 15),
+                              // Product Name
+                              TextFormField(
+                                controller: _nameController,
+                                style: TextStyle(color: color.primary),
+                                decoration: _inputDecoration(
+                                  'Product Name',
+                                  color,
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter product name';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 15),
 
-                // Price
-                TextFormField(
-                  controller: _priceController,
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(color: color.primary),
-                  decoration: _inputDecoration('Price', color),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter product price';
-                    }
-                    if (double.tryParse(value) == null || double.parse(value) <= 0) {
-                      return 'Please enter a valid price';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 15),
+                              // Description
+                              TextFormField(
+                                controller: _descriptionController,
+                                maxLines: 3,
+                                style: TextStyle(color: color.primary),
+                                decoration: _inputDecoration(
+                                  'Product Description',
+                                  color,
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter product description';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 15),
 
-                // Show selected category chip
-                _buildSelectedCategoryChip(),
+                              // Price
+                              TextFormField(
+                                controller: _priceController,
+                                keyboardType: TextInputType.number,
+                                style: TextStyle(color: color.primary),
+                                decoration: _inputDecoration('Price', color),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter product price';
+                                  }
+                                  if (double.tryParse(value) == null ||
+                                      double.parse(value) <= 0) {
+                                    return 'Please enter a valid price';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 15),
 
-                // Category Dropdown
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
-                  decoration: _inputDecoration('Select Category', color),
-                  style: TextStyle(color: color.primary, fontSize: 16),
-                  icon: Icon(Icons.arrow_drop_down, color: color.primary),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedCategory = newValue;
-                      });
-                      // NEW: Check size requirements when category changes
-                      _checkSizeRequirements(newValue);
-                    }
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a category';
-                    }
-                    return null;
-                  },
-                  dropdownColor: Colors.white,
-                  isExpanded: true,
-                  menuMaxHeight: 500,
-                  items: _buildCategoryItems(),
-                ),
-                const SizedBox(height: 15),
+                              // Show selected category chip
+                              _buildSelectedCategoryChip(),
 
-                // NEW: Size Selection Section (Conditional) - NOW MULTIPLE SELECTION
-                _buildSizeSelection(),
+                              // Category Dropdown
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedCategory,
+                                decoration: _inputDecoration(
+                                  'Select Category',
+                                  color,
+                                ),
+                                style: TextStyle(
+                                  color: color.primary,
+                                  fontSize: 16,
+                                ),
+                                icon: Icon(
+                                  Icons.arrow_drop_down,
+                                  color: color.primary,
+                                ),
+                                onChanged: (String? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedCategory = newValue;
+                                      if (_isMedicineCategory(newValue) &&
+                                          !_isApprovedPharmacist) {
+                                        _errorMessage =
+                                            'Medicine listings are reserved for approved pharmacist vendors.';
+                                      } else {
+                                        _errorMessage = null;
+                                      }
+                                    });
+                                    // NEW: Check size requirements when category changes
+                                    _checkSizeRequirements(newValue);
+                                  }
+                                },
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please select a category';
+                                  }
+                                  return null;
+                                },
+                                dropdownColor: Colors.white,
+                                isExpanded: true,
+                                menuMaxHeight: 500,
+                                items: _buildCategoryItems(),
+                              ),
+                              const SizedBox(height: 15),
 
-                // Stock Quantity
-                TextFormField(
-                  controller: _stockQuantityController,
-                  keyboardType: TextInputType.number,
-                  style: TextStyle(color: color.primary),
-                  decoration: _inputDecoration('Stock Quantity', color),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter stock quantity';
-                    }
-                    if (int.tryParse(value) == null || int.parse(value) < 0) {
-                      return 'Please enter a valid non-negative quantity';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
+                              // NEW: Size Selection Section (Conditional) - NOW MULTIPLE SELECTION
+                              _buildSizeSelection(),
 
-                // Flash Sale Checkbox
-                Container(
-                  decoration: BoxDecoration(
-                    color: VendorUi.whiteBackground,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: VendorUi.border, width: 1.0),
-                  ),
-                  child: CheckboxListTile(
-                    title: Text(
-                      'Mark as Flash Sale 🔥',
-                      style: TextStyle(color: color.primary, fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    value: _isFlashSale,
-                    onChanged: (bool? newValue) {
-                      setState(() {
-                        _isFlashSale = newValue ?? false;
-                      });
-                    },
-                    activeColor: color.secondary,
-                    checkColor: color.onSecondary,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10.0),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                ),
+                              _buildRestaurantOrderingSection(),
 
-                const SizedBox(height: 30),
+                              _buildMedicineAccessSection(),
 
-                if (_errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 15.0),
-                    child: Text(
-                      '❌ $_errorMessage',
-                      style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.w500),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                              _buildProductOriginLocationSection(),
 
-                _isLoading
-                    ? Center(child: CircularProgressIndicator(color: color.primary))
-                    : ElevatedButton(
-                        onPressed: _addProduct,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: VendorUi.deepNavyBlue,
-                          foregroundColor: VendorUi.whiteBackground,
-                          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Add Product',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                              // Stock Quantity
+                              TextFormField(
+                                controller: _stockQuantityController,
+                                keyboardType: TextInputType.number,
+                                style: TextStyle(color: color.primary),
+                                decoration: _inputDecoration(
+                                  'Stock Quantity',
+                                  color,
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter stock quantity';
+                                  }
+                                  if (int.tryParse(value) == null ||
+                                      int.parse(value) < 0) {
+                                    return 'Please enter a valid non-negative quantity';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Flash Sale Checkbox
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: VendorUi.whiteBackground,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: VendorUi.border,
+                                    width: 1.0,
+                                  ),
+                                ),
+                                child: CheckboxListTile(
+                                  title: Text(
+                                    'Mark as Flash Sale 🔥',
+                                    style: TextStyle(
+                                      color: color.primary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  value: _isFlashSale,
+                                  onChanged: (bool? newValue) {
+                                    setState(() {
+                                      _isFlashSale = newValue ?? false;
+                                    });
+                                  },
+                                  activeColor: color.secondary,
+                                  checkColor: color.onSecondary,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10.0,
+                                  ),
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
+                                ),
+                              ),
+
+                              const SizedBox(height: 30),
+
+                              if (_errorMessage != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 15.0),
+                                  child: Text(
+                                    '❌ $_errorMessage',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+
+                              _isLoading
+                                  ? Center(
+                                      child: CircularProgressIndicator(
+                                        color: color.primary,
+                                      ),
+                                    )
+                                  : ElevatedButton(
+                                      onPressed: _addProduct,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: VendorUi.deepNavyBlue,
+                                        foregroundColor:
+                                            VendorUi.whiteBackground,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 50,
+                                          vertical: 16,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Add Product',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
                             ],
                           ),
                         ),

@@ -8,6 +8,7 @@ import '../../constants.dart';
 import '../vendor/add_product_screen.dart';
 import '../vendor/orders_recived_screen.dart.dart';
 import '../../vendor/screens/vendor_registration_screen.dart';
+import 'pharmacist_dashboard.dart';
 import 'vendor_desist_confirmation_screen.dart';
 import 'vendor_my_products_screen.dart';
 
@@ -35,6 +36,8 @@ class VendorScreen extends StatefulWidget {
   final int productsSold;
   final int productsUnsold;
   final int followersCount;
+  final bool isPharmacist;
+  final String pharmacistStatus;
   final List<dynamic> notifications;
   final VoidCallback onRefresh;
 
@@ -50,6 +53,8 @@ class VendorScreen extends StatefulWidget {
     required this.productsSold,
     required this.productsUnsold,
     required this.followersCount,
+    required this.isPharmacist,
+    required this.pharmacistStatus,
     required this.notifications,
     required this.onRefresh,
   });
@@ -58,7 +63,8 @@ class VendorScreen extends StatefulWidget {
   State<VendorScreen> createState() => _VendorScreenState();
 }
 
-class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver {
+class _VendorScreenState extends State<VendorScreen>
+    with WidgetsBindingObserver {
   Timer? _countdownTimer;
 
   String _currentCountdownMessage = '';
@@ -67,6 +73,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
   String? _savedBankName;
   String? _savedBankCode;
   String? _savedAccountNumber;
+  bool _isRequestingPharmacistApproval = false;
 
   @override
   void initState() {
@@ -99,7 +106,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
   @override
   void didUpdateWidget(covariant VendorScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.vendorStatus != oldWidget.vendorStatus || widget.rejectionDate != oldWidget.rejectionDate) {
+    if (widget.vendorStatus != oldWidget.vendorStatus ||
+        widget.rejectionDate != oldWidget.rejectionDate) {
       if (widget.vendorStatus == 'rejected' && widget.rejectionDate != null) {
         _startCountdownTimer();
       } else {
@@ -110,7 +118,6 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
       }
     }
   }
-
 
   @override
   void didChangeDependencies() {
@@ -126,7 +133,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
       }
       setState(() {
         _currentCountdownMessage = _getCountdownMessage();
-        if (_currentCountdownMessage == 'You can now submit a new vendor request!') {
+        if (_currentCountdownMessage ==
+            'You can now submit a new vendor request!') {
           timer.cancel();
           widget.onRefresh();
         }
@@ -166,9 +174,9 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
   }
 
   Future<void> _openAddProduct() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const AddProductScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const AddProductScreen()));
     if (!mounted) return;
     widget.onRefresh();
   }
@@ -187,6 +195,63 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     );
     if (!mounted) return;
     widget.onRefresh();
+  }
+
+  Future<void> _openPharmacistWorkspace() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const PharmacistDashboard()),
+    );
+    if (!mounted) return;
+    widget.onRefresh();
+  }
+
+  Future<void> _requestPharmacistApproval() async {
+    if (_isRequestingPharmacistApproval) return;
+
+    setState(() {
+      _isRequestingPharmacistApproval = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null) {
+        _showSnack('Please log in again.');
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/pharmacist/request'),
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+
+      final Map<String, dynamic> body = response.body.isNotEmpty
+          ? jsonDecode(response.body) as Map<String, dynamic>
+          : <String, dynamic>{};
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _showSnack(
+          body['message']?.toString() ?? 'Pharmacy approval request submitted.',
+        );
+        widget.onRefresh();
+      } else {
+        _showSnack(
+          body['message']?.toString() ??
+              'Unable to request pharmacy approval right now.',
+        );
+      }
+    } catch (e) {
+      debugPrint('Pharmacist approval request error: $e');
+      _showSnack('Network error while requesting pharmacy approval.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRequestingPharmacistApproval = false;
+        });
+      }
+    }
   }
 
   String _formatCurrency(double amount) => '₦${amount.toStringAsFixed(2)}';
@@ -251,10 +316,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
                   SizedBox(height: 12),
                   Text(
                     'Pull down to refresh if the status does not update automatically.',
-                    style: TextStyle(
-                      color: _vendorTextMuted,
-                      height: 1.5,
-                    ),
+                    style: TextStyle(color: _vendorTextMuted, height: 1.5),
                   ),
                 ],
               ),
@@ -320,7 +382,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
                 children: [
                   _buildReviewStep(
                     title: 'Application submitted',
-                    description: 'We received your vendor request successfully.',
+                    description:
+                        'We received your vendor request successfully.',
                     state: _ReviewStepState.complete,
                   ),
                   const SizedBox(height: 14),
@@ -349,10 +412,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
               subtitle: 'No extra action is needed from you yet.',
               child: const Text(
                 'Keep your contact and business details accurate. We will notify you once review is complete. You can also pull down to refresh this page anytime.',
-                style: TextStyle(
-                  color: _vendorTextMuted,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: _vendorTextMuted, height: 1.5),
               ),
             ),
           ],
@@ -360,7 +420,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
       case 'approved':
         return _buildVendorDashboard(context);
       case 'rejected':
-        final canResubmit = widget.rejectionDate != null &&
+        final canResubmit =
+            widget.rejectionDate != null &&
             DateTime.now().isAfter(
               widget.rejectionDate!.add(const Duration(days: 30)),
             );
@@ -407,7 +468,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
             ),
             _buildPanel(
               title: 'Before you try again',
-              subtitle: 'A stronger resubmission usually starts with cleaner details.',
+              subtitle:
+                  'A stronger resubmission usually starts with cleaner details.',
               child: Column(
                 children: const [
                   _VendorBullet(
@@ -449,8 +511,9 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumn = constraints.maxWidth >= 860;
-        final paneWidth =
-            twoColumn ? (constraints.maxWidth - 12) / 2 : constraints.maxWidth;
+        final paneWidth = twoColumn
+            ? (constraints.maxWidth - 12) / 2
+            : constraints.maxWidth;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -464,18 +527,9 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
               spacing: 12,
               runSpacing: 12,
               children: [
-                SizedBox(
-                  width: paneWidth,
-                  child: _buildQuickActionsCard(),
-                ),
-                SizedBox(
-                  width: paneWidth,
-                  child: _buildBalanceCard(),
-                ),
-                SizedBox(
-                  width: paneWidth,
-                  child: _buildMetricsCard(),
-                ),
+                SizedBox(width: paneWidth, child: _buildQuickActionsCard()),
+                SizedBox(width: paneWidth, child: _buildBalanceCard()),
+                SizedBox(width: paneWidth, child: _buildMetricsCard()),
                 SizedBox(
                   width: paneWidth,
                   child: _buildStorePulseCard(
@@ -483,6 +537,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
                     hasProducts: hasProducts,
                   ),
                 ),
+                SizedBox(width: paneWidth, child: _buildPharmacyUpgradeCard()),
               ],
             ),
             const SizedBox(height: 16),
@@ -659,7 +714,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
   Widget _buildBalanceCard() {
     return _buildPanel(
       title: 'Balances',
-      subtitle: 'Keep an eye on what you can withdraw and what is still in-app.',
+      subtitle:
+          'Keep an eye on what you can withdraw and what is still in-app.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -695,9 +751,15 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
             ),
           ),
           const SizedBox(height: 16),
-          _buildValueRow('Shopping wallet', _formatCurrency(widget.userWalletBalance)),
+          _buildValueRow(
+            'Shopping wallet',
+            _formatCurrency(widget.userWalletBalance),
+          ),
           const SizedBox(height: 10),
-          _buildValueRow('App wallet', _formatCurrency(widget.appWalletBalance)),
+          _buildValueRow(
+            'App wallet',
+            _formatCurrency(widget.appWalletBalance),
+          ),
           const SizedBox(height: 18),
           Wrap(
             spacing: 12,
@@ -802,8 +864,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     final inventoryMessage = !hasProducts
         ? 'Add your first listing to start taking orders.'
         : widget.productsUnsold == 0
-            ? 'Every listed product has seen demand already.'
-            : '${widget.productsUnsold} product${widget.productsUnsold == 1 ? '' : 's'} still waiting for a first sale.';
+        ? 'Every listed product has seen demand already.'
+        : '${widget.productsUnsold} product${widget.productsUnsold == 1 ? '' : 's'} still waiting for a first sale.';
 
     return _buildPanel(
       title: 'Store pulse',
@@ -819,16 +881,13 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
           const SizedBox(height: 12),
           _buildPulseRow(
             label: 'Alerts',
-            value:
-                notificationCount == 0 ? 'All clear' : '$notificationCount pending',
-            valueColor:
-                notificationCount == 0 ? deepNavyBlue : _vendorWarning,
+            value: notificationCount == 0
+                ? 'All clear'
+                : '$notificationCount pending',
+            valueColor: notificationCount == 0 ? deepNavyBlue : _vendorWarning,
           ),
           const SizedBox(height: 12),
-          _buildPulseRow(
-            label: 'Followers',
-            value: '${widget.followersCount}',
-          ),
+          _buildPulseRow(label: 'Followers', value: '${widget.followersCount}'),
           const SizedBox(height: 18),
           Container(
             width: double.infinity,
@@ -885,6 +944,204 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     );
   }
 
+  Widget _buildPharmacyUpgradeCard() {
+    final normalizedStatus = widget.isPharmacist
+        ? 'approved'
+        : widget.pharmacistStatus.toLowerCase().trim();
+    final isApproved = normalizedStatus == 'approved';
+    final isPending =
+        normalizedStatus == 'sent' ||
+        normalizedStatus == 'received' ||
+        normalizedStatus == 'reviewing' ||
+        normalizedStatus == 'pending';
+    final isRejected = normalizedStatus == 'rejected';
+
+    late final String statusLabel;
+    late final String title;
+    late final String subtitle;
+    late final Color statusColor;
+    late final IconData icon;
+
+    if (isApproved) {
+      statusLabel = 'Approved';
+      title = 'Pharmacist vendor tools';
+      subtitle =
+          'You can manage live consultations, list medicine products, and support pharmacy customers from your verified workspace.';
+      statusColor = _vendorSuccess;
+      icon = Icons.verified_user_outlined;
+    } else if (isPending) {
+      statusLabel = 'Under review';
+      title = 'Pharmacy approval in progress';
+      subtitle =
+          'Your pharmacist verification is being reviewed. Once approved, medicine listing and consultation tools will unlock here.';
+      statusColor = _vendorWarning;
+      icon = Icons.hourglass_top_rounded;
+    } else if (isRejected) {
+      statusLabel = 'Action needed';
+      title = 'Pharmacy approval not completed';
+      subtitle =
+          'Review your pharmacy documents and request approval again when your PCN and store details are ready.';
+      statusColor = _vendorDanger;
+      icon = Icons.assignment_late_outlined;
+    } else {
+      statusLabel = 'Specialist upgrade';
+      title = 'Apply for pharmacy approval';
+      subtitle =
+          'Approved vendors can request pharmacist verification to sell medicine products and claim pharmacy consultations.';
+      statusColor = deepNavyBlue;
+      icon = Icons.local_pharmacy_outlined;
+    }
+
+    return _buildPanel(
+      title: 'Pharmacy unit',
+      subtitle: 'A verified specialist layer on top of your vendor account.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: statusColor.withValues(alpha: 0.18)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 46,
+                  width: 46,
+                  decoration: BoxDecoration(
+                    color: whiteBackground,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: statusColor),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: whiteBackground,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: deepNavyBlue,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: _vendorTextMuted,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              if (isApproved)
+                ElevatedButton.icon(
+                  onPressed: _openPharmacistWorkspace,
+                  icon: const Icon(Icons.medical_services_outlined),
+                  label: const Text('Open Pharmacist Workspace'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: deepNavyBlue,
+                    foregroundColor: whiteBackground,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: isPending || _isRequestingPharmacistApproval
+                      ? null
+                      : _requestPharmacistApproval,
+                  icon: _isRequestingPharmacistApproval
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.fact_check_outlined),
+                  label: Text(
+                    isPending
+                        ? 'Approval Under Review'
+                        : isRejected
+                        ? 'Request Again'
+                        : 'Apply for Pharmacy Approval',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: deepNavyBlue,
+                    foregroundColor: whiteBackground,
+                    disabledBackgroundColor: _vendorBorder,
+                    disabledForegroundColor: _vendorTextMuted,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              OutlinedButton.icon(
+                onPressed: widget.onRefresh,
+                icon: const Icon(Icons.sync_rounded),
+                label: const Text('Refresh status'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: deepNavyBlue,
+                  side: const BorderSide(color: _vendorBorder),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDangerZoneCard() {
     return _buildPanel(
       title: 'Vendor account',
@@ -894,18 +1151,14 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
         children: [
           const Text(
             'If you no longer want to sell on NaijaGo, you can leave the vendor program here. This removes your seller access after confirmation.',
-            style: TextStyle(
-              color: _vendorTextMuted,
-              height: 1.5,
-            ),
+            style: TextStyle(color: _vendorTextMuted, height: 1.5),
           ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () async {
               final bool? confirmed = await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) =>
-                      const VendorDesistConfirmationScreen(),
+                  builder: (context) => const VendorDesistConfirmationScreen(),
                 ),
               );
               if (confirmed == true) {
@@ -917,10 +1170,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
             style: ElevatedButton.styleFrom(
               backgroundColor: _vendorDanger,
               foregroundColor: whiteBackground,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 14,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -990,7 +1240,8 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
                             height: 1.55,
                           ),
                         ),
-                        if (primaryLabel != null && onPrimaryPressed != null) ...[
+                        if (primaryLabel != null &&
+                            onPrimaryPressed != null) ...[
                           const SizedBox(height: 22),
                           ElevatedButton.icon(
                             onPressed: onPrimaryPressed,
@@ -1020,11 +1271,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
                       shape: BoxShape.circle,
                       color: whiteBackground.withValues(alpha: 0.12),
                     ),
-                    child: Icon(
-                      icon,
-                      color: whiteBackground,
-                      size: 30,
-                    ),
+                    child: Icon(icon, color: whiteBackground, size: 30),
                   ),
                 ],
               ),
@@ -1072,10 +1319,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(
-              color: _vendorTextMuted,
-              height: 1.5,
-            ),
+            style: const TextStyle(color: _vendorTextMuted, height: 1.5),
           ),
           const SizedBox(height: 20),
           child,
@@ -1084,18 +1328,13 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     );
   }
 
-  Widget _buildHeroPill({
-    required IconData icon,
-    required String label,
-  }) {
+  Widget _buildHeroPill({required IconData icon, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: whiteBackground.withValues(alpha: 0.12),
-        border: Border.all(
-          color: whiteBackground.withValues(alpha: 0.14),
-        ),
+        border: Border.all(color: whiteBackground.withValues(alpha: 0.14)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1115,10 +1354,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     );
   }
 
-  Widget _buildHeroMetric({
-    required String label,
-    required String value,
-  }) {
+  Widget _buildHeroMetric({required String label, required String value}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1316,13 +1552,13 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     final Color badgeColor = isComplete
         ? _vendorSuccess
         : isActive
-            ? _vendorWarning
-            : _vendorBorder;
+        ? _vendorWarning
+        : _vendorBorder;
     final Color iconColor = isComplete
         ? _vendorSuccess
         : isActive
-            ? _vendorWarning
-            : _vendorTextMuted;
+        ? _vendorWarning
+        : _vendorTextMuted;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1332,15 +1568,16 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
           width: 28,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color:
-                badgeColor.withValues(alpha: isComplete || isActive ? 0.12 : 0.4),
+            color: badgeColor.withValues(
+              alpha: isComplete || isActive ? 0.12 : 0.4,
+            ),
           ),
           child: Icon(
             isComplete
                 ? Icons.check_rounded
                 : isActive
-                    ? Icons.more_horiz_rounded
-                    : Icons.circle_outlined,
+                ? Icons.more_horiz_rounded
+                : Icons.circle_outlined,
             size: 18,
             color: iconColor,
           ),
@@ -1361,10 +1598,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
               const SizedBox(height: 4),
               Text(
                 description,
-                style: const TextStyle(
-                  color: _vendorTextMuted,
-                  height: 1.45,
-                ),
+                style: const TextStyle(color: _vendorTextMuted, height: 1.45),
               ),
             ],
           ),
@@ -1372,7 +1606,7 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
       ],
     );
   }
-  
+
   Future<List<Map<String, String>>> _fetchBanks() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1391,12 +1625,18 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
       if (backendResp.statusCode == 200) {
         final parsed = jsonDecode(backendResp.body);
         final List data = parsed['banks'] ?? [];
-        return data.map<Map<String, String>>((b) => {
-          'name': b['name'].toString(),
-          'code': b['code'].toString(),
-        }).toList();
+        return data
+            .map<Map<String, String>>(
+              (b) => {
+                'name': b['name'].toString(),
+                'code': b['code'].toString(),
+              },
+            )
+            .toList();
       } else {
-        debugPrint('Backend bank list error: ${backendResp.statusCode} ${backendResp.body}');
+        debugPrint(
+          'Backend bank list error: ${backendResp.statusCode} ${backendResp.body}',
+        );
         return [];
       }
     } catch (e) {
@@ -1405,96 +1645,107 @@ class _VendorScreenState extends State<VendorScreen> with WidgetsBindingObserver
     }
   }
 
-Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> banks) {
-  List<Map<String, String>> filteredBanks = List.from(banks); // <-- persists
+  Future<Map<String, String>?> _showBankSelectionDialog(
+    List<Map<String, String>> banks,
+  ) {
+    List<Map<String, String>> filteredBanks = List.from(banks); // <-- persists
 
-  return showDialog<Map<String, String>?>(
-    context: context,
-    builder: (context) {
-      final TextEditingController searchController = TextEditingController();
+    return showDialog<Map<String, String>?>(
+      context: context,
+      builder: (context) {
+        final TextEditingController searchController = TextEditingController();
 
-      return StatefulBuilder(
-        builder: (context, setState) {
-          void filterBanks(String query) {
-            setState(() {
-              if (query.isEmpty) {
-                filteredBanks = List.from(banks);
-              } else {
-                filteredBanks = banks
-                    .where((bank) =>
-                        bank['name']!.toLowerCase().contains(query.toLowerCase()))
-                    .toList();
-              }
-            });
-          }
+        return StatefulBuilder(
+          builder: (context, setState) {
+            void filterBanks(String query) {
+              setState(() {
+                if (query.isEmpty) {
+                  filteredBanks = List.from(banks);
+                } else {
+                  filteredBanks = banks
+                      .where(
+                        (bank) => bank['name']!.toLowerCase().contains(
+                          query.toLowerCase(),
+                        ),
+                      )
+                      .toList();
+                }
+              });
+            }
 
-          return AlertDialog(
-            backgroundColor: whiteBackground,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-              side: const BorderSide(color: _vendorBorder),
-            ),
-            title: const Text('Select a Bank', style: TextStyle(color: deepNavyBlue)),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: searchController,
-                    decoration: _inputDecoration('Search for a bank...'),
-                    onChanged: filterBanks,
-                  ),
-                  const SizedBox(height: 12),
-                  if (filteredBanks.isEmpty)
-                    const Text(
-                      'No banks found.',
-                      style: TextStyle(
-                        color: deepNavyBlue,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    )
-                  else
-                    SizedBox(
-                      height: 320,
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filteredBanks.length,
-                        itemBuilder: (context, index) {
-                          final bank = filteredBanks[index];
-                          return ListTile(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            title: Text(
-                              bank['name']!,
-                              style: const TextStyle(
-                                color: deepNavyBlue,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onTap: () {
-                              Navigator.of(context).pop(bank);
-                            },
-                          );
-                        },
-                      ),
+            return AlertDialog(
+              backgroundColor: whiteBackground,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: const BorderSide(color: _vendorBorder),
+              ),
+              title: const Text(
+                'Select a Bank',
+                style: TextStyle(color: deepNavyBlue),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      decoration: _inputDecoration('Search for a bank...'),
+                      onChanged: filterBanks,
                     ),
-                ],
+                    const SizedBox(height: 12),
+                    if (filteredBanks.isEmpty)
+                      const Text(
+                        'No banks found.',
+                        style: TextStyle(
+                          color: deepNavyBlue,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        height: 320,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filteredBanks.length,
+                          itemBuilder: (context, index) {
+                            final bank = filteredBanks[index];
+                            return ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              title: Text(
+                                bank['name']!,
+                                style: const TextStyle(
+                                  color: deepNavyBlue,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.of(context).pop(bank);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel', style: TextStyle(color: deepNavyBlue)),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
-}
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: deepNavyBlue),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   // UPDATED: This function now coordinates the entire two-step withdrawal process.
   void _showWithdrawDialog() async {
@@ -1504,14 +1755,20 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
     if (!mounted) return;
 
     if (banks.isEmpty) {
-      _showSnack('Failed to load bank list. Check your connection and try again.');
+      _showSnack(
+        'Failed to load bank list. Check your connection and try again.',
+      );
       return;
     }
-    
-    final TextEditingController accountNumberController = TextEditingController(text: _savedAccountNumber ?? '');
-    final TextEditingController accountNameController = TextEditingController(text: '');
+
+    final TextEditingController accountNumberController = TextEditingController(
+      text: _savedAccountNumber ?? '',
+    );
+    final TextEditingController accountNameController = TextEditingController(
+      text: '',
+    );
     final TextEditingController amountController = TextEditingController();
-    
+
     String? selectedBankCode = _savedBankCode;
     String? selectedBankName = _savedBankName;
     bool saveDetails = false;
@@ -1539,10 +1796,7 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                   children: [
                     const Text(
                       'Move available vendor earnings to your bank account securely.',
-                      style: TextStyle(
-                        color: _vendorTextMuted,
-                        height: 1.5,
-                      ),
+                      style: TextStyle(color: _vendorTextMuted, height: 1.5),
                     ),
                     const SizedBox(height: 16),
                     if (_savedBankName != null)
@@ -1556,7 +1810,7 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                           ),
                         ),
                       ),
-                    
+
                     GestureDetector(
                       onTap: () async {
                         final result = await _showBankSelectionDialog(banks);
@@ -1568,7 +1822,10 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 16.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12.0,
+                          vertical: 16.0,
+                        ),
                         decoration: BoxDecoration(
                           color: whiteBackground,
                           border: Border.all(color: _vendorBorder),
@@ -1580,13 +1837,18 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                               child: Text(
                                 selectedBankName ?? 'Select a bank...',
                                 style: TextStyle(
-                                  color: selectedBankName == null ? deepNavyBlue.withValues(alpha: 0.6) : deepNavyBlue,
+                                  color: selectedBankName == null
+                                      ? deepNavyBlue.withValues(alpha: 0.6)
+                                      : deepNavyBlue,
                                   fontSize: 16,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const Icon(Icons.arrow_drop_down, color: deepNavyBlue),
+                            const Icon(
+                              Icons.arrow_drop_down,
+                              color: deepNavyBlue,
+                            ),
                           ],
                         ),
                       ),
@@ -1608,7 +1870,9 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                     TextField(
                       controller: amountController,
                       decoration: _inputDecoration('Amount (₦)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -1634,7 +1898,10 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: deepNavyBlue)),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: deepNavyBlue),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -1664,7 +1931,7 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                       _showSnack('Insufficient vendor wallet balance.');
                       return;
                     }
-                    
+
                     Navigator.pop(context); // Dismiss the first dialog
                     _requestOtpAndWithdraw(
                       bankCode: selectedBankCode!,
@@ -1698,7 +1965,7 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
         headers: _authHeaders(token),
         body: jsonEncode({}),
       );
-      
+
       if (resp.statusCode == 200) {
         final body = jsonDecode(resp.body);
         _showSnack(body['message'] ?? 'OTP sent to your email.');
@@ -1730,19 +1997,17 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
         _showSnack('Please log in again.');
         return;
       }
-    
+
       _showSnack('Sending OTP to your registered email...');
-    
+
       bool otpSent = await _sendOtpRequest(token);
-    
+
       if (!otpSent) {
         _showSnack('Failed to send OTP. Please try again.');
         return;
       }
-    
-      final otp = await _showOtpDialog(
-        onResend: () => _resendOtp(token),
-      );
+
+      final otp = await _showOtpDialog(onResend: () => _resendOtp(token));
 
       if (otp != null && otp.isNotEmpty) {
         _submitWithdrawal(
@@ -1764,7 +2029,7 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
 
   Future<String?> _showOtpDialog({required Future<bool> Function() onResend}) {
     final TextEditingController otpController = TextEditingController();
-    
+
     return showDialog<String?>(
       context: context,
       barrierDismissible: false,
@@ -1774,7 +2039,6 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
 
         return StatefulBuilder(
           builder: (context, setState) {
-            
             if (timer == null || !timer!.isActive) {
               timer = Timer.periodic(const Duration(seconds: 1), (timer) {
                 if (!mounted) {
@@ -1801,13 +2065,18 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                 borderRadius: BorderRadius.circular(24),
                 side: const BorderSide(color: _vendorBorder),
               ),
-              title: const Text('Enter OTP', style: TextStyle(color: deepNavyBlue)),
+              title: const Text(
+                'Enter OTP',
+                style: TextStyle(color: deepNavyBlue),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     'An OTP has been sent to your email. Please enter it below.',
-                    style: TextStyle(color: deepNavyBlue.withValues(alpha: 0.8)),
+                    style: TextStyle(
+                      color: deepNavyBlue.withValues(alpha: 0.8),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -1837,7 +2106,7 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                       if (!context.mounted) return;
                       if (success) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('New OTP sent!'))
+                          SnackBar(content: Text('New OTP sent!')),
                         );
                       }
                       Navigator.of(context).pop();
@@ -1857,7 +2126,10 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
                     timer?.cancel();
                     Navigator.pop(context);
                   },
-                  child: const Text('Cancel', style: TextStyle(color: deepNavyBlue)),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: deepNavyBlue),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: otpCountdown > 0 && otpController.text.length == 6
@@ -1891,13 +2163,15 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
         headers: _authHeaders(token),
         body: jsonEncode({}),
       );
-    
+
       final body = jsonDecode(resp.body);
       if (resp.statusCode == 200) {
         _showSnack(body['message'] ?? 'New OTP sent to your email.');
         return true;
       } else {
-        _showSnack(body['message'] ?? 'Failed to resend OTP. Please try again.');
+        _showSnack(
+          body['message'] ?? 'Failed to resend OTP. Please try again.',
+        );
         return false;
       }
     } catch (e) {
@@ -1960,7 +2234,9 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
 
   void _showSnack(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -1996,21 +2272,25 @@ Future<Map<String, String>?> _showBankSelectionDialog(List<Map<String, String>> 
 
     try {
       final Uri url = Uri.parse('$baseUrl/api/auth/desist-vendor');
-      final response = await http.put(
-        url,
-        headers: _authHeaders(token),
-      );
+      final response = await http.put(url, headers: _authHeaders(token));
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
       if (!mounted) return;
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'Successfully desisted from vendor status.')),
+          SnackBar(
+            content: Text(
+              responseData['message'] ??
+                  'Successfully desisted from vendor status.',
+            ),
+          ),
         );
         widget.onRefresh();
       } else {
-        _showSnack(responseData['message'] ?? 'Failed to desist from vendor status.');
+        _showSnack(
+          responseData['message'] ?? 'Failed to desist from vendor status.',
+        );
       }
     } catch (e) {
       _showSnack('An error occurred while desisting: $e');
@@ -2062,10 +2342,7 @@ class _VendorBullet extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 description,
-                style: const TextStyle(
-                  color: _vendorTextMuted,
-                  height: 1.45,
-                ),
+                style: const TextStyle(color: _vendorTextMuted, height: 1.45),
               ),
             ],
           ),

@@ -224,6 +224,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
     }
 
     try {
+      await LocationAccessService.requestPreciseLocationIfNeeded();
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: LocationAccessService.currentLocationSettings(),
       );

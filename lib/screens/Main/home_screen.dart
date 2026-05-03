@@ -1,22 +1,28 @@
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter, lerpDouble;
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Import your existing files
 import '../../constants.dart';
+import '../../models/food_readiness_campaign.dart';
+import '../../models/home_carousel_slide.dart';
 import '../../models/product.dart';
 import '../../providers/cart_provider.dart';
+import '../../services/analytics_service.dart';
+import '../../services/food_readiness_campaign_service.dart';
+import '../../services/home_carousel_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
-import 'chat_screen.dart';
-import 'product_detail_screen.dart';
 import 'categories_screen.dart'
     hide
         accentGreen,
@@ -35,6 +41,10 @@ import 'category_products_screen.dart'
         secondaryBlack,
         softGrey,
         white;
+import 'chat_screen.dart';
+import 'product_detail_screen.dart';
+import 'restaurant_food_screen.dart'
+    hide lightGrey, primaryNavy, secondaryBlack, softGrey, white;
 
 const Color borderGrey = AppTheme.borderGrey;
 
@@ -417,6 +427,39 @@ class ProductService {
   Future<List<Product>> fetchAllProducts() => _fetchProducts('/api/products');
   Future<List<Product>> fetchProductsByCategory(String category) =>
       _fetchProducts('/api/products/category/$category');
+  Future<Product> fetchProductById(String productId) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? token = prefs.getString('jwt_token');
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/products/$productId'),
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return Product.fromJson(jsonDecode(response.body));
+    }
+
+    throw Exception('Failed to load product: ${response.statusCode}');
+  }
+
+  Future<List<Product>> fetchRestaurantProducts({
+    double? latitude,
+    double? longitude,
+    double radiusKm = 15,
+  }) {
+    final query = <String, String>{};
+    if (latitude != null && longitude != null) {
+      query['lat'] = latitude.toString();
+      query['lng'] = longitude.toString();
+      query['radiusKm'] = radiusKm.toString();
+    }
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    return _fetchProducts('/api/products/restaurants$suffix');
+  }
+
   Future<List<Product>> searchProducts(String query) => _fetchProducts(
     '/api/products/search?q=${Uri.encodeQueryComponent(query)}',
   );
@@ -456,6 +499,21 @@ class ProductService {
 // ────────────────────────────────────────────────
 // MAIN HOME SCREEN
 // ────────────────────────────────────────────────
+enum _MealMoment { breakfast, lunch, dinner }
+
+extension _MealMomentCopy on _MealMoment {
+  String get label {
+    switch (this) {
+      case _MealMoment.breakfast:
+        return 'Breakfast';
+      case _MealMoment.lunch:
+        return 'Lunch';
+      case _MealMoment.dinner:
+        return 'Dinner';
+    }
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -467,6 +525,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Product> _flashSales = [];
   List<Product> _newArrivals = [];
   List<Product> _recommended = [];
+  List<Product> _restaurants = [];
+  List<HomeCarouselSlide> _bannerSlides = [];
+  List<HomeCarouselSlide> _promoSlides = [];
   String? _errorMessage;
 
   final PageController _bannerController = PageController(
@@ -481,11 +542,19 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   late final ProductService _productService;
+  late final HomeCarouselService _homeCarouselService;
+  late final FoodReadinessCampaignService _foodCampaignService;
 
   int _currentBanner = 0;
   int _currentPromo = 0;
 
   String _userFirstName = 'there'; // fallback
+  bool _isAbujaCustomer = false;
+  bool _shouldShowFoodReadySpotlight = false;
+  _MealMoment? _currentMealMoment;
+  FoodReadinessCampaign? _activeFoodCampaign;
+  double? _customerLatitude;
+  double? _customerLongitude;
 
   final List<Map<String, String>> _homeCategories = [
     {"image": "assets/categories/smartphones.jpg", "label": "Phones"},
@@ -500,31 +569,90 @@ class _HomeScreenState extends State<HomeScreen> {
   static const String _cacheFlashKey = 'cache_flash_sales';
   static const String _cacheNewKey = 'cache_new_arrivals';
   static const String _cacheRecommendedKey = 'cache_recommended';
+  static const String _cacheRestaurantsKey = 'cache_restaurants';
   static const String _cacheTimestampKey = 'cache_timestamp';
+  static const String _foodReadyLastPopKey = 'food_ready_last_pop_date';
   static const int _cacheExpiryMs = 30 * 60 * 1000; // 30 minutes
-  static const List<String> _bannerImages = [
-    'assets/Artboard1.jpeg',
-    'assets/Artboard2.jpeg',
-    'assets/Artboard3.jpeg',
-    'assets/Artboard4.jpeg',
-    'assets/Artboard5.jpeg',
-    'assets/Artboard6.jpeg',
-    'assets/Artboard7.jpeg',
+  static const List<HomeCarouselSlide> _fallbackBannerSlides = [
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard1.jpeg',
+      sortOrder: 0,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard2.jpeg',
+      sortOrder: 1,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard3.jpeg',
+      sortOrder: 2,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard4.jpeg',
+      sortOrder: 3,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard5.jpeg',
+      sortOrder: 4,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard6.jpeg',
+      sortOrder: 5,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'main',
+      imageUrl: 'assets/Artboard7.jpeg',
+      sortOrder: 6,
+    ),
   ];
-  static const List<String> _promoBanners = [
-    'assets/ads1.png',
-    'assets/ads2.png',
-    'assets/ads3.png',
-    'assets/ads4.png',
-    'assets/ads5.png',
+  static const List<HomeCarouselSlide> _fallbackPromoSlides = [
+    HomeCarouselSlide.asset(
+      placement: 'promo',
+      imageUrl: 'assets/ads1.png',
+      sortOrder: 0,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'promo',
+      imageUrl: 'assets/ads2.png',
+      sortOrder: 1,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'promo',
+      imageUrl: 'assets/ads3.png',
+      sortOrder: 2,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'promo',
+      imageUrl: 'assets/ads4.png',
+      sortOrder: 3,
+    ),
+    HomeCarouselSlide.asset(
+      placement: 'promo',
+      imageUrl: 'assets/ads5.png',
+      sortOrder: 4,
+    ),
   ];
+
+  List<HomeCarouselSlide> get _effectiveBannerSlides =>
+      _bannerSlides.isNotEmpty ? _bannerSlides : _fallbackBannerSlides;
+
+  List<HomeCarouselSlide> get _effectivePromoSlides =>
+      _promoSlides.isNotEmpty ? _promoSlides : _fallbackPromoSlides;
 
   @override
   void initState() {
     super.initState();
     _productService = ProductService();
+    _homeCarouselService = HomeCarouselService();
+    _foodCampaignService = const FoodReadinessCampaignService();
     _loadUserName();
-    _fetchProducts(); // will use cache first + background refresh
+    _loadFoodReadyTargeting();
+    _loadHomeContent(); // uses cached products + remote carousel refresh
     _startAutoScrollTimers();
   }
 
@@ -544,6 +672,546 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _loadFoodReadyTargeting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedUser = prefs.getString('user');
+    var isAbujaCustomer =
+        cachedUser != null && _containsAbujaSignal(cachedUser);
+    var customerLocation = cachedUser != null
+        ? _extractSavedCustomerLocation(cachedUser)
+        : null;
+
+    final token = prefs.getString('jwt_token');
+    if (token != null) {
+      try {
+        final response = await http.get(
+          Uri.parse('$baseUrl/api/auth/me'),
+          headers: <String, String>{
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          await prefs.setString('user', response.body);
+          isAbujaCustomer = _containsAbujaSignal(response.body);
+          customerLocation = _extractSavedCustomerLocation(response.body);
+        }
+      } catch (e) {
+        debugPrint('Food ready targeting check failed: $e');
+      }
+    }
+
+    FoodReadinessCampaign? campaign;
+    try {
+      campaign = await _foodCampaignService.fetchActiveCampaign(
+        city: isAbujaCustomer ? 'Abuja' : null,
+      );
+    } catch (e) {
+      debugPrint('Food readiness campaign fetch failed: $e');
+    }
+
+    final mealMoment = _mealMomentFor(DateTime.now());
+    final shouldShow =
+        isAbujaCustomer && campaign != null && _hasRestaurantProducts;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isAbujaCustomer = isAbujaCustomer;
+      _customerLatitude = customerLocation?.$1;
+      _customerLongitude = customerLocation?.$2;
+      _currentMealMoment = mealMoment;
+      _activeFoodCampaign = campaign;
+      _shouldShowFoodReadySpotlight = shouldShow;
+    });
+
+    unawaited(_fetchRestaurantProducts(forceRefresh: true));
+
+    if (shouldShow) {
+      _showFoodReadyPopIfAllowed(campaign);
+    }
+  }
+
+  bool _containsAbujaSignal(String source) {
+    try {
+      final decoded = jsonDecode(source);
+      if (decoded is Map<String, dynamic>) {
+        final directLocation = [
+          decoded['city'],
+          decoded['state'],
+          decoded['address'],
+          decoded['addressLine'],
+        ].whereType<Object>().join(' ');
+
+        if (_isAbujaText(directLocation)) {
+          return true;
+        }
+
+        final addresses = decoded['deliveryAddresses'];
+        if (addresses is List) {
+          return addresses.any((address) {
+            if (address is! Map) {
+              return false;
+            }
+
+            final addressText = [
+              address['city'],
+              address['state'],
+              address['address'],
+              address['addressLine'],
+              address['formattedAddress'],
+            ].whereType<Object>().join(' ');
+
+            return _isAbujaText(addressText);
+          });
+        }
+      }
+    } catch (_) {
+      return _isAbujaText(source);
+    }
+
+    return _isAbujaText(source);
+  }
+
+  bool _isAbujaText(String source) {
+    final normalized = source.toLowerCase();
+    return normalized.contains('abuja') ||
+        normalized.contains('fct') ||
+        normalized.contains('federal capital territory');
+  }
+
+  (double, double)? _extractSavedCustomerLocation(String source) {
+    try {
+      final decoded = jsonDecode(source);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final addresses = decoded['deliveryAddresses'];
+      if (addresses is! List || addresses.isEmpty) return null;
+
+      Map<String, dynamic>? selected;
+      for (final address in addresses) {
+        if (address is Map && address['isDefault'] == true) {
+          selected = Map<String, dynamic>.from(address);
+          break;
+        }
+      }
+
+      if (selected == null) {
+        for (final address in addresses) {
+          if (address is Map) {
+            selected = Map<String, dynamic>.from(address);
+            break;
+          }
+        }
+      }
+
+      if (selected == null) return null;
+
+      final latitude = _parseCoordinate(selected['latitude']);
+      final longitude = _parseCoordinate(selected['longitude']);
+      if (latitude == null || longitude == null) return null;
+
+      return (latitude, longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double? _parseCoordinate(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  _MealMoment? _mealMomentFor(DateTime now) {
+    final hour = now.hour;
+    if (hour >= 6 && hour < 11) {
+      return _MealMoment.breakfast;
+    }
+    if (hour >= 12 && hour < 16) {
+      return _MealMoment.lunch;
+    }
+    if (hour >= 18 && hour < 22) {
+      return _MealMoment.dinner;
+    }
+    return null;
+  }
+
+  bool get _hasRestaurantProducts {
+    return _restaurantProducts.isNotEmpty;
+  }
+
+  List<Product> get _restaurantProducts {
+    if (_restaurants.isNotEmpty) {
+      return _restaurants;
+    }
+
+    final seen = <String>{};
+    final allRestaurants = [..._recommended, ..._newArrivals, ..._flashSales]
+        .where((product) {
+          if (!product.isRestaurantItem || seen.contains(product.id)) {
+            return false;
+          }
+          seen.add(product.id);
+          return true;
+        })
+        .toList();
+
+    if (_customerLatitude == null || _customerLongitude == null) {
+      return allRestaurants;
+    }
+
+    final nearby =
+        allRestaurants.where((product) {
+          if (!product.hasVendorCoordinates) return false;
+          return _distanceKm(
+                _customerLatitude!,
+                _customerLongitude!,
+                product.vendorLatitude!,
+                product.vendorLongitude!,
+              ) <=
+              15;
+        }).toList()..sort((a, b) {
+          final aDistance = _distanceKm(
+            _customerLatitude!,
+            _customerLongitude!,
+            a.vendorLatitude!,
+            a.vendorLongitude!,
+          );
+          final bDistance = _distanceKm(
+            _customerLatitude!,
+            _customerLongitude!,
+            b.vendorLatitude!,
+            b.vendorLongitude!,
+          );
+          return aDistance.compareTo(bDistance);
+        });
+
+    return nearby.isNotEmpty ? nearby : allRestaurants;
+  }
+
+  double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
+    const earthRadiusKm = 6371.0;
+    final dLat = _degreesToRadians(lat2 - lat1);
+    final dLon = _degreesToRadians(lon2 - lon1);
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) *
+            math.cos(_degreesToRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
+  double _degreesToRadians(double degrees) => degrees * math.pi / 180;
+
+  Future<void> _showFoodReadyPopIfAllowed(
+    FoodReadinessCampaign campaign,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final todayKey =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}-${campaign.cacheKey}';
+    final lastPopValue = prefs.getString(_foodReadyLastPopKey);
+
+    if (lastPopValue == todayKey) {
+      return;
+    }
+
+    await prefs.setString(_foodReadyLastPopKey, todayKey);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_shouldShowFoodReadySpotlight) {
+        return;
+      }
+      _showFoodReadyBottomSheet(campaign);
+    });
+  }
+
+  void _showFoodReadyBottomSheet(FoodReadinessCampaign campaign) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF18110B),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      height: 44,
+                      width: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB45C).withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: campaign.imageUrl.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(15),
+                              child: CachedNetworkImage(
+                                imageUrl: campaign.imageUrl,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, _, _) => const Icon(
+                                  Icons.restaurant_menu_rounded,
+                                  color: Color(0xFFFFB45C),
+                                ),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.restaurant_menu_rounded,
+                              color: Color(0xFFFFB45C),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        campaign.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  campaign.message,
+                  style: const TextStyle(
+                    color: Color(0xFFFFE4C4),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _openRestaurantStore();
+                    },
+                    icon: const Icon(Icons.north_east_rounded, size: 18),
+                    label: const Text('See ready food'),
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: const Color(0xFFFFB45C),
+                      foregroundColor: const Color(0xFF18110B),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openRestaurantStore() {
+    const AnalyticsService().track(
+      eventType: 'restaurant_card_click',
+      source: 'home',
+      targetType: 'restaurant_section',
+      city: _isAbujaCustomer ? 'Abuja' : null,
+      metadata: {
+        'mealMoment': _currentMealMoment?.label,
+        'restaurantCount': _restaurantProducts.length,
+      },
+    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RestaurantFoodScreen()));
+  }
+
+  Future<void> _handleCarouselSlideTap(HomeCarouselSlide slide) async {
+    final actionType = slide.actionType.trim().toLowerCase();
+    final actionValue = slide.actionValue.trim();
+    const AnalyticsService().track(
+      eventType: 'carousel_click',
+      source: 'home',
+      targetType: actionType.isEmpty ? 'none' : actionType,
+      targetId: actionValue.isNotEmpty ? actionValue : slide.linkUrl,
+      placement: slide.placement,
+      city: _isAbujaCustomer ? 'Abuja' : null,
+      metadata: {
+        'slideId': slide.id,
+        'title': slide.title,
+        'linkUrl': slide.linkUrl,
+      },
+    );
+
+    switch (actionType) {
+      case 'restaurant':
+        _openRestaurantStore();
+        return;
+      case 'pharmacy':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const CategoryProductsScreen(
+              category: 'Health & Beauty > Medicine',
+            ),
+          ),
+        );
+        return;
+      case 'category':
+        if (actionValue.isNotEmpty) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CategoryProductsScreen(category: actionValue),
+            ),
+          );
+        }
+        return;
+      case 'product':
+        if (actionValue.isEmpty) return;
+        try {
+          final product = await _productService.fetchProductById(actionValue);
+          if (!mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ProductDetailScreen(
+                product: product,
+                heroTag: 'carousel-product-${product.id}',
+              ),
+            ),
+          );
+        } catch (error) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to open this product.')),
+          );
+        }
+        return;
+      case 'external':
+        final target = actionValue.isNotEmpty ? actionValue : slide.linkUrl;
+        if (target.isEmpty) return;
+        final uri = Uri.tryParse(target);
+        if (uri != null) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+        return;
+      default:
+        if (slide.linkUrl.isNotEmpty) {
+          final uri = Uri.tryParse(slide.linkUrl);
+          if (uri != null) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        }
+    }
+  }
+
+  void _refreshFoodReadySpotlight({bool allowPop = false}) {
+    final mealMoment = _mealMomentFor(DateTime.now());
+    final shouldShow =
+        _isAbujaCustomer && _activeFoodCampaign != null && _hasRestaurantProducts;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentMealMoment = mealMoment;
+      _shouldShowFoodReadySpotlight = shouldShow;
+    });
+
+    if (allowPop && shouldShow) {
+      _showFoodReadyPopIfAllowed(_activeFoodCampaign!);
+    }
+  }
+
+  Future<void> _loadHomeContent({bool forceRefresh = false}) async {
+    await Future.wait([
+      _fetchProducts(forceRefresh: forceRefresh),
+      _fetchCarouselSlides(),
+    ]);
+  }
+
+  void _normalizeCarouselIndices() {
+    final bannerCount = _effectiveBannerSlides.length;
+    final promoCount = _effectivePromoSlides.length;
+
+    _currentBanner = bannerCount == 0 ? 0 : _currentBanner % bannerCount;
+    _currentPromo = promoCount == 0 ? 0 : _currentPromo % promoCount;
+  }
+
+  void _syncCarouselControllers() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final bannerCount = _effectiveBannerSlides.length;
+      if (bannerCount > 0 && _bannerController.hasClients) {
+        final targetBannerPage = _currentBanner.clamp(0, bannerCount - 1);
+        final currentBannerPage = _bannerController.page?.round();
+        if (currentBannerPage != targetBannerPage) {
+          _bannerController.jumpToPage(targetBannerPage);
+        }
+      }
+
+      final promoCount = _effectivePromoSlides.length;
+      if (promoCount > 0 && _promoController.hasClients) {
+        final targetPromoPage = _currentPromo.clamp(0, promoCount - 1);
+        final currentPromoPage = _promoController.page?.round();
+        if (currentPromoPage != targetPromoPage) {
+          _promoController.jumpToPage(targetPromoPage);
+        }
+      }
+    });
+  }
+
+  Future<void> _fetchCarouselSlides() async {
+    try {
+      final content = await _homeCarouselService.fetchHomeCarousels();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _bannerSlides = content.mainSlides;
+        _promoSlides = content.promoSlides;
+        _normalizeCarouselIndices();
+      });
+
+      _syncCarouselControllers();
+    } catch (e) {
+      debugPrint('Error fetching home carousel slides: $e');
+    }
+  }
+
   Future<void> _fetchProducts({bool forceRefresh = false}) async {
     final prefs = await SharedPreferences.getInstance();
     _errorMessage = null;
@@ -553,6 +1221,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final cachedFlash = prefs.getString(_cacheFlashKey);
       final cachedNew = prefs.getString(_cacheNewKey);
       final cachedRecommended = prefs.getString(_cacheRecommendedKey);
+      final cachedRestaurants = prefs.getString(_cacheRestaurantsKey);
       final cacheTimeStr = prefs.getString(_cacheTimestampKey);
 
       final cacheTime = cacheTimeStr != null
@@ -563,57 +1232,132 @@ class _HomeScreenState extends State<HomeScreen> {
           DateTime.now().millisecondsSinceEpoch - cacheTime < _cacheExpiryMs) {
         if (cachedFlash != null ||
             cachedNew != null ||
-            cachedRecommended != null) {
+            cachedRecommended != null ||
+            cachedRestaurants != null) {
           setState(() {
             _flashSales = <Product>[].fromCacheString(cachedFlash);
             _newArrivals = <Product>[].fromCacheString(cachedNew);
             _recommended = <Product>[].fromCacheString(cachedRecommended)
               ..shuffle();
+            _restaurants = <Product>[].fromCacheString(cachedRestaurants);
           });
+          _refreshFoodReadySpotlight();
         }
         // Do NOT return here — continue to background refresh
       }
     }
 
     // ── CASE 2: Always fetch fresh data in background (updates UI when ready) ──
+    final flashFuture = _productService.fetchFlashSales();
+    final newFuture = _productService.fetchNewArrivals();
+    final recommendedFuture = _productService.fetchAllProducts();
+    final restaurantsFuture = _productService.fetchRestaurantProducts(
+      latitude: _customerLatitude,
+      longitude: _customerLongitude,
+    );
+
+    final results = await Future.wait([
+      flashFuture
+          .then((value) => (key: _cacheFlashKey, products: value))
+          .catchError((error) {
+            debugPrint('Error fetching flash sales: $error');
+            return (key: _cacheFlashKey, products: <Product>[]);
+          }),
+      newFuture
+          .then((value) => (key: _cacheNewKey, products: value))
+          .catchError((error) {
+            debugPrint('Error fetching new arrivals: $error');
+            return (key: _cacheNewKey, products: <Product>[]);
+          }),
+      recommendedFuture
+          .then((value) => (key: _cacheRecommendedKey, products: value))
+          .catchError((error) {
+            debugPrint('Error fetching recommended products: $error');
+            return (key: _cacheRecommendedKey, products: <Product>[]);
+          }),
+      restaurantsFuture
+          .then((value) => (key: _cacheRestaurantsKey, products: value))
+          .catchError((error) {
+            debugPrint('Error fetching restaurant products: $error');
+            return (key: _cacheRestaurantsKey, products: <Product>[]);
+          }),
+    ]);
+
+    if (!mounted) {
+      return;
+    }
+
+    final freshFlash = results[0].products;
+    final freshNew = results[1].products;
+    final freshRecommended = results[2].products..shuffle();
+    final freshRestaurants = results[3].products;
+
+    final anyFreshData =
+        freshFlash.isNotEmpty ||
+        freshNew.isNotEmpty ||
+        freshRecommended.isNotEmpty ||
+        freshRestaurants.isNotEmpty;
+
+    setState(() {
+      if (freshFlash.isNotEmpty || forceRefresh) _flashSales = freshFlash;
+      if (freshNew.isNotEmpty || forceRefresh) _newArrivals = freshNew;
+      if (freshRecommended.isNotEmpty || forceRefresh) {
+        _recommended = freshRecommended;
+      }
+      if (freshRestaurants.isNotEmpty || forceRefresh) {
+        _restaurants = freshRestaurants;
+      }
+    });
+    _refreshFoodReadySpotlight(allowPop: true);
+
+    if (anyFreshData) {
+      await prefs.setString(_cacheFlashKey, _flashSales.toCacheString());
+      await prefs.setString(_cacheNewKey, _newArrivals.toCacheString());
+      await prefs.setString(_cacheRecommendedKey, _recommended.toCacheString());
+      await prefs.setString(_cacheRestaurantsKey, _restaurants.toCacheString());
+      await prefs.setString(
+        _cacheTimestampKey,
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+    } else {
+      if (mounted) {
+        setState(() {
+          _errorMessage =
+              'An error occurred. Please check your network connection.';
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchRestaurantProducts({bool forceRefresh = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!forceRefresh) {
+      final cachedRestaurants = prefs.getString(_cacheRestaurantsKey);
+      if (cachedRestaurants != null) {
+        setState(() {
+          _restaurants = <Product>[].fromCacheString(cachedRestaurants);
+        });
+      }
+    }
+
     try {
-      final results = await Future.wait([
-        _productService.fetchFlashSales(),
-        _productService.fetchNewArrivals(),
-        _productService.fetchAllProducts(),
-      ]);
+      final restaurants = await _productService.fetchRestaurantProducts(
+        latitude: _customerLatitude,
+        longitude: _customerLongitude,
+      );
 
-      if (mounted) {
-        setState(() {
-          _flashSales = results[0];
-          _newArrivals = results[1];
-          _recommended = results[2]..shuffle();
-        });
+      if (!mounted) {
+        return;
+      }
 
-        // Save updated data to cache
-        await prefs.setString(_cacheFlashKey, results[0].toCacheString());
-        await prefs.setString(_cacheNewKey, results[1].toCacheString());
-        await prefs.setString(_cacheRecommendedKey, results[2].toCacheString());
-        await prefs.setString(
-          _cacheTimestampKey,
-          DateTime.now().millisecondsSinceEpoch.toString(),
-        );
-      }
-    } on Exception catch (e) {
-      debugPrint('Error fetching products: $e');
-      if (mounted) {
-        setState(() {
-          if (e.toString().contains('Unauthorized')) {
-            _errorMessage = 'Session expired. Please log in again.';
-          } else if (e.toString().contains('Server error')) {
-            _errorMessage =
-                'Server is currently unavailable. Please try again later.';
-          } else {
-            _errorMessage =
-                'An error occurred. Please check your network connection.';
-          }
-        });
-      }
+      setState(() {
+        _restaurants = restaurants;
+      });
+      _refreshFoodReadySpotlight(allowPop: true);
+      await prefs.setString(_cacheRestaurantsKey, restaurants.toCacheString());
+    } catch (e) {
+      debugPrint('Error fetching restaurant products: $e');
     }
   }
 
@@ -627,8 +1371,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      if (_bannerImages.isNotEmpty) {
-        final next = (_currentBanner + 1) % _bannerImages.length;
+      final bannerSlides = _effectiveBannerSlides;
+      if (bannerSlides.isNotEmpty) {
+        final next = (_currentBanner + 1) % bannerSlides.length;
         _bannerController.animateToPage(
           next,
           duration: const Duration(milliseconds: 450),
@@ -642,8 +1387,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      if (_promoBanners.isNotEmpty) {
-        final next = (_currentPromo + 1) % _promoBanners.length;
+      final promoSlides = _effectivePromoSlides;
+      if (promoSlides.isNotEmpty) {
+        final next = (_currentPromo + 1) % promoSlides.length;
         _promoController.animateToPage(
           next,
           duration: const Duration(milliseconds: 450),
@@ -668,7 +1414,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: softGrey,
       body: RefreshIndicator(
-        onRefresh: () => _fetchProducts(forceRefresh: true),
+        onRefresh: () => _loadHomeContent(forceRefresh: true),
         color: primaryNavy,
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
@@ -683,6 +1429,25 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             SliverToBoxAdapter(child: _buildBannerCarousel()),
+            SliverToBoxAdapter(
+              child: _buildRestaurantEntryCard(_activeFoodCampaign),
+            ),
+            if (_restaurantProducts.isNotEmpty) ...[
+              _buildSectionHeader(
+                'Restaurants',
+                onSeeAll: _openRestaurantStore,
+              ),
+              SliverToBoxAdapter(
+                child: ProductListHorizontal(
+                  products: _restaurantProducts,
+                  sectionKey: 'restaurant',
+                  customerLatitude: _customerLatitude,
+                  customerLongitude: _customerLongitude,
+                  showFlashBadge: false,
+                  showNewBadge: false,
+                ),
+              ),
+            ],
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
 
             // ── Flash Sales section ────────────────────────────────────────
@@ -702,6 +1467,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ProductListHorizontal(
                   products: _flashSales,
                   sectionKey: 'flash',
+                  customerLatitude: _customerLatitude,
+                  customerLongitude: _customerLongitude,
                   showFlashBadge: true,
                   showNewBadge: false,
                 ),
@@ -730,6 +1497,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ProductListHorizontal(
                   products: _newArrivals,
                   sectionKey: 'new',
+                  customerLatitude: _customerLatitude,
+                  customerLongitude: _customerLongitude,
                   showFlashBadge: false,
                   showNewBadge: true,
                 ),
@@ -743,7 +1512,12 @@ class _HomeScreenState extends State<HomeScreen> {
             // ── Recommended For You (shuffled) ─────────────────────────────
             if (_recommended.isNotEmpty) ...[
               _buildSectionHeader('Recommended For You', onSeeAll: null),
-              ProductListGrid(products: _recommended, sectionKey: 'rec'),
+              ProductListGrid(
+                products: _recommended,
+                sectionKey: 'rec',
+                customerLatitude: _customerLatitude,
+                customerLongitude: _customerLongitude,
+              ),
             ],
 
             // ── Error message (if any) ─────────────────────────────────────
@@ -861,6 +1635,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBannerCarousel() {
+    final bannerSlides = _effectiveBannerSlides;
+    if (bannerSlides.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       children: [
         SizedBox(
@@ -868,65 +1647,57 @@ class _HomeScreenState extends State<HomeScreen> {
           child: PageView.builder(
             controller: _bannerController,
             onPageChanged: (i) => setState(() => _currentBanner = i),
-            itemCount: _bannerImages.length,
+            itemCount: bannerSlides.length,
             itemBuilder: (_, i) {
               final active = i == _currentBanner;
+              final slide = bannerSlides[i];
               return Padding(
                 padding: EdgeInsets.fromLTRB(
                   i == 0 ? 16 : 8,
                   active ? 2 : 8,
-                  i == _bannerImages.length - 1 ? 16 : 8,
+                  i == bannerSlides.length - 1 ? 16 : 8,
                   active ? 2 : 8,
                 ),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOut,
-                  decoration: BoxDecoration(
-                    color: white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: borderGrey),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(21),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.asset(
-                          _bannerImages[i],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) => Container(
-                            color: softGrey,
-                            alignment: Alignment.center,
-                            child: const Icon(
-                              Icons.image_not_supported,
-                              size: 48,
-                              color: lightGrey,
-                            ),
-                          ),
+                child: GestureDetector(
+                  onTap: () => _handleCarouselSlideTap(slide),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    decoration: BoxDecoration(
+                      color: white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: borderGrey),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
                         ),
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.white.withValues(alpha: 0.02),
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.04),
-                                ],
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(21),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _buildCarouselImage(slide),
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.02),
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.04),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -936,14 +1707,128 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 10),
         _buildCarouselIndicators(
-          count: _bannerImages.length,
+          count: bannerSlides.length,
           currentIndex: _currentBanner,
         ),
       ],
     );
   }
 
+  Widget _buildRestaurantEntryCard(FoodReadinessCampaign? campaign) {
+    final title = campaign?.title.trim().isNotEmpty == true
+        ? campaign!.title.trim()
+        : 'Restaurants near you';
+    final message = campaign?.message.trim().isNotEmpty == true
+        ? campaign!.message.trim()
+        : 'Open nearby restaurants and see food available to order now.';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: _openRestaurantStore,
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
+            decoration: BoxDecoration(
+              color: const Color(0xFF201208),
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF8F3D00).withValues(alpha: 0.18),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD08A).withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: campaign?.imageUrl.isNotEmpty == true
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: CachedNetworkImage(
+                            imageUrl: campaign!.imageUrl,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, _, _) => const Icon(
+                              Icons.room_service_rounded,
+                              color: Color(0xFFFFD08A),
+                              size: 27,
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.room_service_rounded,
+                          color: Color(0xFFFFD08A),
+                          size: 27,
+                        ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFFFE4C4),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.32,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  height: 38,
+                  width: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD08A),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Color(0xFF201208),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPromoCarousel() {
+    final promoSlides = _effectivePromoSlides;
+    if (promoSlides.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       children: [
         SizedBox(
@@ -951,24 +1836,16 @@ class _HomeScreenState extends State<HomeScreen> {
           child: PageView.builder(
             controller: _promoController,
             onPageChanged: (i) => setState(() => _currentPromo = i),
-            itemCount: _promoBanners.length,
+            itemCount: promoSlides.length,
             itemBuilder: (_, i) {
+              final slide = promoSlides[i];
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(
-                    _promoBanners[i],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stack) => Container(
-                      color: softGrey,
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.image_not_supported,
-                        size: 48,
-                        color: lightGrey,
-                      ),
-                    ),
+                child: GestureDetector(
+                  onTap: () => _handleCarouselSlideTap(slide),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: _buildCarouselImage(slide),
                   ),
                 ),
               );
@@ -977,10 +1854,44 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 10),
         _buildCarouselIndicators(
-          count: _promoBanners.length,
+          count: promoSlides.length,
           currentIndex: _currentPromo,
         ),
       ],
+    );
+  }
+
+  Widget _buildCarouselImage(HomeCarouselSlide slide) {
+    if (slide.isRemoteImage) {
+      return CachedNetworkImage(
+        imageUrl: slide.imageUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => _buildCarouselImageFallback(isLoading: true),
+        errorWidget: (_, _, _) => _buildCarouselImageFallback(),
+      );
+    }
+
+    return Image.asset(
+      slide.imageUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _buildCarouselImageFallback(),
+    );
+  }
+
+  Widget _buildCarouselImageFallback({bool isLoading = false}) {
+    return Container(
+      color: softGrey,
+      alignment: Alignment.center,
+      child: isLoading
+          ? const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: primaryNavy,
+              ),
+            )
+          : const Icon(Icons.image_not_supported, size: 48, color: lightGrey),
     );
   }
 
@@ -1258,7 +2169,8 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Choose how you want to continue.',
+                'Consult for restricted medicines or shop over-the-counter products directly.',
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13.5, color: lightGrey),
               ),
               const SizedBox(height: 18),
@@ -1266,7 +2178,8 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                 icon: Icons.chat_bubble_outline_rounded,
                 iconColor: primaryNavy,
                 title: 'Consult Pharmacist',
-                subtitle: 'Chat for quick guidance before you buy.',
+                subtitle:
+                    'Discuss symptoms and unlock the right medicine path.',
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -1280,7 +2193,7 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                 icon: Icons.local_pharmacy_outlined,
                 iconColor: accentGreen,
                 title: 'Pharmacy Store',
-                subtitle: 'Browse medicine and health essentials.',
+                subtitle: 'Buy over-the-counter drugs and health essentials.',
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -1626,6 +2539,8 @@ class ProductListHorizontal extends StatelessWidget {
   final String sectionKey;
   final bool showFlashBadge;
   final bool showNewBadge;
+  final double? customerLatitude;
+  final double? customerLongitude;
 
   const ProductListHorizontal({
     super.key,
@@ -1633,6 +2548,8 @@ class ProductListHorizontal extends StatelessWidget {
     required this.sectionKey,
     this.showFlashBadge = false,
     this.showNewBadge = false,
+    this.customerLatitude,
+    this.customerLongitude,
   });
 
   @override
@@ -1654,6 +2571,8 @@ class ProductListHorizontal extends StatelessWidget {
               heroTag: heroTag,
               showFlashBadge: showFlashBadge,
               showNewBadge: showNewBadge,
+              customerLatitude: customerLatitude,
+              customerLongitude: customerLongitude,
             ),
           );
         },
@@ -1665,11 +2584,15 @@ class ProductListHorizontal extends StatelessWidget {
 class ProductListGrid extends StatelessWidget {
   final List<Product> products;
   final String sectionKey;
+  final double? customerLatitude;
+  final double? customerLongitude;
 
   const ProductListGrid({
     super.key,
     required this.products,
     required this.sectionKey,
+    this.customerLatitude,
+    this.customerLongitude,
   });
 
   @override
@@ -1704,7 +2627,12 @@ class ProductListGrid extends StatelessWidget {
         delegate: SliverChildBuilderDelegate((context, index) {
           final product = products[index];
           final heroTag = 'product-$sectionKey-${product.id}-$index';
-          return ProductCard(product: product, heroTag: heroTag);
+          return ProductCard(
+            product: product,
+            heroTag: heroTag,
+            customerLatitude: customerLatitude,
+            customerLongitude: customerLongitude,
+          );
         }, childCount: products.length),
       ),
     );
@@ -1901,13 +2829,15 @@ class ProductListGrid extends StatelessWidget {
 // }
 
 class ProductCard extends StatelessWidget {
-  static const double standardCardHeight = 320;
+  static const double standardCardHeight = 344;
   static const double standardImageHeight = 122;
 
   final Product product;
   final String heroTag;
   final bool showFlashBadge;
   final bool showNewBadge;
+  final double? customerLatitude;
+  final double? customerLongitude;
 
   const ProductCard({
     super.key,
@@ -1915,6 +2845,8 @@ class ProductCard extends StatelessWidget {
     required this.heroTag,
     this.showFlashBadge = false,
     this.showNewBadge = false,
+    this.customerLatitude,
+    this.customerLongitude,
   });
 
   String _formatPrice(double price) {
@@ -1950,6 +2882,16 @@ class ProductCard extends StatelessWidget {
     final hasDescription =
         description.isNotEmpty &&
         description.toLowerCase() != product.name.trim().toLowerCase();
+    final isRestaurantItem = product.isRestaurantItem;
+    final isMedicine = product.isMedicine;
+    final foodInformation = product.displayFoodInformation;
+    final distanceLabel = product.distanceAndMinutesLabel(
+      customerLatitude,
+      customerLongitude,
+    );
+    final requiresPharmacyConsult = !product.canBuyDirectly;
+    final restaurantClosed =
+        product.isRestaurantItem && !product.isWithinRestaurantOrderWindow;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -2119,20 +3061,112 @@ class ProductCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          product.vendorBusinessName?.isNotEmpty == true
-                              ? product.vendorBusinessName!
-                              : 'Vendor unavailable',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.2,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF667085),
-                            height: 1.25,
-                          ),
+                        Row(
+                          children: [
+                            if (isRestaurantItem || isMedicine) ...[
+                              Icon(
+                                isRestaurantItem
+                                    ? Icons.restaurant_menu_rounded
+                                    : Icons.local_pharmacy_outlined,
+                                size: 13,
+                                color: isRestaurantItem
+                                    ? const Color(0xFF9A4B00)
+                                    : const Color(0xFF08756F),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(
+                              child: Text(
+                                isRestaurantItem
+                                    ? product.displayRestaurantName
+                                    : product.vendorBusinessName?.isNotEmpty ==
+                                          true
+                                    ? product.vendorBusinessName!
+                                    : 'Vendor unavailable',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11.2,
+                                  fontWeight: FontWeight.w600,
+                                  color: isRestaurantItem
+                                      ? const Color(0xFF9A4B00)
+                                      : isMedicine
+                                      ? const Color(0xFF08756F)
+                                      : const Color(0xFF667085),
+                                  height: 1.25,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        if (hasDescription) ...[
+                        if (isRestaurantItem || isMedicine) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                size: 12,
+                                color: Color(0xFF667085),
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  product.displayVendorLocation,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10.8,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF667085),
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (distanceLabel != null) ...[
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.near_me_outlined,
+                                  size: 12,
+                                  color: Color(0xFF667085),
+                                ),
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: Text(
+                                    distanceLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 10.8,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF667085),
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                        if (isRestaurantItem) ...[
+                          const SizedBox(height: 6),
+                          Expanded(
+                            child: Text(
+                              '$foodInformation\nOrder time: ${product.displayOrderWindow}',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11.8,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF475467),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ] else if (hasDescription) ...[
                           const SizedBox(height: 6),
                           Expanded(
                             child: Text(
@@ -2164,7 +3198,20 @@ class ProductCard extends StatelessWidget {
                           width: double.infinity,
                           height: 36,
                           child: ElevatedButton(
-                            onPressed: product.stockQuantity > 0
+                            onPressed: requiresPharmacyConsult
+                                ? () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatScreen(
+                                          initialConsultationTopic:
+                                              '${product.name} (${product.category})',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                : restaurantClosed
+                                ? null
+                                : product.stockQuantity > 0
                                 ? () {
                                     cartProvider.addProduct(product);
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -2182,10 +3229,17 @@ class ProductCard extends StatelessWidget {
                                 milliseconds: 200,
                               ),
                               elevation: 0,
-                              backgroundColor: product.stockQuantity > 0
+                              backgroundColor: requiresPharmacyConsult
+                                  ? const Color(0xFF08756F)
+                                  : restaurantClosed
+                                  ? Colors.grey[300]
+                                  : product.stockQuantity > 0
                                   ? primaryNavy
                                   : Colors.grey[300],
-                              foregroundColor: product.stockQuantity > 0
+                              foregroundColor:
+                                  requiresPharmacyConsult ||
+                                      (product.stockQuantity > 0 &&
+                                          !restaurantClosed)
                                   ? white
                                   : Colors.grey[700],
                               shadowColor: Colors.transparent,
@@ -2194,7 +3248,11 @@ class ProductCard extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              product.stockQuantity > 0
+                              requiresPharmacyConsult
+                                  ? 'Consult'
+                                  : restaurantClosed
+                                  ? 'Closed'
+                                  : product.stockQuantity > 0
                                   ? 'Add to Cart'
                                   : 'Out of Stock',
                               style: const TextStyle(

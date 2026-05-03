@@ -19,6 +19,7 @@ import 'faq_screen.dart';
 import 'referral_screen.dart';
 import 'vendor_my_products_screen.dart';
 import '../../screens/vendor/orders_recived_screen.dart.dart';
+import '../../screens/vendor/vendor_business_profile_screen.dart';
 import 'pharmacist_dashboard.dart'; // ✅ Import PharmacistDashboard
 import '../../widgets/pharmacy_ui.dart';
 import '../../widgets/tech_glow_background.dart';
@@ -65,6 +66,12 @@ class _AccountScreenState extends State<AccountScreen>
   int _productsUnsold = 0;
   double _vendorWalletBalance = 0.0;
   double _appWalletBalance = 0.0;
+  bool _orderUpdatesEnabled = true;
+  bool _appOrderAlertsEnabled = true;
+  bool _whatsappOrderAlertsEnabled = true;
+  bool _promotionsEnabled = true;
+  bool _priceAlertsEnabled = true;
+  bool _isSavingNotificationPreferences = false;
 
   @override
   void initState() {
@@ -192,6 +199,19 @@ class _AccountScreenState extends State<AccountScreen>
               (responseData['vendorWalletBalance'] as num?)?.toDouble() ?? 0.0;
           _appWalletBalance =
               (responseData['appWalletBalance'] as num?)?.toDouble() ?? 0.0;
+
+          final notificationPreferences =
+              responseData['notificationPreferences'] as Map<String, dynamic>?;
+          _orderUpdatesEnabled =
+              notificationPreferences?['orderUpdates'] as bool? ?? true;
+          _appOrderAlertsEnabled =
+              notificationPreferences?['appOrderAlerts'] as bool? ?? true;
+          _whatsappOrderAlertsEnabled =
+              notificationPreferences?['whatsappOrderAlerts'] as bool? ?? true;
+          _promotionsEnabled =
+              notificationPreferences?['promotions'] as bool? ?? true;
+          _priceAlertsEnabled =
+              notificationPreferences?['priceAlerts'] as bool? ?? true;
         });
       } else {
         final responseData = jsonDecode(response.body);
@@ -215,6 +235,238 @@ class _AccountScreenState extends State<AccountScreen>
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _saveNotificationPreferences({
+    required bool orderUpdates,
+    required bool appOrderAlerts,
+    required bool whatsappOrderAlerts,
+    required bool promotions,
+    required bool priceAlerts,
+  }) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? token = prefs.getString('jwt_token');
+
+    if (token == null || token.isEmpty) {
+      _showSupportSnackBar('Authentication token not found. Please log in again.');
+      return;
+    }
+
+    setState(() => _isSavingNotificationPreferences = true);
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/auth/notification-preferences'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(<String, bool>{
+          'orderUpdates': orderUpdates,
+          'appOrderAlerts': appOrderAlerts,
+          'whatsappOrderAlerts': whatsappOrderAlerts,
+          'promotions': promotions,
+          'priceAlerts': priceAlerts,
+        }),
+      );
+
+      final Map<String, dynamic> responseData = response.body.isNotEmpty
+          ? jsonDecode(response.body) as Map<String, dynamic>
+          : <String, dynamic>{};
+
+      if (response.statusCode == 200) {
+        final preferences =
+            responseData['notificationPreferences'] as Map<String, dynamic>?;
+        setState(() {
+          _orderUpdatesEnabled =
+              preferences?['orderUpdates'] as bool? ?? orderUpdates;
+          _appOrderAlertsEnabled =
+              preferences?['appOrderAlerts'] as bool? ?? appOrderAlerts;
+          _whatsappOrderAlertsEnabled =
+              preferences?['whatsappOrderAlerts'] as bool? ??
+                  whatsappOrderAlerts;
+          _promotionsEnabled =
+              preferences?['promotions'] as bool? ?? promotions;
+          _priceAlertsEnabled =
+              preferences?['priceAlerts'] as bool? ?? priceAlerts;
+        });
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        _showSupportSnackBar('Notification preferences updated.');
+      } else {
+        _showSupportSnackBar(
+          responseData['message']?.toString() ??
+              'Failed to update notification preferences.',
+        );
+      }
+    } catch (e) {
+      debugPrint('Notification preference update error: $e');
+      _showSupportSnackBar('Unable to update notification preferences right now.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingNotificationPreferences = false);
+      }
+    }
+  }
+
+  void _showNotificationPreferencesSheet() {
+    bool orderUpdates = _orderUpdatesEnabled;
+    bool appOrderAlerts = _appOrderAlertsEnabled;
+    bool whatsappOrderAlerts = _whatsappOrderAlertsEnabled;
+    bool promotions = _promotionsEnabled;
+    bool priceAlerts = _priceAlertsEnabled;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final color = Theme.of(sheetContext).colorScheme;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              margin: const EdgeInsets.all(12),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              decoration: BoxDecoration(
+                color: color.surface,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: color.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.notifications_active_outlined,
+                            color: color.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Notification Settings',
+                                style: TextStyle(
+                                  color: color.onSurface,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Choose how NaijaGo should alert you.',
+                                style: TextStyle(
+                                  color: color.onSurface.withValues(alpha: 0.62),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _buildNotificationSwitch(
+                      color: color,
+                      title: 'Order updates',
+                      subtitle: 'General buyer and seller order status alerts.',
+                      value: orderUpdates,
+                      onChanged: (value) =>
+                          setSheetState(() => orderUpdates = value),
+                    ),
+                    if (_isVendor) ...[
+                      _buildNotificationSwitch(
+                        color: color,
+                        title: 'App order alerts',
+                        subtitle: 'Show in-app alerts when a new order arrives.',
+                        value: appOrderAlerts,
+                        onChanged: (value) =>
+                            setSheetState(() => appOrderAlerts = value),
+                      ),
+                      _buildNotificationSwitch(
+                        color: color,
+                        title: 'WhatsApp order alerts',
+                        subtitle:
+                            'Send WhatsApp order alerts to your vendor phone.',
+                        value: whatsappOrderAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => whatsappOrderAlerts = value,
+                        ),
+                      ),
+                    ],
+                    _buildNotificationSwitch(
+                      color: color,
+                      title: 'Promotions',
+                      subtitle: 'Deals, restaurant moments, and campaign news.',
+                      value: promotions,
+                      onChanged: (value) =>
+                          setSheetState(() => promotions = value),
+                    ),
+                    _buildNotificationSwitch(
+                      color: color,
+                      title: 'Price alerts',
+                      subtitle: 'Saved product and market price changes.',
+                      value: priceAlerts,
+                      onChanged: (value) =>
+                          setSheetState(() => priceAlerts = value),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _isSavingNotificationPreferences
+                            ? null
+                            : () => _saveNotificationPreferences(
+                                  orderUpdates: orderUpdates,
+                                  appOrderAlerts: appOrderAlerts,
+                                  whatsappOrderAlerts: whatsappOrderAlerts,
+                                  promotions: promotions,
+                                  priceAlerts: priceAlerts,
+                                ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: color.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: _isSavingNotificationPreferences
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Save preferences'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _handleAccountDeletion() async {
@@ -433,9 +685,10 @@ class _AccountScreenState extends State<AccountScreen>
                     color: color.onSurface.withValues(alpha: 0.2),
                   ),
 
-                  // 🌟 FOR PHARMACISTS – Show if user is a pharmacist
-                  if (_isPharmacist) _buildPharmacistToolsSection(color),
-                  if (_isPharmacist)
+                  // 🌟 FOR PHARMACIST VENDORS – Approved vendor plus pharmacy approval
+                  if (_isVendor && _vendorStatus == 'approved' && _isPharmacist)
+                    _buildPharmacistToolsSection(color),
+                  if (_isVendor && _vendorStatus == 'approved' && _isPharmacist)
                     Divider(
                       height: 30,
                       thickness: 1,
@@ -798,13 +1051,16 @@ class _AccountScreenState extends State<AccountScreen>
           color,
           Icons.store_outlined,
           'Store Profile',
-          'Edit store logo, bio, name',
-          () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Store Profile functionality coming soon!'),
+          'Edit logo, contact, location, hours, and delivery radius',
+          () async {
+            final updated = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (context) => const VendorBusinessProfileScreen(),
               ),
             );
+            if (updated == true) {
+              _fetchUserData();
+            }
           },
         ),
         _buildAccountListItem(
@@ -1050,16 +1306,10 @@ class _AccountScreenState extends State<AccountScreen>
           color,
           Icons.notifications_none,
           'Notification Settings',
-          'Manage your notification preferences',
-          () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Notification Settings functionality coming soon!',
-                ),
-              ),
-            );
-          },
+          _isVendor
+              ? 'Manage app and WhatsApp order alerts'
+              : 'Manage your notification preferences',
+          _showNotificationPreferencesSheet,
         ),
         // ✅ The Dark Mode Toggle now navigates to the SettingsScreen
         _buildAccountListItem(
@@ -1258,6 +1508,42 @@ class _AccountScreenState extends State<AccountScreen>
           color: color.onSurface.withValues(alpha: 0.5),
         ), // Arrow icon color
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildNotificationSwitch({
+    required ColorScheme color,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: color.outline.withValues(alpha: 0.16)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SwitchListTile.adaptive(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        value: value,
+        activeThumbColor: color.primary,
+        title: Text(
+          title,
+          style: TextStyle(
+            color: color.onSurface,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: color.onSurface.withValues(alpha: 0.62),
+            height: 1.3,
+          ),
+        ),
+        onChanged: onChanged,
       ),
     );
   }

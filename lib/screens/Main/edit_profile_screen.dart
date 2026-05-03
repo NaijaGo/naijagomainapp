@@ -28,6 +28,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneNumberController = TextEditingController();
+  final TextEditingController _alternatePhoneNumberController =
+      TextEditingController();
 
   File? _pickedImage;
   String _currentProfilePicUrl = 'https://placehold.co/100x100/CCCCCC/000000?text=User';
@@ -46,6 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneNumberController.dispose();
+    _alternatePhoneNumberController.dispose();
     super.dispose();
   }
 
@@ -104,6 +107,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _lastNameController.text = user.lastName;
         _emailController.text = user.email;
         _phoneNumberController.text = user.phoneNumber;
+        _alternatePhoneNumberController.text = user.alternatePhoneNumber;
 
         setState(() {
           final String? fetchedProfilePicPath = responseData['profilePicUrl']; 
@@ -168,7 +172,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'lastName': _lastNameController.text.trim(),
         'email': _emailController.text.trim(),
         'phoneNumber': _phoneNumberController.text.trim(),
-        'profilePicBase64': ?base64Image,
+        'alternatePhoneNumber': _alternatePhoneNumberController.text.trim(),
+        'profilePicBase64': base64Image,
       };
 
       final Uri url = Uri.parse('$baseUrl/api/auth/profile');
@@ -317,6 +322,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       keyboardType: TextInputType.phone,
                       decoration: _inputDecoration('Phone Number'),
                       validator: (value) => value == null || value.isEmpty ? 'Please enter your phone number' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _alternatePhoneNumberController,
+                      keyboardType: TextInputType.phone,
+                      decoration: _inputDecoration(
+                        'Alternative Phone Number (Optional)',
+                      ),
+                      validator: (value) {
+                        final trimmed = value?.trim() ?? '';
+                        if (trimmed.isEmpty) {
+                          return null;
+                        }
+                        final pattern = RegExp(r'^(?:\+?234|0)[789]\d{9}$');
+                        if (!pattern.hasMatch(trimmed)) {
+                          return 'Enter a valid Nigerian phone number';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 24),
                     if (_errorMessage != null)

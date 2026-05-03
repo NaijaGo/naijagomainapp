@@ -9,6 +9,8 @@ import 'package:photo_view/photo_view_gallery.dart';
 import '../../constants.dart';
 import '../../models/product.dart';
 import '../../providers/cart_provider.dart';
+import '../../services/customer_location_service.dart';
+import 'chat_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -32,11 +34,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _isSubmittingReview = false;
   List<Product> _relatedProducts = [];
   bool _isLoadingRelated = true;
+  double? _customerLatitude;
+  double? _customerLongitude;
 
   @override
   void initState() {
     super.initState();
     _checkIfProductIsSaved();
+    _loadCustomerLocation();
     _fetchRelatedProducts();
     if (widget.product.hasSizes && widget.product.availableSizes.isNotEmpty) {
       if (widget.product.isCustomDimensions) {
@@ -55,6 +60,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         }
       }
     }
+  }
+
+  Future<void> _loadCustomerLocation() async {
+    final location = await CustomerLocationService().getSavedCustomerLocation();
+    if (!mounted || location == null) return;
+    setState(() {
+      _customerLatitude = location.latitude;
+      _customerLongitude = location.longitude;
+    });
   }
 
   @override
@@ -808,6 +822,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   void _addToCart(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
+    if (!widget.product.canBuyDirectly) {
+      _openPharmacistConsultation();
+      return;
+    }
+
+    if (widget.product.isRestaurantItem &&
+        !widget.product.isWithinRestaurantOrderWindow) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.product.restaurantOpenStatusLabel,
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (widget.product.isRestaurantItem &&
+        widget.product.isOutsideDeliveryRadius(
+          _customerLatitude,
+          _customerLongitude,
+        )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This restaurant delivers within ${widget.product.deliveryRadiusKm.toStringAsFixed(0)} km.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     if (widget.product.stockQuantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -862,9 +910,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _openPharmacistConsultation() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          initialConsultationTopic:
+              '${widget.product.name} (${widget.product.category})',
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomAddToCartButton() {
     final isOutOfStock = widget.product.stockQuantity <= 0;
     final needsSizeSelection = widget.product.hasSizes && _selectedSize == null;
+    final requiresConsultation = !widget.product.canBuyDirectly;
+    final restaurantClosed =
+        widget.product.isRestaurantItem &&
+        !widget.product.isWithinRestaurantOrderWindow;
+    final restaurantTooFar =
+        widget.product.isRestaurantItem &&
+        widget.product.isOutsideDeliveryRadius(
+          _customerLatitude,
+          _customerLongitude,
+        );
 
     return SafeArea(
       child: Container(
@@ -874,12 +943,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           children: [
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: isOutOfStock || needsSizeSelection
+                onPressed: requiresConsultation
+                    ? _openPharmacistConsultation
+                    : restaurantClosed
+                    ? null
+                    : restaurantTooFar
+                    ? null
+                    : isOutOfStock || needsSizeSelection
                     ? null
                     : () => _addToCart(context),
-                icon: const Icon(Icons.shopping_cart),
+                icon: Icon(
+                  requiresConsultation
+                      ? Icons.chat_bubble_outline_rounded
+                      : Icons.shopping_cart,
+                ),
                 label: Text(
-                  isOutOfStock
+                  requiresConsultation
+                      ? 'Consult Pharmacist'
+                      : restaurantClosed
+                      ? widget.product.restaurantOpenStatusLabel
+                      : restaurantTooFar
+                      ? 'Too Far for Delivery'
+                      : isOutOfStock
                       ? 'Out of Stock'
                       : needsSizeSelection
                       ? 'Select Size First'
@@ -892,6 +977,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isOutOfStock
                       ? Colors.grey
+                      : restaurantClosed
+                      ? Colors.grey
+                      : restaurantTooFar
+                      ? Colors.grey
+                      : requiresConsultation
+                      ? const Color(0xFF08756F)
                       : needsSizeSelection
                       ? Colors.orange
                       : const Color(0xFF0A2A66),
@@ -1108,6 +1199,183 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ),
               ],
+            ),
+            if (widget.product.shouldShowVendorLocation) ...[
+              const Divider(height: 24),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 20,
+                    color: deepNavyBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${widget.product.isRestaurantItem ? 'Restaurant' : 'Pharmacy'} location: ${widget.product.displayVendorLocation}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: deepNavyBlue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (widget.product.distanceAndMinutesLabel(
+                    _customerLatitude,
+                    _customerLongitude,
+                  ) !=
+                  null) ...[
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.near_me_outlined,
+                      size: 20,
+                      color: deepNavyBlue,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Distance from you: ${widget.product.distanceAndMinutesLabel(_customerLatitude, _customerLongitude)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: deepNavyBlue,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+            if (widget.product.isRestaurantItem) ...[
+              const Divider(height: 24),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.schedule_rounded,
+                    size: 20,
+                    color: deepNavyBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.product.storeHoursLabel,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: deepNavyBlue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.room_service_outlined,
+                    size: 20,
+                    color: deepNavyBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${widget.product.prepTimeLabel} • item order window ${widget.product.displayOrderWindow} • delivery radius ${widget.product.deliveryRadiusKm.toStringAsFixed(0)} km',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: deepNavyBlue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMedicineAccessCard() {
+    if (!widget.product.isMedicine) {
+      return const SizedBox.shrink();
+    }
+
+    final requiresConsultation = widget.product.isRestrictedMedicine;
+    final accent = requiresConsultation
+        ? const Color(0xFF08756F)
+        : Colors.green.shade700;
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                requiresConsultation
+                    ? Icons.health_and_safety_outlined
+                    : Icons.local_pharmacy_outlined,
+                color: accent,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.product.medicineAccessLabel,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    requiresConsultation
+                        ? 'This medicine needs pharmacist guidance before purchase. Start a consultation so a pharmacist can discuss the right option with you.'
+                        : 'This is an over-the-counter medicine. You can add it to cart and purchase it directly.',
+                    style: TextStyle(
+                      color: Colors.grey[800],
+                      fontSize: 13.5,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'For emergencies or severe symptoms, contact a doctor or emergency service immediately.',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                  if (requiresConsultation) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _openPharmacistConsultation,
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      label: const Text('Discuss with pharmacist'),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
@@ -1413,6 +1681,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   _buildPriceAndName(),
                   const SizedBox(height: 20),
                   if (widget.product.hasSizes) _buildSizeSelection(),
+                  _buildMedicineAccessCard(),
+                  if (widget.product.isMedicine) const SizedBox(height: 12),
                   _buildProductDetails(),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Product Description'),

@@ -53,6 +53,11 @@
     <string>We use your location to detect delivery addresses, calculate checkout delivery fees, and improve nearby service suggestions.</string>
     <key>NSLocationAlwaysUsageDescription</key>
     <string>Location access helps us keep delivery-related location features working reliably when iPhone permission handling changes.</string>
+    <key>NSLocationTemporaryUsageDescriptionDictionary</key>
+    <dict>
+        <key>delivery_location</key>
+        <string>We temporarily request precise location on iPhone so we can capture the right delivery address and postal code.</string>
+    </dict>
     <key>NSFaceIDUsageDescription</key>
     <string>We use Face ID or Touch ID for secure, quick authentication and verification.</string>
 

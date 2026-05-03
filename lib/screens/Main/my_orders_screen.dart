@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../constants.dart';
 import '../../models/user.dart';
+import '../../services/socket_service.dart';
 import '../../widgets/order_tracking_widget.dart';
 import '../../widgets/tech_glow_background.dart';
 
@@ -21,6 +22,9 @@ class MyOrdersScreen extends StatefulWidget {
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
   List<dynamic> _orders = []; // Changed to dynamic since we get raw JSON
   bool _isLoading = true;
+  final SocketService _socketService = SocketService();
+  final Map<String, List<Map<String, dynamic>>> _trackingUpdates = {};
+  Set<String> _trackedOrderIds = <String>{};
 
   Timer? _pollingTimer;
   int _pollCount = 0;
@@ -28,8 +32,34 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeTrackingSocket();
     _fetchUserIdAndOrders();
     _startPolling();
+  }
+
+  Future<void> _initializeTrackingSocket() async {
+    await _socketService.connect(baseUrl);
+
+    _socketService.onConnect((_) {
+      if (kDebugMode) {
+        debugPrint('✅ Order tracking socket connected');
+      }
+      _syncTrackedOrders();
+    });
+
+    _socketService.onDisconnect((_) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Order tracking socket disconnected');
+      }
+    });
+
+    _socketService.on('rider_assigned', _handleRiderAssigned);
+    _socketService.on('rider_location', _handleRiderLocation);
+    _socketService.on('delivery_update', _handleDeliveryUpdate);
+    _socketService.on('delivery_status_update', _handleDeliveryUpdate);
+    _socketService.on('order_update', _handleOrderUpdate);
+
+    _syncTrackedOrders();
   }
 
   void _startPolling() {
@@ -103,6 +133,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    for (final orderId in _trackedOrderIds) {
+      _socketService.leaveOrderTracking(orderId);
+    }
+    _socketService.dispose();
     super.dispose();
   }
 
@@ -241,6 +275,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           _orders = orderList;
           _isLoading = false;
         });
+        _syncTrackedOrders();
       } else {
         if (kDebugMode) {
           debugPrint('❌ Failed to load orders. Status: ${response.statusCode}');
@@ -253,6 +288,243 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       }
       setState(() => _isLoading = false);
     }
+  }
+
+  String? _extractOrderId(dynamic order) {
+    if (order is Map<String, dynamic>) {
+      final id = order['_id']?.toString();
+      if (id != null && id.isNotEmpty) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  void _syncTrackedOrders() {
+    if (!_socketService.isConnected) {
+      return;
+    }
+
+    final currentOrderIds = _orders
+        .map(_extractOrderId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    for (final staleId in _trackedOrderIds.difference(currentOrderIds)) {
+      _socketService.leaveOrderTracking(staleId);
+    }
+
+    for (final orderId in currentOrderIds.difference(_trackedOrderIds)) {
+      _socketService.joinOrderTracking(orderId);
+    }
+
+    _trackedOrderIds = currentOrderIds;
+  }
+
+  void _patchOrderById(
+    String orderId,
+    Map<String, dynamic> Function(Map<String, dynamic> order) transformer,
+  ) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _orders = _orders.map((entry) {
+        if (entry is! Map<String, dynamic>) {
+          return entry;
+        }
+
+        if (entry['_id']?.toString() != orderId) {
+          return entry;
+        }
+
+        return transformer(Map<String, dynamic>.from(entry));
+      }).toList();
+    });
+  }
+
+  void _patchOrdersByRiderId(
+    String riderId,
+    Map<String, dynamic> Function(Map<String, dynamic> order) transformer,
+  ) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _orders = _orders.map((entry) {
+        if (entry is! Map<String, dynamic>) {
+          return entry;
+        }
+
+        final rider = entry['rider'];
+        final matchedRiderId = rider is Map<String, dynamic>
+            ? rider['_id']?.toString()
+            : rider?.toString();
+
+        if (matchedRiderId != riderId) {
+          return entry;
+        }
+
+        return transformer(Map<String, dynamic>.from(entry));
+      }).toList();
+    });
+  }
+
+  void _appendTrackingUpdate(String orderId, Map<String, dynamic> update) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      final existing = List<Map<String, dynamic>>.from(
+        _trackingUpdates[orderId] ?? const <Map<String, dynamic>>[],
+      );
+      existing.insert(0, update);
+      _trackingUpdates[orderId] = existing.take(12).toList();
+    });
+  }
+
+  void _handleRiderAssigned(dynamic data) {
+    if (data is! Map) {
+      return;
+    }
+
+    final orderId = data['orderId']?.toString();
+    if (orderId == null || orderId.isEmpty) {
+      return;
+    }
+
+    _patchOrderById(orderId, (order) {
+      final existingRider = order['rider'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(order['rider'] as Map<String, dynamic>)
+          : <String, dynamic>{};
+
+      order['rider'] = {
+        ...existingRider,
+        '_id': data['riderId']?.toString(),
+        'fullName': data['riderName']?.toString(),
+        'phoneNumber': data['riderPhone']?.toString(),
+      };
+      order['shipmentStatus'] = order['shipmentStatus'] ?? 'ready_for_pickup';
+      return order;
+    });
+
+    _appendTrackingUpdate(orderId, {
+      'status': 'rider_assigned',
+      'message':
+          '${data['riderName'] ?? 'A rider'} has been assigned to your order.',
+      'timestamp': data['timestamp'],
+    });
+  }
+
+  void _handleRiderLocation(dynamic data) {
+    if (data is! Map) {
+      return;
+    }
+
+    final riderId = data['riderId']?.toString();
+    if (riderId == null || riderId.isEmpty) {
+      return;
+    }
+
+    _patchOrdersByRiderId(riderId, (order) {
+      final existingRider = order['rider'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(order['rider'] as Map<String, dynamic>)
+          : <String, dynamic>{'_id': riderId};
+      final location = data['location'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(data['location'] as Map<String, dynamic>)
+          : <String, dynamic>{};
+
+      existingRider['currentLocation'] = {
+        ...location,
+        'lastUpdated': data['timestamp'],
+      };
+      order['rider'] = existingRider;
+      return order;
+    });
+  }
+
+  void _handleDeliveryUpdate(dynamic data) {
+    if (data is! Map) {
+      return;
+    }
+
+    final orderId = data['orderId']?.toString();
+    if (orderId == null || orderId.isEmpty) {
+      return;
+    }
+
+    final status = data['status']?.toString().toLowerCase();
+    _appendTrackingUpdate(orderId, Map<String, dynamic>.from(data));
+
+    _patchOrderById(orderId, (order) {
+      if (status != null && status.isNotEmpty) {
+        order['shipmentStatus'] = status;
+        if (status == 'out_for_delivery') {
+          order['mainOrderStatus'] = 'shipped';
+        } else if (status == 'delivered') {
+          order['mainOrderStatus'] = 'delivered';
+          order['deliveredAt'] =
+              data['timestamp']?.toString() ??
+              DateTime.now().toIso8601String();
+        } else if (status == 'ready_for_pickup' &&
+            (order['mainOrderStatus'] == null ||
+                order['mainOrderStatus'] == 'pending_payment')) {
+          order['mainOrderStatus'] = 'processing';
+        }
+      }
+
+      return order;
+    });
+  }
+
+  void _handleOrderUpdate(dynamic data) {
+    if (data is! Map) {
+      return;
+    }
+
+    final orderId = data['orderId']?.toString();
+    if (orderId == null || orderId.isEmpty) {
+      return;
+    }
+
+    final status = data['status']?.toString().toLowerCase();
+    final shipmentStatus = data['shipmentStatus']?.toString().toLowerCase();
+
+    _patchOrderById(orderId, (order) {
+      if (status != null && status.isNotEmpty) {
+        order['mainOrderStatus'] = status;
+      }
+
+      if (shipmentStatus != null && shipmentStatus.isNotEmpty) {
+        order['shipmentStatus'] = shipmentStatus;
+      }
+
+      if (data['deliveredAt'] != null) {
+        order['deliveredAt'] = data['deliveredAt'];
+      }
+
+      if (data['vendorPaidAt'] != null) {
+        order['vendorPaidAt'] = data['vendorPaidAt'];
+      }
+
+      if (data['updatedAt'] != null) {
+        order['updatedAt'] = data['updatedAt'];
+      }
+
+      return order;
+    });
+
+    _appendTrackingUpdate(orderId, {
+      'status': status ?? 'order_update',
+      'message':
+          data['message']?.toString() ??
+          'Order status updated to ${status ?? 'pending'}',
+      'timestamp': data['updatedAt'] ?? DateTime.now().toIso8601String(),
+    });
   }
 
   String _formatDateTime(String? dateString) {
@@ -622,6 +894,17 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
               color: color.onSurface.withValues(alpha: 0.8),
             ),
           ),
+          if ((shipping['phoneNumber']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Delivery phone: ${shipping['phoneNumber']}',
+              style: TextStyle(
+                fontSize: 13.5,
+                color: color.onSurface.withValues(alpha: 0.82),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -917,10 +1200,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
                               // Tracking Timeline
                               OrderTrackingWidget(
-                                key: ValueKey(
-                                  '${order['_id']}-${_getOrderStatus(order)}',
-                                ),
-                                orderStatus: _getOrderStatus(order),
+                                key: ValueKey('${order['_id']}-${order['mainOrderStatus']}-${order['shipmentStatus']}'),
+                                order: order,
+                                liveUpdates:
+                                    _trackingUpdates[order['_id']?.toString()] ??
+                                    const <Map<String, dynamic>>[],
                               ),
 
                               const SizedBox(height: 20),

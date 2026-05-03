@@ -1,13 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
+import '../../services/address_resolution_service.dart';
 import '../../services/location_access_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
@@ -29,6 +29,8 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _alternatePhoneController =
+      TextEditingController();
   final TextEditingController _businessNameController = TextEditingController();
   final TextEditingController _formattedAddressController =
       TextEditingController();
@@ -71,6 +73,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
+    _alternatePhoneController.dispose();
     _businessNameController.dispose();
     _formattedAddressController.dispose();
     super.dispose();
@@ -94,39 +97,22 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
         return;
       }
 
+      await LocationAccessService.requestPreciseLocationIfNeeded();
+
       final position = await Geolocator.getCurrentPosition(
         locationSettings: LocationAccessService.currentLocationSettings(),
       );
 
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (placemarks.isEmpty) {
-        setState(() {
-          _errorMessage =
-              'We could not resolve a readable address for this location.';
-        });
-        return;
-      }
-
-      final place = placemarks.first;
-      final addressParts =
-          [
-            place.street,
-            place.subLocality,
-            place.locality,
-            place.administrativeArea,
-            place.country,
-          ].whereType<String>().map((value) => value.trim()).where((value) {
-            return value.isNotEmpty;
-          }).toList();
+      final resolvedAddress =
+          await AddressResolutionService.resolveFromCoordinates(
+            position.latitude,
+            position.longitude,
+          );
 
       setState(() {
         _businessLocationLatitude = position.latitude;
         _businessLocationLongitude = position.longitude;
-        _formattedAddressController.text = addressParts.join(', ');
+        _formattedAddressController.text = resolvedAddress.formattedAddress;
       });
       _showSnack('Business location captured successfully.');
     } catch (e) {
@@ -194,6 +180,7 @@ class _VendorRegistrationScreenState extends State<VendorRegistrationScreen> {
     final requestBody = <String, dynamic>{
       'firstName': _firstNameController.text.trim(),
       'lastName': _lastNameController.text.trim(),
+      'alternatePhoneNumber': _alternatePhoneController.text.trim(),
       'gender': _selectedGender,
       'businessName': _businessNameController.text.trim(),
       'businessCategories': _selectedCategories,
@@ -643,6 +630,27 @@ b. Disputes shall be referred to a single arbitrator in accordance with the Arbi
                 ),
                 const SizedBox(height: 14),
                 genderField,
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _alternatePhoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: _inputDecoration(
+                    label: 'Alternative phone number',
+                    icon: Icons.phone_outlined,
+                    hint: 'Optional contact number for buyers and support',
+                  ),
+                  validator: (value) {
+                    final trimmed = value?.trim() ?? '';
+                    if (trimmed.isEmpty) {
+                      return null;
+                    }
+                    final pattern = RegExp(r'^(?:\+?234|0)[789]\d{9}$');
+                    if (!pattern.hasMatch(trimmed)) {
+                      return 'Enter a valid Nigerian phone number';
+                    }
+                    return null;
+                  },
+                ),
               ],
             );
           }
@@ -654,6 +662,27 @@ b. Disputes shall be referred to a single arbitrator in accordance with the Arbi
               lastNameField,
               const SizedBox(height: 14),
               genderField,
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _alternatePhoneController,
+                keyboardType: TextInputType.phone,
+                decoration: _inputDecoration(
+                  label: 'Alternative phone number',
+                  icon: Icons.phone_outlined,
+                  hint: 'Optional contact number for buyers and support',
+                ),
+                validator: (value) {
+                  final trimmed = value?.trim() ?? '';
+                  if (trimmed.isEmpty) {
+                    return null;
+                  }
+                  final pattern = RegExp(r'^(?:\+?234|0)[789]\d{9}$');
+                  if (!pattern.hasMatch(trimmed)) {
+                    return 'Enter a valid Nigerian phone number';
+                  }
+                  return null;
+                },
+              ),
             ],
           );
         },

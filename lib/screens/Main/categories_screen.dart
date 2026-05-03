@@ -588,15 +588,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Choose how you want to continue.',
+                'Consult for restricted medicines or shop over-the-counter products directly.',
                 style: TextStyle(fontSize: 13.5, color: lightGrey),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 18),
               _buildBottomSheetAction(
                 icon: Icons.chat_outlined,
                 iconColor: primaryNavy,
                 title: 'Consult Pharmacist',
-                subtitle: 'Chat for guidance before placing an order.',
+                subtitle:
+                    'Discuss symptoms and unlock the right medicine path.',
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -610,7 +612,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 icon: Icons.storefront_outlined,
                 iconColor: accentGreen,
                 title: 'Pharmacy Store',
-                subtitle: 'Browse medicine and health products.',
+                subtitle: 'Buy over-the-counter drugs and health products.',
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(

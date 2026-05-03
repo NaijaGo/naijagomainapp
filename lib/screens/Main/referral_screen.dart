@@ -241,7 +241,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                     Text(
                       summary.isFallback
                           ? 'Your invite code is ready to share right away. Reward totals will start appearing here as live referral data becomes available.'
-                          : 'Track your invites, conversions, and rewards from one polished dashboard.',
+                          : 'Track your invites, first-purchase conversions, and rewards from one polished dashboard.',
                       style: TextStyle(
                         color: brandMutedText.withValues(alpha: 0.96),
                         fontSize: 14.2,
@@ -263,7 +263,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
               ),
               child: Text(
-                '${_formatCurrency(summary.rewardPerReferral)} per successful referral',
+                '${_formatCurrency(summary.rewardPerReferral)} after a referred user completes a first purchase',
                 style: const TextStyle(
                   color: whiteBackground,
                   fontSize: 12.5,
@@ -371,7 +371,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Your invite code is ready to use now. This screen will automatically show live referral counts and rewards once the backend provides those metrics.',
+                  'Your invite code is ready to use now. This screen will automatically show live first-purchase referral counts and rewards once the backend provides those metrics.',
                   style: TextStyle(
                     color: AppTheme.mutedText,
                     fontSize: 13.5,
@@ -395,7 +395,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         accent: AppTheme.accentBlue,
       ),
       _ReferralStat(
-        label: 'Joined',
+        label: 'Purchased',
         value: '${summary.successfulInvites}',
         icon: Icons.verified_outlined,
         accent: highlightGreen,
@@ -616,7 +616,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
             step: '3',
             title: 'Track rewards here',
             description: summary.rewardPerReferral > 0
-                ? 'Each successful referral can unlock ${_formatCurrency(summary.rewardPerReferral)} in rewards, and this screen will keep your totals updated.'
+                ? 'Each referred user who completes a first purchase can unlock ${_formatCurrency(summary.rewardPerReferral)} in rewards, and this screen will keep your totals updated.'
                 : 'This dashboard keeps your invite progress, reward totals, and recent activity in one place.',
           ),
         ],

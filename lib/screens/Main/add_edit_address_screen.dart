@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:geocoding/geocoding.dart'; // Import for reverse geocoding
 import '../../constants.dart'; // Import constants for colors
+import '../../models/address.dart';
+import '../../services/address_resolution_service.dart';
 import '../../widgets/tech_glow_background.dart';
 // Import the Address model
 
@@ -20,7 +21,7 @@ const Color whiteBackground = Colors
     .white; // Explicitly defining white for main backgrounds, text on navy
 
 class AddEditAddressScreen extends StatefulWidget {
-  final dynamic address;
+  final Address? address;
   final int? addressIndex;
   final double? initialLatitude; // New: Latitude from geolocation
   final double? initialLongitude; // New: Longitude from geolocation
@@ -41,6 +42,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _addressController;
+  late TextEditingController _phoneNumberController;
   late TextEditingController _cityController;
   late TextEditingController _postalCodeController;
   late TextEditingController _countryController;
@@ -51,40 +53,49 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   void initState() {
     super.initState();
     _addressController = TextEditingController();
+    _phoneNumberController = TextEditingController();
     _cityController = TextEditingController();
     _postalCodeController = TextEditingController();
     _countryController = TextEditingController();
     _loadInitialData();
   }
 
-  void _loadInitialData() async {
+  Future<void> _loadInitialData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final fallbackPhoneNumber = prefs.getString('phoneNumber') ?? '';
+
     // If editing an existing address
-    if (widget.address != null) {
-      _addressController.text = widget.address['address'] ?? '';
-      _cityController.text = widget.address['city'] ?? '';
-      _postalCodeController.text = widget.address['postalCode'] ?? '';
-      _countryController.text = widget.address['country'] ?? '';
-      _isDefault = widget.address['isDefault'] ?? false;
+    final existingAddress = widget.address;
+    if (existingAddress != null) {
+      _addressController.text = existingAddress.addressLine;
+      _phoneNumberController.text = existingAddress.phoneNumber;
+      _cityController.text = existingAddress.city;
+      _postalCodeController.text = existingAddress.postalCode;
+      _countryController.text = existingAddress.country;
+      _isDefault = existingAddress.isDefault;
+      return;
     }
+
+    if (fallbackPhoneNumber.isNotEmpty) {
+      _phoneNumberController.text = fallbackPhoneNumber;
+    }
+
     // If adding a new address from geolocation
-    else if (widget.initialLatitude != null &&
-        widget.initialLongitude != null) {
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
       setState(() {
         _isLoading = true;
       });
       try {
-        List<Placemark> placemarks = await placemarkFromCoordinates(
-          widget.initialLatitude!,
-          widget.initialLongitude!,
-        );
-        if (placemarks.isNotEmpty) {
-          final placemark = placemarks.first;
-          _addressController.text =
-              '${placemark.street ?? ''}, ${placemark.subLocality ?? ''}';
-          _cityController.text = placemark.locality ?? '';
-          _postalCodeController.text = placemark.postalCode ?? '';
-          _countryController.text = placemark.country ?? '';
-        }
+        final resolvedAddress =
+            await AddressResolutionService.resolveFromCoordinates(
+              widget.initialLatitude!,
+              widget.initialLongitude!,
+            );
+
+        _addressController.text = resolvedAddress.addressLine;
+        _cityController.text = resolvedAddress.city;
+        _postalCodeController.text = resolvedAddress.postalCode;
+        _countryController.text = resolvedAddress.country;
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +117,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   @override
   void dispose() {
     _addressController.dispose();
+    _phoneNumberController.dispose();
     _cityController.dispose();
     _postalCodeController.dispose();
     _countryController.dispose();
@@ -132,6 +144,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
       final addressData = {
         'address': _addressController.text.trim(),
+        'phoneNumber': _phoneNumberController.text.trim(),
         'city': _cityController.text.trim(),
         'postalCode': _postalCodeController.text.trim(),
         'country': _countryController.text.trim(),
@@ -252,6 +265,42 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                           cursorColor: deepNavyBlue,
                           validator: (value) =>
                               value!.isEmpty ? 'Please enter an address' : null,
+                        ),
+                        const SizedBox(height: 20),
+                        TextFormField(
+                          controller: _phoneNumberController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: 'Delivery Phone Number',
+                            labelStyle: const TextStyle(color: deepNavyBlue),
+                            focusedBorder: const OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: greenYellow,
+                                width: 2.0,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: deepNavyBlue.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            border: const OutlineInputBorder(),
+                            prefixIcon: const Icon(
+                              Icons.phone_outlined,
+                              color: deepNavyBlue,
+                            ),
+                          ),
+                          cursorColor: deepNavyBlue,
+                          validator: (value) {
+                            final trimmed = value?.trim() ?? '';
+                            if (trimmed.isEmpty) {
+                              return null;
+                            }
+                            final pattern = RegExp(r'^(?:\+?234|0)[789]\d{9}$');
+                            return pattern.hasMatch(trimmed)
+                                ? null
+                                : 'Enter a valid Nigerian phone number';
+                          },
                         ),
                         const SizedBox(height: 20),
                         TextFormField(

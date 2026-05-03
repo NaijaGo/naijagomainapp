@@ -51,7 +51,8 @@ class ReferralSummary {
     final intro = trimmedName.isEmpty
         ? 'Join me on NaijaGo.'
         : '$trimmedName invited you to join NaijaGo.';
-    final codeInstruction = 'Use referral code $referralCode when you sign up.';
+    final codeInstruction =
+        'Use referral code $referralCode when you sign up and complete your first order.';
     return '$intro $codeInstruction Sign up here: $shareLink';
   }
 }
@@ -90,9 +91,9 @@ class ReferralInviteActivity {
     final value = normalizedStatus.toLowerCase();
     return value.contains('success') ||
         value.contains('complete') ||
-        value.contains('joined') ||
+        value.contains('purchased') ||
+        value.contains('qualified') ||
         value.contains('reward') ||
-        value.contains('verified') ||
         value.contains('converted');
   }
 
@@ -101,6 +102,7 @@ class ReferralInviteActivity {
     return value.contains('pending') ||
         value.contains('sent') ||
         value.contains('invite') ||
-        value.contains('waiting');
+        value.contains('waiting') ||
+        value.contains('signed up');
   }
 }

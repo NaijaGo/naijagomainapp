@@ -40,6 +40,14 @@ class _MyWalletScreenState extends State<MyWalletScreen> {
   List<Map<String, String>> _savedBankCredentials = [];
   final TextEditingController _passwordController = TextEditingController();
 
+  String? _readEnv(String key) {
+    try {
+      return dotenv.env[key];
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -150,14 +158,14 @@ class _MyWalletScreenState extends State<MyWalletScreen> {
       return;
     }
 
-    final publicKey = dotenv.env['FLUTTERWAVE_PUBLIC_KEY'] ?? '';
+    final publicKey = _readEnv('FLUTTERWAVE_PUBLIC_KEY') ?? '';
     if (publicKey.isEmpty) {
       _showSnack('Flutterwave public key not set in .env');
       return;
     }
 
     final bool isTestMode =
-        (dotenv.env['FLUTTERWAVE_TEST_MODE'] ?? 'true') == 'true';
+        (_readEnv('FLUTTERWAVE_TEST_MODE') ?? 'true') == 'true';
     final txRef = 'FLW_${const Uuid().v4()}';
 
     final flutterwave = Flutterwave(

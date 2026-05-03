@@ -5,6 +5,14 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class PaymentService {
+  String? _readEnv(String key) {
+    try {
+      return dotenv.env[key];
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Starts a Flutterwave payment flow
   /// Returns [ChargeResponse] if successful, null otherwise
   Future<ChargeResponse?> startFlutterwavePayment({
@@ -16,7 +24,7 @@ class PaymentService {
     String? userId, // NEW: Add optional userId parameter for webhooks
   }) async {
     // --- Load keys from .env ---
-    final publicKey = dotenv.env['FLUTTERWAVE_PUBLIC_KEY'];
+    final publicKey = _readEnv('FLUTTERWAVE_PUBLIC_KEY');
     if (publicKey == null || publicKey.trim().isEmpty) {
       debugPrint("❌ [PaymentService] Missing FLUTTERWAVE_PUBLIC_KEY in .env");
       return null;
@@ -24,7 +32,7 @@ class PaymentService {
 
     // Test mode flag (true/false in .env)
     final bool isTestMode =
-        (dotenv.env['FLUTTERWAVE_TEST_MODE'] ?? 'true').toLowerCase() == 'true';
+        (_readEnv('FLUTTERWAVE_TEST_MODE') ?? 'true').toLowerCase() == 'true';
 
     // --- Generate a unique transaction reference ---
     final String txRef = 'FLW_${const Uuid().v4()}';
@@ -33,15 +41,12 @@ class PaymentService {
     final flutterwave = Flutterwave(
       publicKey: publicKey,
       currency: 'NGN',
-      redirectUrl: dotenv.env['FLUTTERWAVE_REDIRECT_URL'] ??
+      redirectUrl:
+          _readEnv('FLUTTERWAVE_REDIRECT_URL') ??
           'https://www.google.com', // Fallback redirect URL
       txRef: txRef,
       amount: amount.toStringAsFixed(2),
-      customer: Customer(
-        email: email,
-        name: name,
-        phoneNumber: phoneNumber,
-      ),
+      customer: Customer(email: email, name: name, phoneNumber: phoneNumber),
       paymentOptions: "card, ussd, banktransfer",
       customization: Customization(title: 'E-commerce Payment'),
       isTestMode: isTestMode,
@@ -51,12 +56,14 @@ class PaymentService {
 
     try {
       debugPrint(
-          "💳 [PaymentService] Initiating payment | Amount: ₦$amount | Email: $email | Ref: $txRef | UserID: ${userId ?? 'not_set'}");
+        "💳 [PaymentService] Initiating payment | Amount: ₦$amount | Email: $email | Ref: $txRef | UserID: ${userId ?? 'not_set'}",
+      );
 
       final response = await flutterwave.charge(context);
 
       debugPrint(
-          "✅ [PaymentService] Payment status: ${response.status} | Ref: ${response.txRef}");
+        "✅ [PaymentService] Payment status: ${response.status} | Ref: ${response.txRef}",
+      );
       return response;
     } catch (e, stackTrace) {
       debugPrint("❌ [PaymentService] Error: $e");

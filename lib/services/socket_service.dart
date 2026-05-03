@@ -7,7 +7,16 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 class SocketService {
   io.Socket? socket;
 
+  bool get isConnected => socket?.connected ?? false;
+
   Future<void> connect(String baseUrl) async {
+    if (socket != null) {
+      if (!isConnected) {
+        socket!.connect();
+      }
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
 
@@ -51,6 +60,30 @@ class SocketService {
 
   void onMessage(void Function(dynamic) cb) {
     socket?.on('message', cb);
+  }
+
+  void on(String event, void Function(dynamic) cb) {
+    socket?.on(event, cb);
+  }
+
+  void off(String event) {
+    socket?.off(event);
+  }
+
+  void onConnect(void Function(dynamic) cb) {
+    socket?.onConnect(cb);
+  }
+
+  void onDisconnect(void Function(dynamic) cb) {
+    socket?.onDisconnect(cb);
+  }
+
+  void joinOrderTracking(String orderId) {
+    socket?.emit('join_order_tracking', {'orderId': orderId});
+  }
+
+  void leaveOrderTracking(String orderId) {
+    socket?.emit('leave_order_tracking', {'orderId': orderId});
   }
 
   void dispose() {

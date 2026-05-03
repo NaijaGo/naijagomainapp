@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants.dart';
 import '../../models/address.dart';
 import '../../providers/cart_provider.dart';
+import '../../services/address_resolution_service.dart';
 import '../../services/location_access_service.dart';
 import '../../services/payment_service.dart';
 import '../../theme/app_theme.dart';
@@ -134,6 +135,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _countryController = TextEditingController();
 
   bool _useSavedAddress = false;
+  bool _isManualAddress = false;
   Address? _selectedAddress;
   List<Address> _userAddresses = [];
 
@@ -220,6 +222,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               orElse: () => _userAddresses.first,
             );
             _useSavedAddress = true;
+            _isManualAddress = false;
             _addressSelectedOrFetched = true;
           }
         });
@@ -278,14 +281,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             },
             body: jsonEncode({
               'cartItems': orderItems,
-              'shippingAddress': _useSavedAddress
-                  ? _selectedAddress!.toJson()
-                  : {
-                      'address': _addressController.text.trim(),
-                      'city': _cityController.text.trim(),
-                      'postalCode': _postalCodeController.text.trim(),
-                      'country': _countryController.text.trim(),
-                    },
+              'shippingAddress': _buildShippingAddressPayload(),
               'userLocation': {
                 'latitude': _userLatitude,
                 'longitude': _userLongitude,
@@ -455,6 +451,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       setState(() {
         _useSavedAddress = false;
+        _isManualAddress = false;
         _selectedAddress = null;
         _addressSelectedOrFetched = false;
         _isSummaryCalculated = false;
@@ -469,59 +466,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
 
+      await LocationAccessService.requestPreciseLocationIfNeeded();
+
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: LocationAccessService.currentLocationSettings(),
       ).timeout(const Duration(seconds: 15));
 
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      ).timeout(const Duration(seconds: 10));
+      final resolvedAddress =
+          await AddressResolutionService.resolveFromCoordinates(
+            position.latitude,
+            position.longitude,
+          ).timeout(const Duration(seconds: 10));
 
-      if (placemarks.isEmpty) throw Exception('No address found');
-
-      final place = placemarks.first;
-
-      // ────────────────────────────────────────────────────────────────
-      // IMPROVED ADDRESS BUILDING – replaces your old 4 lines
-      final addressParts = <String>[];
-
-      if (place.thoroughfare?.isNotEmpty == true) {
-        addressParts.add(place.thoroughfare!);
-      }
-      if (place.subThoroughfare?.isNotEmpty == true) {
-        addressParts.add(place.subThoroughfare!);
-      }
-      if (place.subLocality?.isNotEmpty == true) {
-        addressParts.add(place.subLocality!);
-      }
-      if (addressParts.isEmpty && place.street?.isNotEmpty == true) {
-        addressParts.add(place.street!);
-      }
-
-      _addressController.text = addressParts.join(', ').trim();
-
-      if (_addressController.text.isEmpty || _addressController.text == ',') {
-        _addressController.text = place.locality != null
-            ? 'Area in ${place.locality}'
-            : 'Current Location';
-      }
-
-      _cityController.text =
-          place.locality ??
-          place.subAdministrativeArea ??
-          place.administrativeArea ??
-          '';
-
-      _postalCodeController.text = place.postalCode ?? '';
-
-      _countryController.text =
-          place.country ?? place.isoCountryCode ?? 'Nigeria';
+      _addressController.text = resolvedAddress.addressLine;
+      _cityController.text = resolvedAddress.city;
+      _postalCodeController.text = resolvedAddress.postalCode;
+      _countryController.text = resolvedAddress.country;
 
       // iOS-specific hint (only show on iPhone — Android usually has good data)
       if (Platform.isIOS) {
         _showSnackBar(
-          'Location loaded — please verify address & postal code (iOS data can be limited)',
+          resolvedAddress.hasPostalCode
+              ? 'Precise iPhone location loaded successfully.'
+              : 'Precise iPhone location loaded. Please confirm the postal code before placing your order.',
           isError: false,
         );
       }
@@ -920,14 +887,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final requestBody = {
         'orderItems': orderItems,
-        'shippingAddress': _useSavedAddress
-            ? _selectedAddress!.toJson()
-            : {
-                'address': _addressController.text.trim(),
-                'city': _cityController.text.trim(),
-                'postalCode': _postalCodeController.text.trim(),
-                'country': _countryController.text.trim(),
-              },
+        'shippingAddress': _buildShippingAddressPayload(),
         'paymentMethod': _selectedPaymentMethod,
         'totalShippingPrice': summary.totalShippingPrice,
         'totalPlatformFees': summary.totalPlatformFees,
@@ -1542,7 +1502,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _buildSectionHeader(
             icon: Icons.local_shipping_outlined,
             title: 'Delivery address',
-            subtitle: 'Choose where this order should be sent.',
+            subtitle:
+                'Choose your current location, a saved address, or enter one manually.',
             trailing: _buildStatusChip(
               label: _addressSelectedOrFetched ? 'Ready' : 'Required',
               color: _addressSelectedOrFetched
@@ -1581,11 +1542,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           setState(() {
                             _selectedAddress = selected;
                             _useSavedAddress = true;
+                            _isManualAddress = false;
                             _addressSelectedOrFetched = true;
                           });
                           await _ensureUserLocation(shouldFetchSummary: true);
                         }
                       },
+              );
+
+              final manualAddressButton = _buildAddressActionButton(
+                title: 'Enter address manually',
+                subtitle: 'Type the exact street, city, and postal code',
+                icon: Icons.edit_location_alt_outlined,
+                selected: _isManualAddress,
+                onPressed: (_isLoading || _isFetchingLocation)
+                    ? null
+                    : _activateManualAddress,
               );
 
               if (constraints.maxWidth < 620) {
@@ -1597,6 +1569,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                     const SizedBox(height: 12),
                     SizedBox(width: double.infinity, child: savedAddressButton),
+                    const SizedBox(height: 12),
+                    SizedBox(width: double.infinity, child: manualAddressButton),
                   ],
                 );
               }
@@ -1606,10 +1580,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Expanded(child: currentLocationButton),
                   const SizedBox(width: 12),
                   Expanded(child: savedAddressButton),
+                  const SizedBox(width: 12),
+                  Expanded(child: manualAddressButton),
                 ],
               );
             },
           ),
+          if (_isManualAddress) ...[
+            const SizedBox(height: AppSpacing.md),
+            _buildManualAddressForm(),
+          ],
           const SizedBox(height: AppSpacing.md),
           if (_isFetchingLocation) ...[
             const LinearProgressIndicator(minHeight: 3),
@@ -2178,6 +2158,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _cityController.text,
       _countryController.text,
     ]).isNotEmpty;
+    final bool hasManualAddress = _isManualAddress && hasLiveAddress;
 
     if (!hasSavedAddress && !hasLiveAddress) {
       return Container(
@@ -2200,7 +2181,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             SizedBox(height: 6),
             Text(
-              'Use your current location or choose one of your saved addresses to unlock delivery pricing.',
+              'Use your current location, choose one of your saved addresses, or type the delivery address manually.',
               style: TextStyle(
                 color: AppTheme.mutedText,
                 fontSize: 13.5,
@@ -2216,11 +2197,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ? (_selectedAddress!.isDefault
               ? 'Default saved address'
               : 'Saved address')
+        : hasManualAddress
+        ? 'Manual address'
         : 'Current location';
     final String title = hasSavedAddress
         ? (_selectedAddress!.name.isNotEmpty
               ? _selectedAddress!.name
               : 'Delivery destination')
+        : hasManualAddress
+        ? 'Entered by you'
         : 'Detected from your device';
     final String primaryLine = hasSavedAddress
         ? (_selectedAddress!.addressLine.isNotEmpty
@@ -2297,7 +2282,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ),
               _buildStatusChip(
-                label: hasSavedAddress ? 'Saved' : 'Live',
+                label: hasSavedAddress
+                    ? 'Saved'
+                    : hasManualAddress
+                    ? 'Manual'
+                    : 'Live',
                 color: AppTheme.primaryNavy,
               ),
             ],
@@ -2334,6 +2323,230 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Map<String, dynamic> _buildShippingAddressPayload() {
+    if (_useSavedAddress && _selectedAddress != null) {
+      return _selectedAddress!.toJson();
+    }
+
+    return {
+      'address': _addressController.text.trim(),
+      'city': _cityController.text.trim(),
+      'postalCode': _postalCodeController.text.trim(),
+      'country': _countryController.text.trim(),
+    };
+  }
+
+  void _activateManualAddress() {
+    setState(() {
+      _useSavedAddress = false;
+      _isManualAddress = true;
+      _selectedAddress = null;
+      _addressSelectedOrFetched = false;
+      _isSummaryCalculated = false;
+      _fullOrderSummary = null;
+      _userLatitude = null;
+      _userLongitude = null;
+    });
+  }
+
+  void _handleManualAddressChanged(String _) {
+    if (!_isManualAddress) {
+      return;
+    }
+
+    if (_addressSelectedOrFetched ||
+        _isSummaryCalculated ||
+        _fullOrderSummary != null ||
+        _userLatitude != null ||
+        _userLongitude != null) {
+      setState(() {
+        _addressSelectedOrFetched = false;
+        _isSummaryCalculated = false;
+        _fullOrderSummary = null;
+        _userLatitude = null;
+        _userLongitude = null;
+      });
+    }
+  }
+
+  Future<void> _applyManualAddress() async {
+    final address = _addressController.text.trim();
+    final city = _cityController.text.trim();
+    final postalCode = _postalCodeController.text.trim();
+    final country = _countryController.text.trim();
+
+    if ([address, city, postalCode, country].any((value) => value.isEmpty)) {
+      _showSnackBar(
+        'Please complete the street address, city, postal code, and country.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() {
+      _useSavedAddress = false;
+      _isManualAddress = true;
+      _selectedAddress = null;
+      _addressSelectedOrFetched = false;
+      _isSummaryCalculated = false;
+      _fullOrderSummary = null;
+      _userLatitude = null;
+      _userLongitude = null;
+      _isLoading = true;
+    });
+
+    try {
+      final hasCoords = await _ensureUserLocation(shouldFetchSummary: true);
+      if (!hasCoords) {
+        _showSnackBar(
+          'We could not map that address. Please make the street and city more specific.',
+          isError: true,
+        );
+        return;
+      }
+
+      setState(() {
+        _addressSelectedOrFetched = true;
+      });
+      _showSnackBar(
+        'Manual delivery address saved for this checkout.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildManualAddressForm() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppTheme.borderGrey),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Manual delivery address',
+            style: TextStyle(
+              color: AppTheme.secondaryBlack,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Enter the exact delivery details and confirm them to calculate delivery fees.',
+            style: TextStyle(
+              color: AppTheme.mutedText,
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _buildManualAddressField(
+            controller: _addressController,
+            label: 'Street address',
+            icon: Icons.home_outlined,
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cityField = _buildManualAddressField(
+                controller: _cityController,
+                label: 'City',
+                icon: Icons.location_city_outlined,
+              );
+              final postalCodeField = _buildManualAddressField(
+                controller: _postalCodeController,
+                label: 'Postal code',
+                icon: Icons.local_post_office_outlined,
+              );
+
+              if (constraints.maxWidth < 620) {
+                return Column(
+                  children: [
+                    cityField,
+                    const SizedBox(height: 12),
+                    postalCodeField,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: cityField),
+                  const SizedBox(width: 12),
+                  Expanded(child: postalCodeField),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildManualAddressField(
+            controller: _countryController,
+            label: 'Country',
+            icon: Icons.flag_outlined,
+          ),
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading || _isFetchingLocation ? null : _applyManualAddress,
+              icon: const Icon(Icons.check_circle_outline_rounded),
+              label: const Text('Use this address'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryNavy,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualAddressField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+  }) {
+    return TextFormField(
+      controller: controller,
+      onChanged: _handleManualAddressChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppTheme.borderGrey),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppTheme.borderGrey),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: AppTheme.primaryNavy, width: 1.5),
+        ),
       ),
     );
   }

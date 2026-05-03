@@ -9,10 +9,12 @@ import 'package:naija_go/auth/screens/login_screen.dart';
 import 'package:naija_go/providers/cart_provider.dart';
 import 'package:naija_go/screens/Main/notifications_screen.dart';
 import 'package:naija_go/screens/vendor/add_product_screen.dart';
+import 'package:naija_go/screens/vendor/orders_recived_screen.dart.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
+import '../../services/socket_service.dart';
 import 'account_screen.dart';
 import 'cart_screen.dart';
 import 'categories_screen.dart'
@@ -208,7 +210,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   int _productsSold = 0;
   int _productsUnsold = 0;
   int _followersCount = 0;
+  bool _isPharmacist = false;
+  String _pharmacistStatus = 'none';
   List<dynamic> _notifications = [];
+  final SocketService _socketService = SocketService();
 
   @override
   void initState() {
@@ -220,6 +225,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _socketService.dispose();
     super.dispose();
   }
 
@@ -286,6 +292,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               productsSold: _productsSold,
               productsUnsold: _productsUnsold,
               followersCount: _followersCount,
+              isPharmacist: _isPharmacist,
+              pharmacistStatus: _pharmacistStatus,
               notifications: _notifications,
               onRefresh: _fetchUserStatus,
             )
@@ -321,6 +329,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         _productsSold = 0;
         _productsUnsold = 0;
         _followersCount = 0;
+        _isPharmacist = false;
+        _pharmacistStatus = 'none';
         _notifications = [];
       });
       return;
@@ -356,6 +366,11 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
             : null;
         final notifications = userData['notifications'] ?? [];
         final followers = userData['followersCount'] ?? 0;
+        final isPharmacist = userData['isPharmacist'] == true;
+        final pharmacistStatus =
+            (userData['pharmacistStatus'] ??
+                    (isPharmacist ? 'approved' : 'none'))
+                .toString();
 
         int totalProds = 0;
         int productsSold = 0;
@@ -394,7 +409,13 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           _totalProducts = totalProds;
           _productsSold = productsSold;
           _productsUnsold = productsUnsold;
+          _isPharmacist = isPharmacist;
+          _pharmacistStatus = pharmacistStatus;
         });
+
+        if (isApproved) {
+          unawaited(_connectVendorNotifications());
+        }
       } else {
         final responseData = jsonDecode(userResponse.body);
         setState(() {
@@ -403,6 +424,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           _isLoggedIn = false;
           _isApprovedVendor = false;
           _vendorStatus = 'none';
+          _isPharmacist = false;
+          _pharmacistStatus = 'none';
         });
 
         if (userResponse.statusCode == 401) {
@@ -415,6 +438,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         _isLoggedIn = false;
         _isApprovedVendor = false;
         _vendorStatus = 'none';
+        _isPharmacist = false;
+        _pharmacistStatus = 'none';
       });
       debugPrint('MainAppNavigator fetch error: $e');
     } finally {
@@ -447,6 +472,89 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  Future<void> _connectVendorNotifications() async {
+    await _socketService.connect(baseUrl);
+    _socketService.off('vendor_notification');
+    _socketService.on('vendor_notification', (payload) {
+      if (!mounted) return;
+
+      final data = payload is Map
+          ? Map<String, dynamic>.from(payload)
+          : <String, dynamic>{'message': payload.toString()};
+      final message = data['message']?.toString() ?? 'You have a new vendor alert.';
+      final notification = {
+        '_id': DateTime.now().microsecondsSinceEpoch.toString(),
+        'type': data['data']?['type'] ?? 'new_order',
+        'message': message,
+        'read': false,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      setState(() {
+        _notifications = [notification, ..._notifications];
+      });
+
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(data['title']?.toString() ?? 'New vendor order'),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () => _onItemTapped(3),
+          ),
+        ),
+      );
+      _playVendorOrderAlert();
+      _showVendorOrderAlertDialog(
+        title: data['title']?.toString() ?? 'New vendor order',
+        message: message,
+      );
+    });
+  }
+
+  Future<void> _playVendorOrderAlert() async {
+    try {
+      await SystemSound.play(SystemSoundType.alert);
+      await HapticFeedback.heavyImpact();
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      await SystemSound.play(SystemSoundType.alert);
+      await HapticFeedback.vibrate();
+    } catch (_) {
+      // Platform support for alert sounds and haptics can vary.
+    }
+  }
+
+  Future<void> _showVendorOrderAlertDialog({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const OrdersRecivedScreen(),
+                ),
+              );
+            },
+            child: const Text('Open orders'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildLoadingState() {
