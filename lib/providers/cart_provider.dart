@@ -6,16 +6,13 @@ class CartItem {
   int quantity;
   final dynamic selectedSize;
 
-  CartItem({
-    required this.product, 
-    this.quantity = 1,
-    this.selectedSize,
-  });
+  CartItem({required this.product, this.quantity = 1, this.selectedSize});
 
   Map<String, dynamic> toJson() {
-
-     debugPrint('CartItem.toJson() - selectedSize type: ${selectedSize.runtimeType}');
-      debugPrint('CartItem.toJson() - selectedSize value: $selectedSize');
+    debugPrint(
+      'CartItem.toJson() - selectedSize type: ${selectedSize.runtimeType}',
+    );
+    debugPrint('CartItem.toJson() - selectedSize value: $selectedSize');
 
     return {
       'product': product.id,
@@ -53,18 +50,42 @@ class CartProvider with ChangeNotifier {
 
   Map<String, CartItem> get items => {..._items};
 
+  CartItem? restaurantVendorConflict(Product product) {
+    if (!product.isRestaurantItem) return null;
+
+    for (final item in _items.values) {
+      if (item.product.isRestaurantItem &&
+          item.product.vendorId.isNotEmpty &&
+          product.vendorId.isNotEmpty &&
+          item.product.vendorId != product.vendorId) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
   int get itemCount {
     return _items.values.fold(0, (sum, item) => sum + item.quantity);
   }
 
   double get totalAmount {
-    return _items.values.fold(0.0,
-        (sum, item) => sum + (item.product.price * item.quantity));
+    return _items.values.fold(
+      0.0,
+      (sum, item) => sum + (item.product.price * item.quantity),
+    );
   }
 
-  void addProduct(Product product, {dynamic selectedSize}) {
+  bool addProduct(Product product, {dynamic selectedSize}) {
+    if (restaurantVendorConflict(product) != null) {
+      debugPrint(
+        'Cannot mix restaurant items from different vendors in one cart.',
+      );
+      return false;
+    }
+
     String itemKey = product.id;
-    
+
     if (product.hasSizes && selectedSize != null) {
       String sizeString;
       if (selectedSize is String) {
@@ -78,7 +99,7 @@ class CartProvider with ChangeNotifier {
       }
       itemKey = '${product.id}_$sizeString';
     }
-    
+
     if (_items.containsKey(itemKey)) {
       _items.update(itemKey, (existingItem) {
         if (existingItem.quantity < product.stockQuantity) {
@@ -100,9 +121,11 @@ class CartProvider with ChangeNotifier {
         );
       } else {
         debugPrint('Product ${product.name} is out of stock.');
+        return false;
       }
     }
     notifyListeners();
+    return true;
   }
 
   void removeSingleItem(String productId, {dynamic selectedSize}) {
@@ -120,17 +143,17 @@ class CartProvider with ChangeNotifier {
       }
       itemKey = '${productId}_$sizeString';
     }
-    
+
     if (!_items.containsKey(itemKey)) {
       final existingKey = _items.keys.firstWhere(
         (key) => key.startsWith(productId),
         orElse: () => '',
       );
-      
+
       if (existingKey.isEmpty) return;
       itemKey = existingKey;
     }
-    
+
     if (_items[itemKey]!.quantity > 1) {
       _items.update(
         itemKey,
@@ -161,12 +184,12 @@ class CartProvider with ChangeNotifier {
       }
       itemKey = '${productId}_$sizeString';
     }
-    
+
     if (!_items.containsKey(itemKey)) {
       final keysToRemove = _items.keys
           .where((key) => key.startsWith(productId))
           .toList();
-      
+
       for (final key in keysToRemove) {
         _items.remove(key);
       }
@@ -177,9 +200,7 @@ class CartProvider with ChangeNotifier {
   }
 
   List<CartItem> getItemsForProduct(String productId) {
-    return _items.values
-        .where((item) => item.product.id == productId)
-        .toList();
+    return _items.values.where((item) => item.product.id == productId).toList();
   }
 
   bool hasSizeInCart(String productId, String size) {

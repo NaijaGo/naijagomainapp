@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 // Import your existing files
 import '../../constants.dart';
+import '../../core/performance/json_decode.dart';
 import '../../models/food_readiness_campaign.dart';
 import '../../models/home_carousel_slide.dart';
 import '../../models/product.dart';
@@ -45,6 +46,7 @@ import 'chat_screen.dart';
 import 'product_detail_screen.dart';
 import 'restaurant_food_screen.dart'
     hide lightGrey, primaryNavy, secondaryBlack, softGrey, white;
+import 'subscription_screen.dart';
 
 const Color borderGrey = AppTheme.borderGrey;
 
@@ -421,10 +423,11 @@ class _SearchScreenState extends State<SearchScreen> {
 // ────────────────────────────────────────────────
 class ProductService {
   Future<List<Product>> fetchFlashSales() =>
-      _fetchProducts('/api/products/flashsales');
+      _fetchProducts('/api/products/flashsales?limit=30');
   Future<List<Product>> fetchNewArrivals() =>
-      _fetchProducts('/api/products/newarrivals');
-  Future<List<Product>> fetchAllProducts() => _fetchProducts('/api/products');
+      _fetchProducts('/api/products/newarrivals?limit=30');
+  Future<List<Product>> fetchAllProducts() =>
+      _fetchProducts('/api/products?limit=100');
   Future<List<Product>> fetchProductsByCategory(String category) =>
       _fetchProducts('/api/products/category/$category');
   Future<Product> fetchProductById(String productId) async {
@@ -439,7 +442,7 @@ class ProductService {
     );
 
     if (response.statusCode == 200) {
-      return Product.fromJson(jsonDecode(response.body));
+      return Product.fromJson(await decodeJsonMapInBackground(response.body));
     }
 
     throw Exception('Failed to load product: ${response.statusCode}');
@@ -456,12 +459,13 @@ class ProductService {
       query['lng'] = longitude.toString();
       query['radiusKm'] = radiusKm.toString();
     }
+    query['limit'] = '100';
     final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
     return _fetchProducts('/api/products/restaurants$suffix');
   }
 
   Future<List<Product>> searchProducts(String query) => _fetchProducts(
-    '/api/products/search?q=${Uri.encodeQueryComponent(query)}',
+    '/api/products/search?q=${Uri.encodeQueryComponent(query)}&limit=50',
   );
 
   Future<List<Product>> _fetchProducts(String endpoint) async {
@@ -482,7 +486,7 @@ class ProductService {
     debugPrint('API Response Body: ${response.body}');
 
     if (response.statusCode == 200) {
-      final List<dynamic> jsonList = jsonDecode(response.body);
+      final jsonList = await decodeJsonListInBackground(response.body);
       return jsonList.map((json) => Product.fromJson(json)).toList();
     } else if (response.statusCode == 401) {
       throw Exception('Unauthorized: Please log in again.');
@@ -893,6 +897,24 @@ class _HomeScreenState extends State<HomeScreen> {
     return nearby.isNotEmpty ? nearby : allRestaurants;
   }
 
+  List<Product> get _restaurantVendorProducts {
+    final grouped = <String, Product>{};
+
+    for (final product in _restaurantProducts) {
+      final vendorId = product.vendorId.isNotEmpty
+          ? product.vendorId
+          : product.displayRestaurantName;
+      final restaurantName = product.displayRestaurantName
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ');
+      final key = '$vendorId::$restaurantName';
+      grouped.putIfAbsent(key, () => product);
+    }
+
+    return grouped.values.toList();
+  }
+
   double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
     const earthRadiusKm = 6371.0;
     final dLat = _degreesToRadians(lat2 - lat1);
@@ -1047,7 +1069,7 @@ class _HomeScreenState extends State<HomeScreen> {
       city: _isAbujaCustomer ? 'Abuja' : null,
       metadata: {
         'mealMoment': _currentMealMoment?.label,
-        'restaurantCount': _restaurantProducts.length,
+        'restaurantCount': _restaurantVendorProducts.length,
       },
     );
     Navigator.of(
@@ -1101,10 +1123,15 @@ class _HomeScreenState extends State<HomeScreen> {
           if (!mounted) return;
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ProductDetailScreen(
-                product: product,
-                heroTag: 'carousel-product-${product.id}',
-              ),
+              builder: (_) => product.isRestaurantItem
+                  ? RestaurantFoodScreen(
+                      initialVendorId: product.vendorId,
+                      initialVendorName: product.displayRestaurantName,
+                    )
+                  : ProductDetailScreen(
+                      product: product,
+                      heroTag: 'carousel-product-${product.id}',
+                    ),
             ),
           );
         } catch (error) {
@@ -1135,7 +1162,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _refreshFoodReadySpotlight({bool allowPop = false}) {
     final mealMoment = _mealMomentFor(DateTime.now());
     final shouldShow =
-        _isAbujaCustomer && _activeFoodCampaign != null && _hasRestaurantProducts;
+        _isAbujaCustomer &&
+        _activeFoodCampaign != null &&
+        _hasRestaurantProducts;
 
     if (!mounted) {
       return;
@@ -1409,6 +1438,75 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Widget _buildSubscriptionEntryCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: borderGrey),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: primaryNavy.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_outlined,
+                  color: primaryNavy,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'NaijaGo Subscription',
+                      style: TextStyle(
+                        color: secondaryBlack,
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Set up free delivery plans and personalized picks.',
+                      style: TextStyle(
+                        color: lightGrey,
+                        fontSize: 12.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: lightGrey,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1432,14 +1530,15 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: _buildRestaurantEntryCard(_activeFoodCampaign),
             ),
-            if (_restaurantProducts.isNotEmpty) ...[
+            SliverToBoxAdapter(child: _buildSubscriptionEntryCard()),
+            if (_restaurantVendorProducts.isNotEmpty) ...[
               _buildSectionHeader(
                 'Restaurants',
                 onSeeAll: _openRestaurantStore,
               ),
               SliverToBoxAdapter(
                 child: ProductListHorizontal(
-                  products: _restaurantProducts,
+                  products: _restaurantVendorProducts,
                   sectionKey: 'restaurant',
                   customerLatitude: _customerLatitude,
                   customerLongitude: _customerLongitude,
@@ -2905,8 +3004,12 @@ class ProductCard extends StatelessWidget {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (context) =>
-                    ProductDetailScreen(product: product, heroTag: heroTag),
+                builder: (context) => product.isRestaurantItem
+                    ? RestaurantFoodScreen(
+                        initialVendorId: product.vendorId,
+                        initialVendorName: product.displayRestaurantName,
+                      )
+                    : ProductDetailScreen(product: product, heroTag: heroTag),
               ),
             );
           },
@@ -3099,31 +3202,31 @@ class ProductCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        if (isRestaurantItem || isMedicine) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.location_on_outlined,
-                                size: 12,
-                                color: Color(0xFF667085),
-                              ),
-                              const SizedBox(width: 3),
-                              Expanded(
-                                child: Text(
-                                  product.displayVendorLocation,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 10.8,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF667085),
-                                    height: 1.2,
-                                  ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 12,
+                              color: Color(0xFF667085),
+                            ),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                product.displayVendorLocation,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 10.8,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF667085),
+                                  height: 1.2,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
+                        ),
+                        if (isRestaurantItem || isMedicine) ...[
                           if (distanceLabel != null) ...[
                             const SizedBox(height: 3),
                             Row(
@@ -3213,7 +3316,29 @@ class ProductCard extends StatelessWidget {
                                 ? null
                                 : product.stockQuantity > 0
                                 ? () {
-                                    cartProvider.addProduct(product);
+                                    final added = cartProvider.addProduct(
+                                      product,
+                                    );
+                                    if (!added) {
+                                      final conflict = cartProvider
+                                          .restaurantVendorConflict(product);
+                                      final vendorName =
+                                          conflict
+                                              ?.product
+                                              .displayRestaurantName ??
+                                          'another restaurant';
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Your cart already has food from $vendorName. Clear it before ordering here.',
+                                          ),
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(

@@ -1,6 +1,7 @@
 // lib/screens/Main/write_review_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -163,13 +164,15 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                         ListTile(
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              widget.product.imageUrls.isNotEmpty
+                            child: CachedNetworkImage(
+                              imageUrl: widget.product.imageUrls.isNotEmpty
                                   ? widget.product.imageUrls[0]
                                   : 'https://placehold.co/60x60/CCCCCC/000000?text=No+Image',
                               width: 60,
                               height: 60,
                               fit: BoxFit.cover,
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.image_not_supported),
                             ),
                           ),
                           title: Text(

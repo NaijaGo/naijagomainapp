@@ -587,6 +587,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           label: 'Vendor update',
           accent: highlightGreen,
         );
+      case 'new_order':
+        return const _NotificationPresentation(
+          icon: Icons.receipt_long_outlined,
+          label: 'New order',
+          accent: AppTheme.accentBlue,
+        );
+      case 'order_update':
+        return const _NotificationPresentation(
+          icon: Icons.password_outlined,
+          label: 'Order update',
+          accent: AppTheme.accentBlue,
+        );
+      case 'order_shipped':
+        return const _NotificationPresentation(
+          icon: Icons.local_shipping_outlined,
+          label: 'Out for delivery',
+          accent: Color(0xFF0EA5E9),
+        );
+      case 'order_delivered':
+        return const _NotificationPresentation(
+          icon: Icons.verified_outlined,
+          label: 'Delivered',
+          accent: Color(0xFF10B981),
+        );
+      case 'admin_message':
+        return const _NotificationPresentation(
+          icon: Icons.campaign_outlined,
+          label: 'Admin message',
+          accent: AppTheme.primaryNavy,
+        );
       default:
         return const _NotificationPresentation(
           icon: Icons.info_outline,

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class OrderTrackingWidget extends StatelessWidget {
   final Map<String, dynamic> order;
@@ -60,6 +63,10 @@ class OrderTrackingWidget extends StatelessWidget {
         if (rider != null) ...[
           const SizedBox(height: 16),
           _buildRiderCard(color, rider),
+        ],
+        if (_deliveryOtp.isNotEmpty && !_isDelivered) ...[
+          const SizedBox(height: 16),
+          _buildDeliveryCodeCard(color),
         ],
         if (shipments.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -408,22 +415,31 @@ class OrderTrackingWidget extends StatelessWidget {
   }
 
   Widget _buildRiderCard(ColorScheme color, Map<String, dynamic> rider) {
+    final tracking = order['riderTracking'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(order['riderTracking'] as Map<String, dynamic>)
+        : <String, dynamic>{};
     final location = rider['currentLocation'] is Map<String, dynamic>
         ? Map<String, dynamic>.from(rider['currentLocation'] as Map<String, dynamic>)
         : <String, dynamic>{};
+    final lat = _toDouble(location['lat']);
+    final lng = _toDouble(location['lng']);
+    final isStale = location['isStale'] == true;
 
     final locationParts = <String>[
       if ((location['address']?.toString() ?? '').isNotEmpty)
         location['address'].toString(),
-      if (location['lat'] != null && location['lng'] != null)
-        '${(location['lat'] as num).toStringAsFixed(5)}, ${(location['lng'] as num).toStringAsFixed(5)}',
+      if (lat != null && lng != null)
+        '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
     ];
 
-    final lastUpdated = _formatDateTime(
-      location['lastUpdated']?.toString() ??
-          rider['lastUpdated']?.toString() ??
-          order['claimedAt']?.toString(),
-    );
+    final lastSeenLabel = location['lastSeenLabel']?.toString() ?? '';
+    final lastUpdated = lastSeenLabel.isNotEmpty && lastSeenLabel != 'never'
+        ? lastSeenLabel
+        : _formatDateTime(
+            location['lastUpdated']?.toString() ??
+                rider['lastUpdated']?.toString() ??
+                order['claimedAt']?.toString(),
+          );
 
     return Container(
       width: double.infinity,
@@ -437,7 +453,9 @@ class OrderTrackingWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Rider Tracking',
+            tracking['stage'] == 'after_pickup'
+                ? 'Live Rider Tracking'
+                : 'Rider Tracking',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
@@ -469,7 +487,7 @@ class OrderTrackingWidget extends StatelessWidget {
           if (locationParts.isNotEmpty) ...[
             const SizedBox(height: 8),
             _buildMetaRow(
-              icon: Icons.my_location_outlined,
+              icon: isStale ? Icons.location_off_outlined : Icons.my_location_outlined,
               label: 'Latest rider location',
               value: locationParts.join(' • '),
             ),
@@ -478,10 +496,131 @@ class OrderTrackingWidget extends StatelessWidget {
             const SizedBox(height: 8),
             _buildMetaRow(
               icon: Icons.access_time_outlined,
-              label: 'Updated',
+              label: isStale ? 'GPS stale' : 'Last updated',
               value: lastUpdated,
             ),
           ],
+          if (lat != null && lng != null) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 180,
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: LatLng(lat, lng),
+                    initialZoom: 15,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.drag |
+                          InteractiveFlag.pinchZoom |
+                          InteractiveFlag.doubleTapZoom,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.naijago.customer',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(lat, lng),
+                          width: 44,
+                          height: 44,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isStale ? Colors.orange : Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.18),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.delivery_dining,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _openMap(lat, lng),
+                icon: const Icon(Icons.map_outlined, size: 18),
+                label: const Text('Open map'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryCodeCard(ColorScheme color) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.18)),
+            ),
+            child: const Icon(Icons.lock_outline, color: Colors.green),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Customer delivery code',
+                  style: TextStyle(
+                    color: color.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Give this code to the rider only after receiving your order.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _deliveryOtp,
+            style: const TextStyle(
+              color: Colors.green,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
         ],
       ),
     );
@@ -687,6 +826,18 @@ class OrderTrackingWidget extends StatelessWidget {
     return null;
   }
 
+  double? _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  Future<void> _openMap(double lat, double lng) async {
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   List<Map<String, dynamic>> get _shipments {
     return (order['shipments'] as List<dynamic>? ?? const <dynamic>[])
         .whereType<Map>()
@@ -724,6 +875,18 @@ class OrderTrackingWidget extends StatelessWidget {
     }
 
     return '';
+  }
+
+  String get _deliveryOtp {
+    return order['deliveryOTP']?.toString().trim() ?? '';
+  }
+
+  bool get _isDelivered {
+    final mainStatus = _normalizeStatus(order['mainOrderStatus']);
+    final shipmentStatus = _normalizeStatus(order['shipmentStatus']);
+    return mainStatus == 'delivered' ||
+        mainStatus == 'completed' ||
+        shipmentStatus == 'delivered';
   }
 
   String _normalizeStatus(dynamic value) {

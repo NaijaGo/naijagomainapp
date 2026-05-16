@@ -417,6 +417,29 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: lightGrey,
+                      ),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          cartItem.product.displayVendorLocation,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: lightGrey,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   if (cartItem.selectedSize != null &&
                       cartItem.selectedSize!.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -1100,6 +1123,28 @@ class _RecentlyViewedProductCard extends StatelessWidget {
                           color: lightGrey,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 12,
+                            color: lightGrey,
+                          ),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              product.displayVendorLocation,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                color: lightGrey,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       if (product.hasSizes) ...[
                         const SizedBox(height: 4),
                         Text(
@@ -1118,7 +1163,27 @@ class _RecentlyViewedProductCard extends StatelessWidget {
                         child: ElevatedButton(
                           onPressed: product.stockQuantity > 0
                               ? () {
-                                  cartProvider.addProduct(product);
+                                  final added = cartProvider.addProduct(
+                                    product,
+                                  );
+                                  if (!added) {
+                                    final conflict = cartProvider
+                                        .restaurantVendorConflict(product);
+                                    final vendorName =
+                                        conflict
+                                            ?.product
+                                            .displayRestaurantName ??
+                                        'another restaurant';
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Your cart already has food from $vendorName. Clear it before ordering here.',
+                                        ),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(

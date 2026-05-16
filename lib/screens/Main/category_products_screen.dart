@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,11 +5,13 @@ import 'package:shimmer/shimmer.dart';
 
 import '../../constants.dart'
     hide lightGrey, primaryNavy, secondaryBlack, softGrey, white;
+import '../../core/performance/json_decode.dart';
 import '../../models/product.dart';
 import '../../services/customer_location_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import 'product_detail_screen.dart';
+import 'restaurant_food_screen.dart';
 
 const Color primaryNavy = AppTheme.primaryNavy;
 const Color secondaryBlack = AppTheme.secondaryBlack;
@@ -70,6 +70,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       query['lng'] = _customerLongitude!.toString();
       query['radiusKm'] = '15';
     }
+    query['limit'] = '100';
 
     final endpoint = isRestaurantCategory
         ? '/api/products/restaurants'
@@ -84,7 +85,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final List<dynamic> productsJson = jsonDecode(response.body);
+        final productsJson = await decodeJsonListInBackground(response.body);
         setState(() {
           _filteredProducts = productsJson
               .map((json) => Product.fromJson(json))
@@ -349,8 +350,12 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) =>
-                  ProductDetailScreen(product: product, heroTag: heroTag),
+              builder: (_) => product.isRestaurantItem
+                  ? RestaurantFoodScreen(
+                      initialVendorId: product.vendorId,
+                      initialVendorName: product.displayRestaurantName,
+                    )
+                  : ProductDetailScreen(product: product, heroTag: heroTag),
             ),
           );
         },
@@ -492,31 +497,31 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                           ],
                         ),
                       ),
-                      if (isRestaurantItem || isMedicine) ...[
-                        const SizedBox(height: 7),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              size: 12,
-                              color: Color(0xFF667085),
-                            ),
-                            const SizedBox(width: 3),
-                            Expanded(
-                              child: Text(
-                                product.displayVendorLocation,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 10.8,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF667085),
-                                  height: 1.2,
-                                ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 12,
+                            color: Color(0xFF667085),
+                          ),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              product.displayVendorLocation,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10.8,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF667085),
+                                height: 1.2,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                      if (isRestaurantItem || isMedicine) ...[
                         if (distanceLabel != null) ...[
                           const SizedBox(height: 4),
                           Row(

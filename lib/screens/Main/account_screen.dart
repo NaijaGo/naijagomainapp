@@ -17,11 +17,7 @@ import 'reviews_ratings_screen.dart'; // NEW: Import ReviewsRatingsScreen
 import 'dispute_list_screen.dart';
 import 'faq_screen.dart';
 import 'referral_screen.dart';
-import 'vendor_my_products_screen.dart';
-import '../../screens/vendor/orders_recived_screen.dart.dart';
-import '../../screens/vendor/vendor_business_profile_screen.dart';
-import 'pharmacist_dashboard.dart'; // ✅ Import PharmacistDashboard
-import '../../widgets/pharmacy_ui.dart';
+import 'subscription_screen.dart';
 import '../../widgets/tech_glow_background.dart';
 
 // Define your color constants (consistent with vendor registration)
@@ -53,22 +49,11 @@ class _AccountScreenState extends State<AccountScreen>
   String _phoneNumber = '';
   String _profilePicUrl =
       'https://placehold.co/100x100/CCCCCC/000000?text=User'; // Default placeholder
-  bool _isPharmacist = false; // ⬅️ VARIABLE DECLARED
 
   // Buyer Specific Data
   double _userWalletBalance = 0.0;
 
-  // Vendor Specific Data
-  bool _isVendor = false;
-  String _vendorStatus = 'none';
-  int _totalProducts = 0;
-  int _productsSold = 0;
-  int _productsUnsold = 0;
-  double _vendorWalletBalance = 0.0;
-  double _appWalletBalance = 0.0;
   bool _orderUpdatesEnabled = true;
-  bool _appOrderAlertsEnabled = true;
-  bool _whatsappOrderAlertsEnabled = true;
   bool _promotionsEnabled = true;
   bool _priceAlertsEnabled = true;
   bool _isSavingNotificationPreferences = false;
@@ -181,33 +166,14 @@ class _AccountScreenState extends State<AccountScreen>
                 'https://placehold.co/100x100/CCCCCC/000000?text=User';
           }
 
-          _isPharmacist =
-              responseData['isPharmacist'] ??
-              false; // 🌟 PHARMACIST FIX APPLIED HERE
-
           // Buyer Specific Data
           _userWalletBalance =
               (responseData['userWalletBalance'] as num?)?.toDouble() ?? 0.0;
-
-          // Vendor Specific Data
-          _isVendor = responseData['isVendor'] ?? false;
-          _vendorStatus = responseData['vendorStatus'] ?? 'none';
-          _totalProducts = responseData['totalProducts'] ?? 0;
-          _productsSold = responseData['productsSold'] ?? 0;
-          _productsUnsold = responseData['productsUnsold'] ?? 0;
-          _vendorWalletBalance =
-              (responseData['vendorWalletBalance'] as num?)?.toDouble() ?? 0.0;
-          _appWalletBalance =
-              (responseData['appWalletBalance'] as num?)?.toDouble() ?? 0.0;
 
           final notificationPreferences =
               responseData['notificationPreferences'] as Map<String, dynamic>?;
           _orderUpdatesEnabled =
               notificationPreferences?['orderUpdates'] as bool? ?? true;
-          _appOrderAlertsEnabled =
-              notificationPreferences?['appOrderAlerts'] as bool? ?? true;
-          _whatsappOrderAlertsEnabled =
-              notificationPreferences?['whatsappOrderAlerts'] as bool? ?? true;
           _promotionsEnabled =
               notificationPreferences?['promotions'] as bool? ?? true;
           _priceAlertsEnabled =
@@ -239,8 +205,6 @@ class _AccountScreenState extends State<AccountScreen>
 
   Future<void> _saveNotificationPreferences({
     required bool orderUpdates,
-    required bool appOrderAlerts,
-    required bool whatsappOrderAlerts,
     required bool promotions,
     required bool priceAlerts,
   }) async {
@@ -263,8 +227,6 @@ class _AccountScreenState extends State<AccountScreen>
         },
         body: jsonEncode(<String, bool>{
           'orderUpdates': orderUpdates,
-          'appOrderAlerts': appOrderAlerts,
-          'whatsappOrderAlerts': whatsappOrderAlerts,
           'promotions': promotions,
           'priceAlerts': priceAlerts,
         }),
@@ -280,11 +242,6 @@ class _AccountScreenState extends State<AccountScreen>
         setState(() {
           _orderUpdatesEnabled =
               preferences?['orderUpdates'] as bool? ?? orderUpdates;
-          _appOrderAlertsEnabled =
-              preferences?['appOrderAlerts'] as bool? ?? appOrderAlerts;
-          _whatsappOrderAlertsEnabled =
-              preferences?['whatsappOrderAlerts'] as bool? ??
-                  whatsappOrderAlerts;
           _promotionsEnabled =
               preferences?['promotions'] as bool? ?? promotions;
           _priceAlertsEnabled =
@@ -311,8 +268,6 @@ class _AccountScreenState extends State<AccountScreen>
 
   void _showNotificationPreferencesSheet() {
     bool orderUpdates = _orderUpdatesEnabled;
-    bool appOrderAlerts = _appOrderAlertsEnabled;
-    bool whatsappOrderAlerts = _whatsappOrderAlertsEnabled;
     bool promotions = _promotionsEnabled;
     bool priceAlerts = _priceAlertsEnabled;
 
@@ -391,26 +346,6 @@ class _AccountScreenState extends State<AccountScreen>
                       onChanged: (value) =>
                           setSheetState(() => orderUpdates = value),
                     ),
-                    if (_isVendor) ...[
-                      _buildNotificationSwitch(
-                        color: color,
-                        title: 'App order alerts',
-                        subtitle: 'Show in-app alerts when a new order arrives.',
-                        value: appOrderAlerts,
-                        onChanged: (value) =>
-                            setSheetState(() => appOrderAlerts = value),
-                      ),
-                      _buildNotificationSwitch(
-                        color: color,
-                        title: 'WhatsApp order alerts',
-                        subtitle:
-                            'Send WhatsApp order alerts to your vendor phone.',
-                        value: whatsappOrderAlerts,
-                        onChanged: (value) => setSheetState(
-                          () => whatsappOrderAlerts = value,
-                        ),
-                      ),
-                    ],
                     _buildNotificationSwitch(
                       color: color,
                       title: 'Promotions',
@@ -435,8 +370,6 @@ class _AccountScreenState extends State<AccountScreen>
                             ? null
                             : () => _saveNotificationPreferences(
                                   orderUpdates: orderUpdates,
-                                  appOrderAlerts: appOrderAlerts,
-                                  whatsappOrderAlerts: whatsappOrderAlerts,
                                   promotions: promotions,
                                   priceAlerts: priceAlerts,
                                 ),
@@ -674,27 +607,6 @@ class _AccountScreenState extends State<AccountScreen>
                     color: color.onSurface.withValues(alpha: 0.2),
                   ),
 
-                  // 🛒 FOR VENDORS – Show if user is a vendor
-                  if (_isVendor && _vendorStatus == 'approved')
-                    _buildVendorToolsSection(color)
-                  else
-                    _buildBecomeVendorCTA(color),
-                  Divider(
-                    height: 30,
-                    thickness: 1,
-                    color: color.onSurface.withValues(alpha: 0.2),
-                  ),
-
-                  // 🌟 FOR PHARMACIST VENDORS – Approved vendor plus pharmacy approval
-                  if (_isVendor && _vendorStatus == 'approved' && _isPharmacist)
-                    _buildPharmacistToolsSection(color),
-                  if (_isVendor && _vendorStatus == 'approved' && _isPharmacist)
-                    Divider(
-                      height: 30,
-                      thickness: 1,
-                      color: color.onSurface.withValues(alpha: 0.2),
-                    ),
-
                   // ⚙️ COMMON TOOLS (For All Users)
                   _buildCommonToolsSection(color),
                   const SizedBox(height: 20),
@@ -921,6 +833,20 @@ class _AccountScreenState extends State<AccountScreen>
         _buildAccountListItem(
           context,
           color,
+          Icons.workspace_premium_outlined,
+          'NaijaGo Subscription',
+          'Free delivery plans and personalized offers',
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const SubscriptionScreen(),
+              ),
+            );
+          },
+        ),
+        _buildAccountListItem(
+          context,
+          color,
           Icons.location_on_outlined,
           'Delivery Addresses',
           'Manage your shipping locations',
@@ -977,317 +903,6 @@ class _AccountScreenState extends State<AccountScreen>
     );
   }
 
-  Widget _buildVendorToolsSection(ColorScheme color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Vendor Tools',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color.primary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        _buildAccountListItem(
-          context,
-          color,
-          Icons.inventory_2_outlined,
-          'My Products',
-          'View/manage inventory ($_totalProducts total, $_productsUnsold unsold)',
-          () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const VendorMyProductsScreen(),
-              ),
-            );
-          },
-        ),
-        _buildAccountListItem(
-          context,
-          color,
-          Icons.receipt_long_outlined,
-          'Orders Received',
-          'View buyer orders ($_productsSold products sold)',
-          () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const OrdersRecivedScreen(),
-              ),
-            );
-          },
-        ),
-        _buildAccountListItem(
-          context,
-          color,
-          Icons.payments_outlined,
-          'Earnings Dashboard',
-          'Vendor Wallet: ₦${_vendorWalletBalance.toStringAsFixed(2)} | App Wallet: ₦${_appWalletBalance.toStringAsFixed(2)}',
-          () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Earnings Dashboard functionality coming soon!'),
-              ),
-            );
-          },
-        ),
-        _buildAccountListItem(
-          context,
-          color,
-          Icons.campaign_outlined,
-          'Promotions & Ads',
-          'Promote a product, view ad performance',
-          () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Promotions & Ads functionality coming soon!'),
-              ),
-            );
-          },
-        ),
-        _buildAccountListItem(
-          context,
-          color,
-          Icons.store_outlined,
-          'Store Profile',
-          'Edit logo, contact, location, hours, and delivery radius',
-          () async {
-            final updated = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (context) => const VendorBusinessProfileScreen(),
-              ),
-            );
-            if (updated == true) {
-              _fetchUserData();
-            }
-          },
-        ),
-        _buildAccountListItem(
-          context,
-          color,
-          Icons.message_outlined,
-          'Messages from Buyers',
-          'Buyer inquiries or complaints',
-          () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Messages from Buyers functionality coming soon!',
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  // 🌟 NEW HELPER METHOD FOR PHARMACIST DASHBOARD
-  Widget _buildPharmacistToolsSection(ColorScheme color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Pharmacy Workspace',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color.primary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [PharmacyUi.deepNavy, PharmacyUi.teal],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: PharmacyUi.deepNavy.withValues(alpha: 0.18),
-                blurRadius: 24,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(24),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const PharmacistDashboard(),
-                  ),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          height: 52,
-                          width: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.local_pharmacy_outlined,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Care Hub',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Pharmacist dashboard',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Handle live consultation requests, jump into patient chats, and manage pharmacy support from one workspace.',
-                      style: TextStyle(color: Color(0xFFE6FBF4), height: 1.5),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: const [
-                        Icon(
-                          Icons.medical_services_outlined,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Open the workspace',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBecomeVendorCTA(ColorScheme color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Become a Vendor',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color.primary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          color: color.surface, // Card background color
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Want to sell your products on NaijaGo?',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: color.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Register as a vendor to list your products and manage your sales.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: color.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 15),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Vendor Registration coming soon!'),
-                        ),
-                      );
-                    },
-                    icon: Icon(
-                      Icons.store_mall_directory_outlined,
-                      color: color.onPrimary,
-                    ),
-                    label: Text(
-                      'Register as Vendor',
-                      style: TextStyle(color: color.onPrimary),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: color.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildCommonToolsSection(ColorScheme color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1306,9 +921,7 @@ class _AccountScreenState extends State<AccountScreen>
           color,
           Icons.notifications_none,
           'Notification Settings',
-          _isVendor
-              ? 'Manage app and WhatsApp order alerts'
-              : 'Manage your notification preferences',
+          'Manage your notification preferences',
           _showNotificationPreferencesSheet,
         ),
         // ✅ The Dark Mode Toggle now navigates to the SettingsScreen

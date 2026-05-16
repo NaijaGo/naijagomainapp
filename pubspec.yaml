@@ -20,6 +20,8 @@ dependencies:
   intl: ^0.18.1
   flutter_animate: ^4.5.2
   url_launcher: ^6.3.2
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
   flutter_dotenv: ^5.2.1
   flutterwave_standard: ^1.0.7
   geolocator: ^14.0.2

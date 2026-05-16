@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,9 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:ionicons/ionicons.dart';
 import 'package:naija_go/auth/screens/login_screen.dart';
 import 'package:naija_go/providers/cart_provider.dart';
-import 'package:naija_go/screens/Main/notifications_screen.dart';
-import 'package:naija_go/screens/vendor/add_product_screen.dart';
-import 'package:naija_go/screens/vendor/orders_recived_screen.dart.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,7 +24,7 @@ import 'categories_screen.dart'
         softGrey,
         white;
 import 'home_screen.dart';
-import 'vendor_screen.dart';
+import 'notifications_screen.dart';
 
 class AppUi {
   static const Color primaryNavy = Color(0xFF102B5C);
@@ -138,7 +135,7 @@ class GuestPlaceholderScreen extends StatelessWidget {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Login gives you access to your cart, orders, account, and vendor features.',
+                            'Login gives you access to your cart, orders, account, and saved preferences.',
                             style: TextStyle(
                               color: AppUi.mutedText,
                               fontSize: 12.5,
@@ -199,19 +196,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   bool _isLoading = false;
   bool _isLoggedIn = false;
   String? _errorMessage;
-
-  bool _isApprovedVendor = false;
-  String _vendorStatus = 'loading';
-  DateTime? _rejectionDate;
-  double _vendorWalletBalance = 0.0;
-  double _appWalletBalance = 0.0;
-  double _userWalletBalance = 0.0;
-  int _totalProducts = 0;
-  int _productsSold = 0;
-  int _productsUnsold = 0;
-  int _followersCount = 0;
-  bool _isPharmacist = false;
-  String _pharmacistStatus = 'none';
   List<dynamic> _notifications = [];
   final SocketService _socketService = SocketService();
 
@@ -224,8 +208,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _socketService.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -243,7 +227,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           onLoginSuccess: () {
             Navigator.of(context).pop();
             _fetchUserStatus();
-            _onItemTapped(4);
+            _onItemTapped(3);
           },
         ),
       ),
@@ -261,13 +245,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       onLoginTapped: _navigateToLogin,
     );
 
-    final protectedVendorScreen = GuestPlaceholderScreen(
-      title: 'Vendor Access',
-      message:
-          'Log in to apply as a vendor, manage your store, and track your business performance.',
-      onLoginTapped: _navigateToLogin,
-    );
-
     final protectedAccountScreen = GuestPlaceholderScreen(
       title: 'My Account',
       message: 'Log in to view your profile, addresses, orders, and settings.',
@@ -280,24 +257,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           ? CartScreen(onOrderSuccess: _fetchUserStatus)
           : protectedCartScreen,
       categoriesScreen,
-      _isLoggedIn
-          ? VendorScreen(
-              isApprovedVendor: _isApprovedVendor,
-              vendorStatus: _vendorStatus,
-              rejectionDate: _rejectionDate,
-              vendorWalletBalance: _vendorWalletBalance,
-              appWalletBalance: _appWalletBalance,
-              userWalletBalance: _userWalletBalance,
-              totalProducts: _totalProducts,
-              productsSold: _productsSold,
-              productsUnsold: _productsUnsold,
-              followersCount: _followersCount,
-              isPharmacist: _isPharmacist,
-              pharmacistStatus: _pharmacistStatus,
-              notifications: _notifications,
-              onRefresh: _fetchUserStatus,
-            )
-          : protectedVendorScreen,
       _isLoggedIn
           ? AccountScreen(onLogout: widget.onLogout)
           : protectedAccountScreen,
@@ -320,18 +279,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         _isLoggedIn = false;
         _isLoading = false;
         _errorMessage = null;
-        _isApprovedVendor = false;
-        _vendorStatus = 'guest';
-        _vendorWalletBalance = 0.0;
-        _appWalletBalance = 0.0;
-        _userWalletBalance = 0.0;
-        _totalProducts = 0;
-        _productsSold = 0;
-        _productsUnsold = 0;
-        _followersCount = 0;
-        _isPharmacist = false;
-        _pharmacistStatus = 'none';
-        _notifications = [];
       });
       return;
     }
@@ -347,85 +294,24 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       );
 
       if (userResponse.statusCode == 200) {
-        final Map<String, dynamic> userData = jsonDecode(userResponse.body);
-
-        final isApproved =
-            userData['isVendor'] == true &&
-            userData['vendorStatus'] == 'approved';
-
-        final status = userData['vendorStatus'] ?? 'none';
-        final vendorBalance =
-            (userData['vendorWalletBalance'] as num?)?.toDouble() ?? 0.0;
-        final appBalance =
-            (userData['appWalletBalance'] as num?)?.toDouble() ?? 0.0;
-        final userBalance =
-            (userData['userWalletBalance'] as num?)?.toDouble() ?? 0.0;
-        final rejectionDate =
-            (status == 'rejected' && userData['vendorRejectionDate'] != null)
-            ? DateTime.parse(userData['vendorRejectionDate'])
-            : null;
-        final notifications = userData['notifications'] ?? [];
-        final followers = userData['followersCount'] ?? 0;
-        final isPharmacist = userData['isPharmacist'] == true;
-        final pharmacistStatus =
-            (userData['pharmacistStatus'] ??
-                    (isPharmacist ? 'approved' : 'none'))
-                .toString();
-
-        int totalProds = 0;
-        int productsSold = 0;
-        int productsUnsold = 0;
-
-        if (isApproved) {
-          final statsUrl = Uri.parse('$baseUrl/api/vendor/stats');
-          final statsResponse = await http.get(
-            statsUrl,
-            headers: <String, String>{
-              'Content-Type': 'application/json; charset=UTF-8',
-              'Authorization': 'Bearer $token',
-            },
-          );
-
-          if (statsResponse.statusCode == 200) {
-            final Map<String, dynamic> statsData = jsonDecode(
-              statsResponse.body,
-            );
-            totalProds = statsData['totalProducts'] ?? 0;
-            productsSold = statsData['productsSold'] ?? 0;
-            productsUnsold = statsData['productsUnsold'] ?? 0;
-          }
-        }
-
+        final responseData = jsonDecode(userResponse.body);
+        final notifications = responseData['notifications'] as List? ?? [];
+        final userId = responseData['_id']?.toString();
         setState(() {
           _isLoggedIn = true;
-          _isApprovedVendor = isApproved;
-          _vendorStatus = status;
-          _vendorWalletBalance = vendorBalance;
-          _appWalletBalance = appBalance;
-          _userWalletBalance = userBalance;
-          _rejectionDate = rejectionDate;
-          _notifications = notifications;
-          _followersCount = followers;
-          _totalProducts = totalProds;
-          _productsSold = productsSold;
-          _productsUnsold = productsUnsold;
-          _isPharmacist = isPharmacist;
-          _pharmacistStatus = pharmacistStatus;
+          _notifications = _dedupeNotifications([
+            ...notifications,
+            ..._notifications,
+          ]);
         });
-
-        if (isApproved) {
-          unawaited(_connectVendorNotifications());
-        }
+        unawaited(_connectUserNotifications(userId));
       } else {
         final responseData = jsonDecode(userResponse.body);
         setState(() {
           _errorMessage =
               responseData['message'] ?? 'Failed to fetch user status.';
           _isLoggedIn = false;
-          _isApprovedVendor = false;
-          _vendorStatus = 'none';
-          _isPharmacist = false;
-          _pharmacistStatus = 'none';
+          _notifications = [];
         });
 
         if (userResponse.statusCode == 401) {
@@ -436,10 +322,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       setState(() {
         _errorMessage = 'An error occurred while fetching user status.';
         _isLoggedIn = false;
-        _isApprovedVendor = false;
-        _vendorStatus = 'none';
-        _isPharmacist = false;
-        _pharmacistStatus = 'none';
+        _notifications = [];
       });
       debugPrint('MainAppNavigator fetch error: $e');
     } finally {
@@ -460,8 +343,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       case 2:
         return 'Categories';
       case 3:
-        return _isLoggedIn && _isApprovedVendor ? 'Vendor Dashboard' : 'Vendor';
-      case 4:
         return 'Account';
       default:
         return 'NaijaGo';
@@ -474,47 +355,66 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     });
   }
 
-  Future<void> _connectVendorNotifications() async {
+  Future<void> _connectUserNotifications(String? userId) async {
+    if (userId == null || userId.isEmpty) return;
+
     await _socketService.connect(baseUrl);
-    _socketService.off('vendor_notification');
-    _socketService.on('vendor_notification', (payload) {
+
+    void handlePayload(dynamic payload) {
       if (!mounted) return;
 
-      final data = payload is Map
-          ? Map<String, dynamic>.from(payload)
-          : <String, dynamic>{'message': payload.toString()};
-      final message = data['message']?.toString() ?? 'You have a new vendor alert.';
-      final notification = {
-        '_id': DateTime.now().microsecondsSinceEpoch.toString(),
-        'type': data['data']?['type'] ?? 'new_order',
-        'message': message,
-        'read': false,
-        'createdAt': DateTime.now().toIso8601String(),
-      };
+      final normalizedPayload = payload is List && payload.isNotEmpty
+          ? payload.first
+          : payload;
+      final data = normalizedPayload is Map
+          ? Map<String, dynamic>.from(normalizedPayload)
+          : <String, dynamic>{'message': normalizedPayload.toString()};
+      final message = _socketNotificationMessage(
+        data,
+        fallback: 'You have a new order update.',
+      );
 
       setState(() {
-        _notifications = [notification, ..._notifications];
+        _notifications = _dedupeNotifications([
+          {
+            '_id': DateTime.now().microsecondsSinceEpoch.toString(),
+            'type': data['type']?.toString() ?? 'order_update',
+            'message': message,
+            'read': false,
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+          ..._notifications,
+        ]);
       });
 
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      messenger?.showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-          content: Text(data['title']?.toString() ?? 'New vendor order'),
-          action: SnackBarAction(
-            label: 'Open',
-            onPressed: () => _onItemTapped(3),
-          ),
+          content: Text(message),
+          action: SnackBarAction(label: 'Open', onPressed: _openNotifications),
         ),
       );
-      _playVendorOrderAlert();
-      _showVendorOrderAlertDialog(
-        title: data['title']?.toString() ?? 'New vendor order',
-        message: message,
+      unawaited(_playUserAlert());
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 700), () {
+          if (mounted) return _fetchUserStatus();
+        }),
       );
-    });
+    }
+
+    for (final event in [
+      'user_$userId',
+      'order_update',
+      'order_claimed',
+      'order_picked_up',
+      'order_delivered',
+      'pharmacy_chat_message',
+    ]) {
+      _socketService.off(event);
+      _socketService.on(event, handlePayload);
+    }
   }
 
-  Future<void> _playVendorOrderAlert() async {
+  Future<void> _playUserAlert() async {
     try {
       await SystemSound.play(SystemSoundType.alert);
       await HapticFeedback.heavyImpact();
@@ -522,39 +422,84 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       await SystemSound.play(SystemSoundType.alert);
       await HapticFeedback.vibrate();
     } catch (_) {
-      // Platform support for alert sounds and haptics can vary.
+      // Some targets do not support alert sounds or haptics.
     }
   }
 
-  Future<void> _showVendorOrderAlertDialog({
-    required String title,
-    required String message,
-  }) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Later'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const OrdersRecivedScreen(),
-                ),
-              );
-            },
-            child: const Text('Open orders'),
-          ),
-        ],
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) =>
+            NotificationsScreen(notifications: _notifications),
       ),
     );
+    await _fetchUserStatus();
+  }
+
+  List<dynamic> _dedupeNotifications(Iterable<dynamic> rawItems) {
+    final seen = <String>{};
+    final result = <Map<String, dynamic>>[];
+
+    for (final raw in rawItems) {
+      final item = _notificationMap(raw);
+      if (item.isEmpty) continue;
+      final key = _notificationFingerprint(item);
+      if (key.isEmpty || seen.add(key)) {
+        result.add(item);
+      }
+    }
+
+    result.sort((a, b) {
+      final aDate = DateTime.tryParse(a['createdAt']?.toString() ?? '');
+      final bDate = DateTime.tryParse(b['createdAt']?.toString() ?? '');
+      return (bDate ?? DateTime(0)).compareTo(aDate ?? DateTime(0));
+    });
+
+    return result;
+  }
+
+  Map<String, dynamic> _notificationMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return <String, dynamic>{};
+  }
+
+  String _notificationFingerprint(Map<String, dynamic> item) {
+    final nestedData = _notificationMap(item['data']);
+    final type =
+        item['type']?.toString() ?? nestedData['type']?.toString() ?? '';
+    final relatedId =
+        item['relatedId']?.toString() ??
+        item['orderId']?.toString() ??
+        nestedData['relatedId']?.toString() ??
+        nestedData['orderId']?.toString() ??
+        '';
+    final message = (item['message']?.toString() ?? '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toLowerCase();
+    final id = item['_id']?.toString() ?? item['id']?.toString() ?? '';
+
+    if (message.isNotEmpty) return '$type|$relatedId|$message';
+    return id;
+  }
+
+  String _socketNotificationMessage(
+    Map<String, dynamic> data, {
+    required String fallback,
+  }) {
+    final title = data['title']?.toString().trim() ?? '';
+    final message = data['message']?.toString().trim() ?? '';
+
+    if (title.isNotEmpty &&
+        message.isNotEmpty &&
+        !message.toLowerCase().startsWith('${title.toLowerCase()}:')) {
+      return '$title: $message';
+    }
+
+    return message.isNotEmpty ? message : fallback;
   }
 
   Widget _buildLoadingState() {
@@ -677,7 +622,9 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   }
 
   PreferredSizeWidget _buildAppBar(CartProvider cartProvider) {
-    final unreadCount = _notifications.where((n) => n['read'] == false).length;
+    final unreadCount = _notifications
+        .where((notification) => notification['read'] != true)
+        .length;
 
     return AppBar(
       backgroundColor: AppUi.white,
@@ -702,6 +649,48 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         ),
       ),
       actions: [
+        if (_isLoggedIn)
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                tooltip: 'Notifications',
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppUi.secondaryBlack,
+                ),
+                onPressed: _openNotifications,
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppUi.dangerRed,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 18,
+                      minHeight: 18,
+                    ),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         Stack(
           clipBehavior: Clip.none,
           children: [
@@ -742,55 +731,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               ),
           ],
         ),
-        if (_isApprovedVendor && _selectedIndex == 3)
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppUi.secondaryBlack,
-                ),
-                onPressed: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          NotificationsScreen(notifications: _notifications),
-                    ),
-                  );
-                  _fetchUserStatus();
-                },
-              ),
-              if (unreadCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppUi.dangerRed,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 18,
-                      minHeight: 18,
-                    ),
-                    child: Text(
-                      unreadCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
         const SizedBox(width: 6),
       ],
     );
@@ -844,11 +784,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               label: 'Categories',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Ionicons.storefront_outline),
-              activeIcon: Icon(Ionicons.storefront),
-              label: 'Vendor',
-            ),
-            BottomNavigationBarItem(
               icon: Icon(Ionicons.person_outline),
               activeIcon: Icon(Ionicons.person),
               label: 'Account',
@@ -882,29 +817,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           ? _buildErrorState()
           : _widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: _buildBottomNav(),
-      floatingActionButton: _selectedIndex == 3 && _isApprovedVendor
-          ? FloatingActionButton.extended(
-              onPressed: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const AddProductScreen(),
-                  ),
-                );
-                _fetchUserStatus();
-              },
-              backgroundColor: AppUi.primaryNavy,
-              foregroundColor: AppUi.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text(
-                'Add Product',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            )
-          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }

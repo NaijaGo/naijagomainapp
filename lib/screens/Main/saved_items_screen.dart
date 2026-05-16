@@ -1,6 +1,7 @@
 // lib/screens/Main/saved_items_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -224,14 +225,19 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(15),
                               ),
-                              child: Image.network(
-                                product.imageUrls.isNotEmpty
+                              child: CachedNetworkImage(
+                                imageUrl: product.imageUrls.isNotEmpty
                                     ? product.imageUrls[0]
                                     : 'https://placehold.co/200x150/CCCCCC/000000?text=No+Image',
                                 height: 120,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
+                                placeholder: (context, url) => Container(
+                                  height: 120,
+                                  width: double.infinity,
+                                  color: Colors.grey[200],
+                                ),
+                                errorWidget: (context, url, error) {
                                   return Container(
                                     height: 120,
                                     width: double.infinity,
@@ -280,6 +286,28 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                                     fontSize: 12,
                                     color: mutedText,
                                   ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on_outlined,
+                                      size: 13,
+                                      color: mutedText,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Expanded(
+                                      child: Text(
+                                        product.displayVendorLocation,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: mutedText,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

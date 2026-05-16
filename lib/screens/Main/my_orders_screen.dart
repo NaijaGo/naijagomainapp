@@ -1,6 +1,7 @@
 // my_orders_screen.dart - FIXED VERSION
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
@@ -276,6 +277,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           _isLoading = false;
         });
         _syncTrackedOrders();
+        unawaited(_fetchRiderTrackingForVisibleOrders(token));
       } else {
         if (kDebugMode) {
           debugPrint('❌ Failed to load orders. Status: ${response.statusCode}');
@@ -287,6 +289,53 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         debugPrint('❌ Exception while fetching orders: $e');
       }
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchRiderTrackingForVisibleOrders(String token) async {
+    final orderIds = _orders
+        .whereType<Map<String, dynamic>>()
+        .where((order) {
+          final status = order['mainOrderStatus']?.toString().toLowerCase();
+          return status != 'completed' && status != 'cancelled';
+        })
+        .map((order) => order['_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    for (final orderId in orderIds) {
+      try {
+        final response = await http.get(
+          Uri.parse('$baseUrl/api/orders/$orderId/rider-location'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode != 200) {
+          continue;
+        }
+
+        final decoded = json.decode(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          continue;
+        }
+
+        _patchOrderById(orderId, (order) {
+          order['riderTracking'] = decoded;
+          final rider = decoded['rider'];
+          if (rider is Map<String, dynamic>) {
+            order['rider'] = rider;
+          }
+          return order;
+        });
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Rider tracking fetch failed for $orderId: $error');
+        }
+      }
     }
   }
 
@@ -397,8 +446,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       return;
     }
 
-    _patchOrderById(orderId, (order) {
-      final existingRider = order['rider'] is Map<String, dynamic>
+      _patchOrderById(orderId, (order) {
+        final existingRider = order['rider'] is Map<String, dynamic>
           ? Map<String, dynamic>.from(order['rider'] as Map<String, dynamic>)
           : <String, dynamic>{};
 
@@ -409,6 +458,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         'phoneNumber': data['riderPhone']?.toString(),
       };
       order['shipmentStatus'] = order['shipmentStatus'] ?? 'ready_for_pickup';
+      if ((data['deliveryOTP']?.toString() ?? '').isNotEmpty) {
+        order['deliveryOTP'] = data['deliveryOTP'].toString();
+      }
       return order;
     });
 
@@ -425,12 +477,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       return;
     }
 
+    final orderId = data['orderId']?.toString();
     final riderId = data['riderId']?.toString();
     if (riderId == null || riderId.isEmpty) {
       return;
     }
 
-    _patchOrdersByRiderId(riderId, (order) {
+    void patch(Map<String, dynamic> order) {
       final existingRider = order['rider'] is Map<String, dynamic>
           ? Map<String, dynamic>.from(order['rider'] as Map<String, dynamic>)
           : <String, dynamic>{'_id': riderId};
@@ -443,6 +496,27 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         'lastUpdated': data['timestamp'],
       };
       order['rider'] = existingRider;
+      order['riderTracking'] = {
+        ...Map<String, dynamic>.from(
+          order['riderTracking'] is Map<String, dynamic>
+              ? order['riderTracking'] as Map<String, dynamic>
+              : const <String, dynamic>{},
+        ),
+        'trackingAvailable': true,
+        'rider': existingRider,
+      };
+    }
+
+    if (orderId != null && orderId.isNotEmpty) {
+      _patchOrderById(orderId, (order) {
+        patch(order);
+        return order;
+      });
+      return;
+    }
+
+    _patchOrdersByRiderId(riderId, (order) {
+      patch(order);
       return order;
     });
   }
@@ -468,8 +542,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         } else if (status == 'delivered') {
           order['mainOrderStatus'] = 'delivered';
           order['deliveredAt'] =
-              data['timestamp']?.toString() ??
-              DateTime.now().toIso8601String();
+              data['timestamp']?.toString() ?? DateTime.now().toIso8601String();
         } else if (status == 'ready_for_pickup' &&
             (order['mainOrderStatus'] == null ||
                 order['mainOrderStatus'] == 'pending_payment')) {
@@ -513,6 +586,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
       if (data['updatedAt'] != null) {
         order['updatedAt'] = data['updatedAt'];
+      }
+
+      if ((data['deliveryOTP']?.toString() ?? '').isNotEmpty) {
+        order['deliveryOTP'] = data['deliveryOTP'].toString();
       }
 
       return order;
@@ -945,12 +1022,17 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        imageUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
                         width: 100,
                         height: 100,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
+                        placeholder: (context, url) => Container(
+                          width: 100,
+                          height: 100,
+                          color: Colors.grey.shade200,
+                        ),
+                        errorWidget: (context, url, error) {
                           return Container(
                             width: 100,
                             height: 100,
@@ -1009,12 +1091,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              imageUrl,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
               width: 80,
               height: 80,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
+              placeholder: (context, url) =>
+                  Container(width: 80, height: 80, color: Colors.grey.shade200),
+              errorWidget: (context, url, error) {
                 return Container(
                   width: 80,
                   height: 80,
@@ -1200,10 +1284,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
                               // Tracking Timeline
                               OrderTrackingWidget(
-                                key: ValueKey('${order['_id']}-${order['mainOrderStatus']}-${order['shipmentStatus']}'),
+                                key: ValueKey(
+                                  '${order['_id']}-${order['mainOrderStatus']}-${order['shipmentStatus']}',
+                                ),
                                 order: order,
                                 liveUpdates:
-                                    _trackingUpdates[order['_id']?.toString()] ??
+                                    _trackingUpdates[order['_id']
+                                        ?.toString()] ??
                                     const <Map<String, dynamic>>[],
                               ),
 

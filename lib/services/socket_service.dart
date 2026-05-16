@@ -6,10 +6,20 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 
 class SocketService {
   io.Socket? socket;
+  DateTime? _lastConnectAttempt;
+  DateTime? _lastErrorLogAt;
 
   bool get isConnected => socket?.connected ?? false;
 
   Future<void> connect(String baseUrl) async {
+    final now = DateTime.now();
+    final lastAttempt = _lastConnectAttempt;
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < const Duration(seconds: 15)) {
+      return;
+    }
+    _lastConnectAttempt = now;
+
     if (socket != null) {
       if (!isConnected) {
         socket!.connect();
@@ -24,7 +34,12 @@ class SocketService {
       'transports': ['websocket'],
       'autoConnect': false,
       'auth': {'token': token},
-      'forceNew': true,
+      'forceNew': false,
+      'timeout': 10000,
+      'reconnection': true,
+      'reconnectionAttempts': 5,
+      'reconnectionDelay': 5000,
+      'reconnectionDelayMax': 30000,
     });
 
     socket!.connect();
@@ -37,9 +52,7 @@ class SocketService {
       debugPrint('Socket disconnected');
     });
 
-    socket!.onConnectError((err) {
-      debugPrint('Socket connect error: $err');
-    });
+    socket!.onConnectError(_logConnectError);
   }
 
   void joinDispute(String disputeId) {
@@ -88,7 +101,20 @@ class SocketService {
 
   void dispose() {
     socket?.disconnect();
+    socket?.dispose();
     socket = null;
+    _lastConnectAttempt = null;
+    _lastErrorLogAt = null;
+  }
+
+  void _logConnectError(dynamic err) {
+    final now = DateTime.now();
+    final lastLog = _lastErrorLogAt;
+    if (lastLog != null &&
+        now.difference(lastLog) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastErrorLogAt = now;
+    debugPrint('Socket connect error: $err');
   }
 }
-

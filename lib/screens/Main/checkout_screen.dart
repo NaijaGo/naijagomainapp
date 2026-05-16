@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants.dart';
 import '../../models/address.dart';
+import '../../models/product.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/address_resolution_service.dart';
 import '../../services/location_access_service.dart';
@@ -33,6 +34,10 @@ class ShipmentSummary {
   final String vendorId;
   final double vendorLatitude;
   final double vendorLongitude;
+  final String? vendorZoneAddress;
+  final double originalShippingPrice;
+  final double subscriptionDeliveryDiscount;
+  final bool subscriptionFreeDeliveryApplied;
 
   ShipmentSummary({
     required this.vendorName,
@@ -43,9 +48,17 @@ class ShipmentSummary {
     required this.vendorId,
     required this.vendorLatitude,
     required this.vendorLongitude,
+    this.vendorZoneAddress,
+    required this.originalShippingPrice,
+    required this.subscriptionDeliveryDiscount,
+    required this.subscriptionFreeDeliveryApplied,
   });
 
   factory ShipmentSummary.fromJson(Map<String, dynamic> json) {
+    final vendorLocation = json['vendorLocation'] is Map
+        ? Map<String, dynamic>.from(json['vendorLocation'] as Map)
+        : <String, dynamic>{};
+
     return ShipmentSummary(
       vendorName: json['vendorName'] as String? ?? 'Unknown Vendor',
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
@@ -57,10 +70,22 @@ class ShipmentSummary {
               .toList() ??
           [],
       vendorId: json['vendorId'] as String? ?? '',
-      vendorLatitude:
-          (json['vendorLocation']?['latitude'] as num?)?.toDouble() ?? 0.0,
-      vendorLongitude:
-          (json['vendorLocation']?['longitude'] as num?)?.toDouble() ?? 0.0,
+      vendorLatitude: (vendorLocation['latitude'] as num?)?.toDouble() ?? 0.0,
+      vendorLongitude: (vendorLocation['longitude'] as num?)?.toDouble() ?? 0.0,
+      vendorZoneAddress:
+          vendorLocation['formattedAddress']?.toString() ??
+          vendorLocation['address']?.toString() ??
+          vendorLocation['addressLine']?.toString() ??
+          json['vendorAddress']?.toString() ??
+          json['vendorZone']?.toString(),
+      originalShippingPrice:
+          (json['originalShippingPrice'] as num?)?.toDouble() ??
+          (json['shippingPrice'] as num?)?.toDouble() ??
+          0.0,
+      subscriptionDeliveryDiscount:
+          (json['subscriptionDeliveryDiscount'] as num?)?.toDouble() ?? 0.0,
+      subscriptionFreeDeliveryApplied:
+          json['subscriptionFreeDeliveryApplied'] == true,
     );
   }
 
@@ -69,10 +94,14 @@ class ShipmentSummary {
       'vendorName': vendorName,
       'subtotal': subtotal,
       'shippingPrice': shippingPrice,
+      'originalShippingPrice': originalShippingPrice,
+      'subscriptionDeliveryDiscount': subscriptionDeliveryDiscount,
+      'subscriptionFreeDeliveryApplied': subscriptionFreeDeliveryApplied,
       'platformFee': platformFee,
       'items': items,
       'vendor': vendorId,
       'vendorLocation': {
+        'formattedAddress': vendorZoneAddress,
         'latitude': vendorLatitude,
         'longitude': vendorLongitude,
       },
@@ -83,6 +112,12 @@ class ShipmentSummary {
 class FullOrderSummary {
   final double totalSubtotal;
   final double totalShippingPrice;
+  final double originalShippingPrice;
+  final double subscriptionDeliveryDiscount;
+  final bool subscriptionFreeDeliveryApplied;
+  final String subscriptionPlanId;
+  final String subscriptionReason;
+  final int subscriptionDeliveriesRemaining;
   final double totalPlatformFees;
   final double taxPrice;
   final double totalPrice;
@@ -91,6 +126,12 @@ class FullOrderSummary {
   FullOrderSummary({
     required this.totalSubtotal,
     required this.totalShippingPrice,
+    required this.originalShippingPrice,
+    required this.subscriptionDeliveryDiscount,
+    required this.subscriptionFreeDeliveryApplied,
+    required this.subscriptionPlanId,
+    required this.subscriptionReason,
+    required this.subscriptionDeliveriesRemaining,
     required this.totalPlatformFees,
     required this.taxPrice,
     required this.totalPrice,
@@ -98,10 +139,29 @@ class FullOrderSummary {
   });
 
   factory FullOrderSummary.fromJson(Map<String, dynamic> json) {
+    final deliveryFeePolicy = json['deliveryFeePolicy'] is Map
+        ? Map<String, dynamic>.from(json['deliveryFeePolicy'] as Map)
+        : <String, dynamic>{};
+    final subscriptionPolicy = deliveryFeePolicy['subscription'] is Map
+        ? Map<String, dynamic>.from(deliveryFeePolicy['subscription'] as Map)
+        : <String, dynamic>{};
+
     return FullOrderSummary(
       totalSubtotal: (json['totalSubtotal'] as num?)?.toDouble() ?? 0.0,
       totalShippingPrice:
           (json['totalShippingPrice'] as num?)?.toDouble() ?? 0.0,
+      originalShippingPrice:
+          (json['originalShippingPrice'] as num?)?.toDouble() ??
+          (json['totalShippingPrice'] as num?)?.toDouble() ??
+          0.0,
+      subscriptionDeliveryDiscount:
+          (json['subscriptionDeliveryDiscount'] as num?)?.toDouble() ?? 0.0,
+      subscriptionFreeDeliveryApplied:
+          json['subscriptionFreeDeliveryApplied'] == true,
+      subscriptionPlanId: json['subscriptionPlanId']?.toString() ?? '',
+      subscriptionReason: subscriptionPolicy['reason']?.toString() ?? '',
+      subscriptionDeliveriesRemaining:
+          (subscriptionPolicy['deliveriesRemaining'] as num?)?.toInt() ?? 0,
       totalPlatformFees: (json['totalPlatformFees'] as num?)?.toDouble() ?? 0.0,
       taxPrice: (json['taxPrice'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['totalPrice'] as num?)?.toDouble() ?? 0.0,
@@ -889,7 +949,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'orderItems': orderItems,
         'shippingAddress': _buildShippingAddressPayload(),
         'paymentMethod': _selectedPaymentMethod,
+        'totalSubtotal': summary.totalSubtotal,
         'totalShippingPrice': summary.totalShippingPrice,
+        'originalShippingPrice': summary.originalShippingPrice,
+        'subscriptionDeliveryDiscount': summary.subscriptionDeliveryDiscount,
+        'subscriptionFreeDeliveryApplied':
+            summary.subscriptionFreeDeliveryApplied,
+        'subscriptionPlanId': summary.subscriptionPlanId,
         'totalPlatformFees': summary.totalPlatformFees,
         'taxPrice': summary.taxPrice,
         'totalPrice': totalPrice,
@@ -1205,6 +1271,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ],
           ),
         ),
+        if (summary.subscriptionFreeDeliveryApplied) ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildNoticeCard(
+            icon: Icons.local_shipping_outlined,
+            title: 'Subscription free delivery applied',
+            message:
+                'You saved ${_formatPriceWithCommas(summary.subscriptionDeliveryDiscount)} on delivery. ${summary.subscriptionDeliveriesRemaining} free delivery credit${summary.subscriptionDeliveriesRemaining == 1 ? '' : 's'} available before this payment is completed.',
+            accentColor: AppTheme.accentGreen,
+          ),
+        ] else if (summary.subscriptionReason.isNotEmpty &&
+            summary.subscriptionReason != 'No delivery fee to waive.') ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildNoticeCard(
+            icon: Icons.info_outline_rounded,
+            title: 'Subscription delivery not applied',
+            message: summary.subscriptionReason,
+            accentColor: const Color(0xFFD97706),
+          ),
+        ],
         if (summary.shipmentSummaries.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
           const Text(
@@ -1233,6 +1318,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'Delivery fees',
           _formatPriceWithCommas(summary.totalShippingPrice),
         ),
+        if (summary.subscriptionFreeDeliveryApplied &&
+            summary.subscriptionDeliveryDiscount > 0)
+          _buildSummaryRow(
+            'Subscription saved',
+            '-${_formatPriceWithCommas(summary.subscriptionDeliveryDiscount)}',
+            valueColor: AppTheme.accentGreen,
+          ),
         if (summary.taxPrice > 0)
           _buildSummaryRow('Tax', _formatPriceWithCommas(summary.taxPrice)),
         const SizedBox(height: 12),
@@ -1255,6 +1347,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildShipmentSummaryCard(ShipmentSummary shipment) {
+    final vendorZone = _vendorZoneLabel(shipment);
+    final vendorDistance = _vendorDistanceLabel(shipment);
+    final vendorRadius = _vendorDeliveryRadiusLabel(shipment);
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -1302,6 +1398,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         color: AppTheme.mutedText,
                       ),
                     ),
+                    if (vendorZone != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: AppTheme.primaryNavy,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              'Vendor zone: $vendorZone',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.secondaryBlack,
+                                fontWeight: FontWeight.w700,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (vendorDistance != null || vendorRadius != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        [?vendorDistance, ?vendorRadius].join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: AppTheme.mutedText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1321,7 +1457,74 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value) {
+  String? _vendorZoneLabel(ShipmentSummary shipment) {
+    final directAddress = shipment.vendorZoneAddress?.trim();
+    if (directAddress != null && directAddress.isNotEmpty) {
+      return directAddress;
+    }
+
+    final product = _cartProductForShipment(shipment);
+    final productAddress = product?.displayVendorLocation.trim();
+    if (productAddress != null &&
+        productAddress.isNotEmpty &&
+        productAddress.toLowerCase() != 'location unavailable') {
+      return productAddress;
+    }
+
+    if (shipment.vendorLatitude != 0 || shipment.vendorLongitude != 0) {
+      return '${shipment.vendorLatitude.toStringAsFixed(5)}, ${shipment.vendorLongitude.toStringAsFixed(5)}';
+    }
+
+    return null;
+  }
+
+  String? _vendorDistanceLabel(ShipmentSummary shipment) {
+    if (_userLatitude == null ||
+        _userLongitude == null ||
+        shipment.vendorLatitude == 0 && shipment.vendorLongitude == 0) {
+      return null;
+    }
+
+    final distanceMeters = Geolocator.distanceBetween(
+      _userLatitude!,
+      _userLongitude!,
+      shipment.vendorLatitude,
+      shipment.vendorLongitude,
+    );
+    final distanceKm = distanceMeters / 1000;
+    final distanceLabel = distanceKm < 1
+        ? '${distanceMeters.round()} m from you'
+        : '${distanceKm.toStringAsFixed(distanceKm < 10 ? 1 : 0)} km from you';
+    return distanceLabel;
+  }
+
+  String? _vendorDeliveryRadiusLabel(ShipmentSummary shipment) {
+    final product = _cartProductForShipment(shipment);
+    if (product == null || product.deliveryRadiusKm <= 0) return null;
+    return 'Zone radius ${product.deliveryRadiusKm.toStringAsFixed(0)} km';
+  }
+
+  Product? _cartProductForShipment(ShipmentSummary shipment) {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    for (final item in cart.items.values) {
+      final product = item.product;
+      if (shipment.vendorId.isNotEmpty &&
+          product.vendorId == shipment.vendorId) {
+        return product;
+      }
+      if (shipment.vendorId.isEmpty &&
+          product.displayRestaurantName == shipment.vendorName) {
+        return product;
+      }
+      if (shipment.vendorId.isEmpty &&
+          product.vendorBusinessName == shipment.vendorName) {
+        return product;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildSummaryRow(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1340,9 +1543,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(width: 16),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppTheme.secondaryBlack,
+              color: valueColor ?? AppTheme.secondaryBlack,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1570,7 +1773,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const SizedBox(height: 12),
                     SizedBox(width: double.infinity, child: savedAddressButton),
                     const SizedBox(height: 12),
-                    SizedBox(width: double.infinity, child: manualAddressButton),
+                    SizedBox(
+                      width: double.infinity,
+                      child: manualAddressButton,
+                    ),
                   ],
                 );
               }
@@ -2412,9 +2618,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       setState(() {
         _addressSelectedOrFetched = true;
       });
-      _showSnackBar(
-        'Manual delivery address saved for this checkout.',
-      );
+      _showSnackBar('Manual delivery address saved for this checkout.');
     } finally {
       if (mounted) {
         setState(() {
@@ -2501,7 +2705,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
-              onPressed: _isLoading || _isFetchingLocation ? null : _applyManualAddress,
+              onPressed: _isLoading || _isFetchingLocation
+                  ? null
+                  : _applyManualAddress,
               icon: const Icon(Icons.check_circle_outline_rounded),
               label: const Text('Use this address'),
               style: ElevatedButton.styleFrom(

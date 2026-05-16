@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:photo_view/photo_view.dart';
@@ -32,6 +33,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   int _userRating = 0;
   bool _isSubmittingReview = false;
+  bool _isCheckingPurchaseEligibility = true;
+  bool _hasPurchasedProduct = false;
   List<Product> _relatedProducts = [];
   bool _isLoadingRelated = true;
   double? _customerLatitude;
@@ -41,6 +44,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   void initState() {
     super.initState();
     _checkIfProductIsSaved();
+    _checkPurchaseEligibility();
     _loadCustomerLocation();
     _fetchRelatedProducts();
     if (widget.product.hasSizes && widget.product.availableSizes.isNotEmpty) {
@@ -60,6 +64,92 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         }
       }
     }
+  }
+
+  Future<void> _checkPurchaseEligibility() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final String? token = prefs.getString('jwt_token');
+    if (token == null) {
+      setState(() {
+        _hasPurchasedProduct = false;
+        _isCheckingPurchaseEligibility = false;
+      });
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/orders/my'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final orders = decoded is List ? decoded : <dynamic>[];
+        setState(() {
+          _hasPurchasedProduct = orders.any(_orderContainsCurrentProduct);
+          _isCheckingPurchaseEligibility = false;
+        });
+      } else {
+        setState(() {
+          _hasPurchasedProduct = false;
+          _isCheckingPurchaseEligibility = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Purchase eligibility check failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _hasPurchasedProduct = false;
+        _isCheckingPurchaseEligibility = false;
+      });
+    }
+  }
+
+  bool _orderContainsCurrentProduct(dynamic order) {
+    if (order is! Map) return false;
+    final isPaid = order['isPaid'] == true;
+    final status = order['mainOrderStatus']?.toString().toLowerCase() ?? '';
+    if (!isPaid || status == 'cancelled' || status == 'pending_payment') {
+      return false;
+    }
+
+    final shipments = order['shipments'];
+    if (shipments is! List) return false;
+
+    for (final shipment in shipments) {
+      if (shipment is! Map) continue;
+      final shipmentStatus =
+          shipment['shipmentStatus']?.toString().toLowerCase() ?? '';
+      if (shipmentStatus == 'cancelled' || shipmentStatus == 'rejected') {
+        continue;
+      }
+
+      final items = shipment['items'];
+      if (items is! List) continue;
+      for (final item in items) {
+        if (item is! Map) continue;
+        if (_matchesCurrentProductId(item['product'])) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  bool _matchesCurrentProductId(dynamic productValue) {
+    if (productValue == null) return false;
+    if (productValue is Map) {
+      final id = productValue['_id'] ?? productValue['id'];
+      return id?.toString() == widget.product.id;
+    }
+    return productValue.toString() == widget.product.id;
   }
 
   Future<void> _loadCustomerLocation() async {
@@ -140,12 +230,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Future<void> _fetchRelatedProducts() async {
     setState(() => _isLoadingRelated = true);
     try {
-      final String encodedCategory = Uri.encodeComponent(
-        widget.product.category,
-      );
-      final Uri url = Uri.parse(
-        '$baseUrl/api/products?category=$encodedCategory',
-      );
+      final Uri url = widget.product.isRestaurantItem
+          ? Uri.parse('$baseUrl/api/products/restaurants?limit=100')
+          : Uri.parse(
+              '$baseUrl/api/products?category=${Uri.encodeComponent(widget.product.category)}',
+            );
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -154,9 +243,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             .toList()
             .cast<Product>();
         setState(() {
-          _relatedProducts = products
-              .where((p) => p.id != widget.product.id)
-              .toList();
+          _relatedProducts = products.where(_isRelatedProduct).toList();
           _isLoadingRelated = false;
         });
       } else {
@@ -166,6 +253,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       debugPrint('Error fetching related products: $e');
       setState(() => _isLoadingRelated = false);
     }
+  }
+
+  bool _isRelatedProduct(Product product) {
+    if (product.id == widget.product.id) return false;
+
+    if (!widget.product.isRestaurantItem) {
+      return true;
+    }
+
+    if (!product.isRestaurantItem) return false;
+    if (product.vendorId != widget.product.vendorId) return false;
+
+    return _restaurantIdentityKey(product.displayRestaurantName) ==
+        _restaurantIdentityKey(widget.product.displayRestaurantName);
+  }
+
+  String _restaurantIdentityKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
   Future<void> _toggleSaveProduct() async {
@@ -237,6 +342,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (token == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in to submit a review.')),
+      );
+      return;
+    }
+    if (!_hasPurchasedProduct) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can only review products you have purchased.'),
+        ),
       );
       return;
     }
@@ -831,9 +944,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         !widget.product.isWithinRestaurantOrderWindow) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            widget.product.restaurantOpenStatusLabel,
-          ),
+          content: Text(widget.product.restaurantOpenStatusLabel),
           backgroundColor: Colors.orange,
         ),
       );
@@ -875,7 +986,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
-    cartProvider.addProduct(widget.product, selectedSize: _selectedSize);
+    final added = cartProvider.addProduct(
+      widget.product,
+      selectedSize: _selectedSize,
+    );
+    if (!added) {
+      final conflict = cartProvider.restaurantVendorConflict(widget.product);
+      final vendorName =
+          conflict?.product.displayRestaurantName ?? 'another restaurant';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Your cart already has food from $vendorName. Clear it before ordering from this restaurant.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     String? displaySize;
     if (_selectedSize != null) {
@@ -1027,10 +1155,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             borderRadius: const BorderRadius.vertical(
               bottom: Radius.circular(30),
             ),
-            child: Image.network(
-              imageUrl,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
+              placeholder: (context, url) => Container(color: Colors.grey[200]),
+              errorWidget: (context, url, error) {
                 return Container(
                   color: Colors.grey[200],
                   child: Center(
@@ -1066,12 +1195,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               onTap: () => _openImageGallery(index + 1),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8.0),
-                child: Image.network(
-                  imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
                   width: 80,
                   height: 80,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
+                  placeholder: (context, url) =>
+                      Container(width: 80, height: 80, color: Colors.grey[200]),
+                  errorWidget: (context, url, error) {
                     return Container(
                       width: 80,
                       height: 80,
@@ -1212,7 +1343,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${widget.product.isRestaurantItem ? 'Restaurant' : 'Pharmacy'} location: ${widget.product.displayVendorLocation}',
+                      'Vendor location: ${widget.product.displayVendorLocation}',
                       style: const TextStyle(
                         fontSize: 16,
                         color: deepNavyBlue,
@@ -1430,9 +1561,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildRelatedProductCard(Product product) {
     const Color deepNavyBlue = Color(0xFF0A2A66);
-    final imageUrl = product.imageUrls.isNotEmpty
-        ? product.imageUrls.first
-        : 'https://placehold.co/170x130/CCCCCC/000000?text=No+Image';
+    final imageUrl = _relatedImageUrl(product);
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final restaurantClosed =
+        product.isRestaurantItem && !product.isWithinRestaurantOrderWindow;
+    final canAddToCart =
+        product.canBuyDirectly &&
+        product.stockQuantity > 0 &&
+        !restaurantClosed;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -1467,12 +1604,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),
-                child: Image.network(
-                  imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
                   height: 130,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
+                  placeholder: (context, url) =>
+                      Container(height: 130, color: Colors.grey[200]),
+                  errorWidget: (context, url, error) => Container(
                     height: 130,
                     color: Colors.grey[200],
                     child: Center(
@@ -1514,19 +1653,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     width: double.infinity,
                     height: 36,
                     child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProductDetailScreen(
-                              product: product,
-                              heroTag: 'product_${product.id}',
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: canAddToCart
+                          ? () {
+                              final added = cartProvider.addProduct(product);
+                              if (!added) {
+                                final conflict = cartProvider
+                                    .restaurantVendorConflict(product);
+                                final vendorName =
+                                    conflict?.product.displayRestaurantName ??
+                                    'another restaurant';
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Your cart already has food from $vendorName. Clear it before ordering here.',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${product.name} added to cart',
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: product.stockQuantity > 0
+                        backgroundColor: canAddToCart
                             ? deepNavyBlue
                             : Colors.grey,
                         padding: EdgeInsets.zero,
@@ -1536,7 +1694,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         elevation: 0,
                       ),
                       child: Text(
-                        product.stockQuantity > 0 ? 'Add to Cart' : 'Out',
+                        restaurantClosed
+                            ? 'Closed'
+                            : product.stockQuantity > 0
+                            ? 'Add to Cart'
+                            : 'Out',
                         style: const TextStyle(fontSize: 14),
                       ),
                     ),
@@ -1550,7 +1712,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  String _relatedImageUrl(Product product) {
+    if (product.imageUrls.isEmpty) {
+      return 'https://placehold.co/170x130/CCCCCC/000000?text=No+Image';
+    }
+    final url = product.imageUrls.first;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return '$baseUrl$url';
+    return '$baseUrl/$url';
+  }
+
   Widget _buildReviewForm() {
+    final canSubmitReview =
+        !_isCheckingPurchaseEligibility &&
+        _hasPurchasedProduct &&
+        !_isSubmittingReview;
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1591,11 +1768,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            if (_isCheckingPurchaseEligibility || !_hasPurchasedProduct) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Text(
+                  _isCheckingPurchaseEligibility
+                      ? 'Checking purchase history...'
+                      : 'Only customers who purchased this product can submit a review.',
+                  style: const TextStyle(
+                    color: Color(0xFF8A5A00),
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _isSubmittingReview ? null : _submitReview,
+                onPressed: canSubmitReview ? _submitReview : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color.fromARGB(255, 46, 188, 131),
                   shape: RoundedRectangleBorder(
@@ -1689,7 +1890,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   _buildDescriptionCard(),
                   const SizedBox(height: 24),
                   if (_relatedProducts.isNotEmpty) ...[
-                    _buildSectionTitle('Similar Products'),
+                    _buildSectionTitle(
+                      widget.product.isRestaurantItem
+                          ? 'Available menu'
+                          : 'Similar Products',
+                    ),
                     _buildRelatedProductsSection(),
                     const SizedBox(height: 24),
                   ],

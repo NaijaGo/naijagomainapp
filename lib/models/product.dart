@@ -359,7 +359,7 @@ class Product {
   bool get hasVendorCoordinates =>
       vendorLatitude != null && vendorLongitude != null;
 
-  bool get shouldShowVendorLocation => isRestaurantItem || isMedicine;
+  bool get shouldShowVendorLocation => true;
 
   double? distanceKmFrom(double? latitude, double? longitude) {
     if (latitude == null || longitude == null || !hasVendorCoordinates) {
@@ -385,7 +385,9 @@ class Product {
 
     const averageCitySpeedKmPerHour = 24.0;
     final travelMinutes = (distance / averageCitySpeedKmPerHour * 60).ceil();
-    final minutes = isRestaurantItem ? travelMinutes + prepTimeMinutes : travelMinutes;
+    final minutes = isRestaurantItem
+        ? travelMinutes + prepTimeMinutes
+        : travelMinutes;
     return minutes < 1 ? 1 : minutes;
   }
 
@@ -430,7 +432,9 @@ class Product {
     if (!isRestaurantItem) return '';
     if (vendorTemporarilyClosed) {
       final reason = vendorClosureReason?.trim();
-      return reason == null || reason.isEmpty ? 'Closed today' : 'Closed: $reason';
+      return reason == null || reason.isEmpty
+          ? 'Closed today'
+          : 'Closed: $reason';
     }
     if (isWithinRestaurantOrderWindow) return 'Open now';
     return 'Opens at ${_formatTimeLabel(effectiveOpeningTime)}';

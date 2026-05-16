@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
+import '../core/performance/json_decode.dart';
 
 class ApiService {
   // ---- JWT Token Helper ----
@@ -18,8 +19,11 @@ class ApiService {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
-    return http.post(Uri.parse('$baseUrl$path'),
-        headers: headers, body: jsonEncode(body));
+    return http.post(
+      Uri.parse('$baseUrl$path'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
   }
 
   static Future<http.Response> get(String path) async {
@@ -37,13 +41,18 @@ class ApiService {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
-    return http.put(Uri.parse('$baseUrl$path'),
-        headers: headers, body: jsonEncode(body));
+    return http.put(
+      Uri.parse('$baseUrl$path'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
   }
 
   // ---- Upload (Cloudinary/S3 via backend) ----
-  static Future<String> uploadFileToBackend(String filePath,
-      {String purpose = 'dispute'}) async {
+  static Future<String> uploadFileToBackend(
+    String filePath, {
+    String purpose = 'dispute',
+  }) async {
     final token = await _getToken();
     final uri = Uri.parse('$baseUrl/api/uploads');
     final request = http.MultipartRequest('POST', uri);
@@ -56,7 +65,7 @@ class ApiService {
     final res = await http.Response.fromStream(streamed);
 
     if (res.statusCode == 200 || res.statusCode == 201) {
-      final j = jsonDecode(res.body);
+      final j = await decodeJsonMapInBackground(res.body);
       return j['url'] ?? j['secure_url'] ?? j['path'] ?? '';
     } else {
       throw Exception('Upload failed: ${res.body}');
@@ -68,18 +77,23 @@ class ApiService {
     final token = await _getToken();
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token'
+      if (token != null) 'Authorization': 'Bearer $token',
     };
 
-    var res = await http.get(Uri.parse('$baseUrl/api/orders/my'),
-        headers: headers);
+    var res = await http.get(
+      Uri.parse('$baseUrl/api/orders/my?limit=50'),
+      headers: headers,
+    );
 
     if (res.statusCode == 404) {
-      res = await http.get(Uri.parse('$baseUrl/api/orders'), headers: headers);
+      res = await http.get(
+        Uri.parse('$baseUrl/api/orders?limit=50'),
+        headers: headers,
+      );
     }
 
     if (res.statusCode == 200) {
-      return jsonDecode(res.body) as List<dynamic>;
+      return decodeJsonListInBackground(res.body);
     }
     throw Exception('Failed to fetch orders: ${res.body}');
   }
@@ -89,14 +103,16 @@ class ApiService {
     final token = await _getToken();
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token'
+      if (token != null) 'Authorization': 'Bearer $token',
     };
 
-    final res = await http.get(Uri.parse('$baseUrl/api/disputes'),
-        headers: headers);
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/disputes'),
+      headers: headers,
+    );
 
     if (res.statusCode == 200) {
-      return jsonDecode(res.body) as List<dynamic>;
+      return decodeJsonListInBackground(res.body);
     }
     throw Exception('Failed to fetch disputes: ${res.body}');
   }
@@ -105,14 +121,16 @@ class ApiService {
     final token = await _getToken();
     final headers = {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token'
+      if (token != null) 'Authorization': 'Bearer $token',
     };
 
-    final res = await http.get(Uri.parse('$baseUrl/api/disputes/$id'),
-        headers: headers);
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/disputes/$id'),
+      headers: headers,
+    );
 
     if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
+      return decodeJsonMapInBackground(res.body);
     }
     throw Exception('Failed to fetch dispute: ${res.body}');
   }
