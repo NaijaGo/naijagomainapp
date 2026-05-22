@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert'; // For json.decode()
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http; // For http requests
@@ -14,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import './auth/screens/registration_screen.dart';
 import 'providers/cart_provider.dart';
 import './screens/Main/main_app_navigator.dart';
+import 'services/location_access_service.dart';
 import './splash_screen.dart';
 
 const Color _lightPrimaryColor = Color.fromARGB(255, 3, 2, 76);
@@ -257,8 +259,7 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
     _hasAttemptedNotificationPrompt = true;
 
     try {
-      final canRequest = await OneSignal.Notifications.canRequest();
-      if (!canRequest || !mounted) {
+      if (!mounted) {
         return;
       }
 
@@ -267,9 +268,27 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
         return;
       }
 
-      await OneSignal.Notifications.requestPermission(false);
+      final granted = await OneSignal.Notifications.requestPermission(true);
+      if (granted) {
+        await OneSignal.User.pushSubscription.optIn();
+      }
     } catch (error) {
       debugPrint('Unable to request OneSignal permission: $error');
+    }
+  }
+
+  Future<void> _maybeRequestLocationPermission() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS || !mounted) {
+      return;
+    }
+
+    try {
+      final result = await LocationAccessService.ensureAccess();
+      if (result.granted) {
+        await LocationAccessService.requestPreciseLocationIfNeeded();
+      }
+    } catch (error) {
+      debugPrint('Unable to request iOS location permission: $error');
     }
   }
 
@@ -429,7 +448,10 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openPendingReferralSignupIfReady();
-      _maybeRequestNotificationPermission();
+      unawaited(_maybeRequestNotificationPermission());
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        unawaited(_maybeRequestLocationPermission());
+      });
     });
   }
 
