@@ -79,7 +79,6 @@ flutter:
     - assets/Artboard7.jpeg
     - assets/app_icon.jpg # 👈 Add your app icon here
     - assets/naijago-9.jpg # 👈 Add your splash screen image here
-    - .env
 
 # 👇 App Icon Config
 flutter_icons:

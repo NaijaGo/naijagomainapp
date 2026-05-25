@@ -1141,7 +1141,9 @@ class _AccountScreenState extends State<AccountScreen>
       child: SwitchListTile.adaptive(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
         value: value,
-        activeThumbColor: color.primary,
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected) ? color.primary : null;
+        }),
         title: Text(
           title,
           style: TextStyle(
