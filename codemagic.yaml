@@ -1,0 +1,74 @@
+workflows:
+  ios-release:
+    name: iOS Release
+
+    max_build_duration: 60
+
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: "NaijaGo App LTD"
+
+    environment:
+      flutter: 3.32.8
+      xcode: latest
+      cocoapods: default
+
+      vars:
+        BUNDLE_ID: "com.naijago.naijaGo"
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.naijago.govendor
+
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - ~/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          flutter pub get
+
+      - name: Install pods
+        script: |
+          cd ios
+          pod repo update
+          pod install
+          cd ..
+
+      - name: Analyze
+        script: |
+          flutter analyze
+
+      - name: Run tests
+        script: |
+          flutter test
+
+      - name: Setup signing
+        script: |
+          xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          flutter build ipa \
+          --release \
+          --export-method app-store
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+      email:
+        recipients:
+          - ojemenosesdestiny@gmail.com
+
+        notify:
+          success: true
+          failure: true
