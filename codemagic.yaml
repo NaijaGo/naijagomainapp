@@ -1,62 +1,63 @@
-ios-release:
-  name: iOS Release
-  max_build_duration: 60
-  instance_type: mac_mini_m2
+workflows:
+  ios-release:
+    name: iOS Release
 
-  integrations:
-    app_store_connect: NaijaGo App LTD
+    max_build_duration: 60
+    instance_type: mac_mini_m2
 
-  environment:
-    flutter: 3.32.8
-    xcode: latest
-    cocoapods: default
+    integrations:
+      app_store_connect: naijago_mainapp_key
 
-    vars:
-      BUNDLE_ID: "com.naijago.naijaGo"
+    environment:
+      flutter: 3.32.8
+      xcode: latest
+      cocoapods: default
 
-    ios_signing:
-      distribution_type: app_store
-      bundle_identifier: com.naijago.naijaGo
+      vars:
+        BUNDLE_ID: com.naijago.naijaGo
 
-  cache:
-    cache_paths:
-      - ~/.pub-cache
-      - ~/Library/Caches/CocoaPods
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.naijago.naijaGo
 
-  scripts:
-    - name: Install dependencies
-      script: |
-        flutter pub get
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - ~/Library/Caches/CocoaPods
 
-    - name: Install pods
-      script: |
-        cd ios
-        pod install
-        cd ..
+    scripts:
+      - name: Clean project
+        script: |
+          flutter clean
+          flutter pub get
 
-    - name: Analyze
-      script: |
-        flutter analyze
+      - name: Install pods
+        script: |
+          cd ios
+          pod install
+          cd ..
 
-    - name: Run tests
-      script: |
-        flutter test
+      - name: Setup signing
+        script: |
+          xcode-project use-profiles
 
-    - name: Set up code signing
-      script: |
-        xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          flutter build ipa --release --export-method app-store
 
-    - name: Build IPA
-      script: |
-        flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
 
-  artifacts:
-    - build/ios/ipa/*.ipa
-    - /tmp/xcodebuild_logs/*.log
-    - flutter_drive.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
 
-  publishing:
-    app_store_connect:
-      auth: integration
-      submit_to_testflight: true
-      submit_to_app_store: false
+      email:
+        recipients:
+          - ojemenosesdestiny@gmail.com
+
+        notify:
+          success: true
+          failure: true
