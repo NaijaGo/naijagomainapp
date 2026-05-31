@@ -31,10 +31,6 @@ workflows:
           flutter clean
           flutter pub get
 
-      - name: Install dependencies
-        script: |
-          flutter pub get
-
       - name: Install pods
         script: |
           cd ios
@@ -54,19 +50,29 @@ workflows:
         script: |
           xcode-project use-profiles
 
-      - name: Build IPA
+      # 🔥 ARCHIVE (FIXED PATH)
+      - name: Build iOS archive
         script: |
-          flutter build ipa --release --export-method app-store
+          cd ios
+          xcodebuild \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath Runner.xcarchive \
+            archive
 
-      # 🔥 IMPORTANT FIX: ensure IPA is found
-      - name: Ensure IPA is in artifacts folder
+      # 🔥 EXPORT IPA (FIXED PATH)
+      - name: Export IPA
         script: |
-          mkdir -p build/ios/ipa
-          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \; || true
+          xcodebuild \
+            -exportArchive \
+            -archivePath ios/Runner.xcarchive \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -exportPath build/ios/ipa
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
+      - ios/Runner.xcarchive
 
     publishing:
       app_store_connect:
