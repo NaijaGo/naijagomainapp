@@ -6,20 +6,6 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "NaijaGo App LTD"
-
-    environment:
-      flutter: 3.32.8
-      xcode: latest
-      cocoapods: default
-workflows:
-  ios-release:
-    name: iOS Release
-
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-
-    integrations:
       app_store_connect: "naijago_mainapp_key"
 
     environment:
@@ -45,24 +31,12 @@ workflows:
           flutter clean
           flutter pub get
 
-      - name: Install dependencies
-        script: |
-          flutter pub get
-
       - name: Install pods
         script: |
           cd ios
           pod repo update
           pod install
           cd ..
-
-      - name: Analyze
-        script: |
-          flutter analyze
-
-      - name: Run tests
-        script: |
-          flutter test
 
       - name: Setup signing
         script: |
@@ -72,11 +46,11 @@ workflows:
         script: |
           flutter build ipa --release --export-method app-store
 
-      - name: Verify IPA
+      - name: Verify IPA exists
         script: |
           find build -name "*.ipa"
 
-      - name: Ensure artifact folder exists
+      - name: Prepare artifacts
         script: |
           mkdir -p build/ios/ipa
           find build -name "*.ipa" -exec cp {} build/ios/ipa/ \;
@@ -95,79 +69,6 @@ workflows:
         recipients:
           - ojemenosesdestiny@gmail.com
 
-        notify:
-          success: true
-          failure: true
-      vars:
-        BUNDLE_ID: "com.naijago.naijaGo"
-
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.naijago.naijaGo
-
-    cache:
-      cache_paths:
-        - ~/.pub-cache
-        - ~/Library/Caches/CocoaPods
-
-    scripts:
-      - name: Clean project
-        script: |
-          flutter clean
-          flutter pub get
-
-      - name: Install dependencies
-        script: |
-          flutter pub get
-
-      - name: Install pods
-        script: |
-          cd ios
-          pod repo update
-          pod install
-          cd ..
-
-      - name: Analyze project
-        script: |
-          flutter analyze
-
-      - name: Run tests
-        script: |
-          flutter test
-
-      - name: Setup signing
-        script: |
-          xcode-project use-profiles
-
-      # 🔥 IMPORTANT: build IPA using Flutter (most stable with Codemagic)
-      - name: Build IPA
-        script: |
-          flutter build ipa --release --export-method app-store
-
-      # 🔥 FORCE IPA DISCOVERY (fix your “No artifacts found” issue)
-      - name: Locate IPA
-        script: |
-          echo "Searching for IPA..."
-          find build -name "*.ipa" || true
-
-      - name: Copy IPA to artifacts folder
-        script: |
-          mkdir -p build/ios/ipa
-          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \; || true
-          ls -la build/ios/ipa || true
-
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-
-      email:
-        recipients:
-          - ojemenosesdestiny@gmail.com
         notify:
           success: true
           failure: true
