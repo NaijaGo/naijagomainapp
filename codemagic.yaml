@@ -6,7 +6,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "naijago_mainapp_key"
+      app_store_connect: naijago_mainapp_key
 
     environment:
       flutter: 3.32.8
@@ -14,10 +14,11 @@ workflows:
       cocoapods: default
 
       vars:
-        BUNDLE_ID: "com.naijago.naijaGo"
+        BUNDLE_ID: com.naijago.naijaGo
 
       ios_signing:
         distribution_type: app_store
+        bundle_identifier: com.naijago.naijaGo
 
     cache:
       cache_paths:
@@ -33,7 +34,6 @@ workflows:
       - name: Install pods
         script: |
           cd ios
-          pod repo update
           pod install
           cd ..
 
@@ -44,16 +44,6 @@ workflows:
       - name: Build IPA
         script: |
           flutter build ipa --release --export-method app-store
-
-      - name: Verify IPA
-        script: |
-          find build -name "*.ipa" || true
-
-      - name: Prepare artifacts
-        script: |
-          mkdir -p build/ios/ipa
-          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \; || true
-          ls -la build/ios/ipa
 
     artifacts:
       - build/ios/ipa/*.ipa
