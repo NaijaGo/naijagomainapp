@@ -26,6 +26,11 @@ workflows:
         - ~/Library/Caches/CocoaPods
 
     scripts:
+      - name: Clean project
+        script: |
+          flutter clean
+          flutter pub get
+
       - name: Install dependencies
         script: |
           flutter pub get
@@ -52,6 +57,12 @@ workflows:
       - name: Build IPA
         script: |
           flutter build ipa --release --export-method app-store
+
+      # 🔥 IMPORTANT FIX: ensure IPA is found
+      - name: Ensure IPA is in artifacts folder
+        script: |
+          mkdir -p build/ios/ipa
+          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \; || true
 
     artifacts:
       - build/ios/ipa/*.ipa
