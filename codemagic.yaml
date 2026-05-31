@@ -3,7 +3,6 @@ workflows:
     name: iOS Release
 
     max_build_duration: 60
-
     instance_type: mac_mini_m2
 
     integrations:
@@ -19,7 +18,7 @@ workflows:
 
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.naijago.govendor
+        bundle_identifier: com.naijago.naijaGo
 
     cache:
       cache_paths:
@@ -52,9 +51,7 @@ workflows:
 
       - name: Build IPA
         script: |
-          flutter build ipa \
-          --release \
-          --export-method app-store
+          flutter build ipa --release --export-method app-store
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -68,7 +65,6 @@ workflows:
       email:
         recipients:
           - ojemenosesdestiny@gmail.com
-
         notify:
           success: true
           failure: true
