@@ -25,7 +25,8 @@ ios-release:
 
   scripts:
     - name: Install dependencies
-      script: flutter pub get
+      script: |
+        flutter pub get
 
     - name: Install pods
       script: |
@@ -33,17 +34,21 @@ ios-release:
         pod install
         cd ..
 
-    - name: Analyze project
-      script: flutter analyze
+    - name: Analyze
+      script: |
+        flutter analyze
 
     - name: Run tests
-      script: flutter test
+      script: |
+        flutter test
 
-    - name: Setup code signing
-      script: xcode-project use-profiles
+    - name: Set up code signing
+      script: |
+        xcode-project use-profiles
 
     - name: Build IPA
-      script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+      script: |
+        flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
 
   artifacts:
     - build/ios/ipa/*.ipa
