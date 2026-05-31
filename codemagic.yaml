@@ -31,6 +31,10 @@ workflows:
           flutter clean
           flutter pub get
 
+      - name: Install dependencies
+        script: |
+          flutter pub get
+
       - name: Install pods
         script: |
           cd ios
@@ -38,7 +42,7 @@ workflows:
           pod install
           cd ..
 
-      - name: Analyze
+      - name: Analyze project
         script: |
           flutter analyze
 
@@ -50,29 +54,26 @@ workflows:
         script: |
           xcode-project use-profiles
 
-      # 🔥 ARCHIVE (FIXED PATH)
-      - name: Build iOS archive
+      # 🔥 IMPORTANT: build IPA using Flutter (most stable with Codemagic)
+      - name: Build IPA
         script: |
-          cd ios
-          xcodebuild \
-            -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath Runner.xcarchive \
-            archive
+          flutter build ipa --release --export-method app-store
 
-      # 🔥 EXPORT IPA (FIXED PATH)
-      - name: Export IPA
+      # 🔥 FORCE IPA DISCOVERY (fix your “No artifacts found” issue)
+      - name: Locate IPA
         script: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath ios/Runner.xcarchive \
-            -exportOptionsPlist ios/ExportOptions.plist \
-            -exportPath build/ios/ipa
+          echo "Searching for IPA..."
+          find build -name "*.ipa" || true
+
+      - name: Copy IPA to artifacts folder
+        script: |
+          mkdir -p build/ios/ipa
+          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \; || true
+          ls -la build/ios/ipa || true
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - ios/Runner.xcarchive
+      - /tmp/xcodebuild_logs/*.log
 
     publishing:
       app_store_connect:
