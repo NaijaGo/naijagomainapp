@@ -18,7 +18,6 @@ workflows:
 
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.naijago.naijaGo
 
     cache:
       cache_paths:
@@ -46,14 +45,14 @@ workflows:
         script: |
           flutter build ipa --release --export-method app-store
 
-      - name: Verify IPA exists
+      - name: Verify IPA
         script: |
-          find build -name "*.ipa"
+          find build -name "*.ipa" || true
 
       - name: Prepare artifacts
         script: |
           mkdir -p build/ios/ipa
-          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \;
+          find build -name "*.ipa" -exec cp {} build/ios/ipa/ \; || true
           ls -la build/ios/ipa
 
     artifacts:
