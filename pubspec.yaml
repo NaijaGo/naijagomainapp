@@ -17,7 +17,7 @@ dependencies:
   device_info_plus: ^11.5.0
   image_picker: ^1.1.2
   provider: ^6.1.2
-  ionicons: any
+  font_awesome_flutter: ^10.8.0
   intl: ^0.18.1
   flutter_animate: ^4.5.2
   url_launcher: ^6.3.2
