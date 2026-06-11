@@ -518,7 +518,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _fullOrderSummary = null;
       });
 
-      final locationAccess = await LocationAccessService.ensureAccess();
+      final locationAccess = await _ensureLocationAccessWithRetry();
       if (!locationAccess.granted) {
         if (mounted) {
           await LocationAccessService.presentIssue(context, locationAccess);
@@ -528,9 +528,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       await LocationAccessService.requestPreciseLocationIfNeeded();
 
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: LocationAccessService.currentLocationSettings(),
-      ).timeout(const Duration(seconds: 15));
+      final position = await _getCurrentPositionWithRetry();
 
       final resolvedAddress =
           await AddressResolutionService.resolveFromCoordinates(
@@ -563,9 +561,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'Location fetched successfully! Calculating delivery fee...',
       );
       await _fetchOrderSummary();
-    } catch (e) {
-      _showSnackBar('Failed to get current location: $e');
-      debugPrint('Current location error: $e');
+    } catch (error, stackTrace) {
+      _showSnackBar(_currentLocationFailureMessage(error), isError: true);
+      debugPrint('Current location error: $error');
+      debugPrintStack(stackTrace: stackTrace);
     } finally {
       if (mounted) {
         setState(() {
@@ -574,6 +573,55 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         });
       }
     }
+  }
+
+  Future<Position> _getCurrentPositionWithRetry() async {
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: LocationAccessService.currentLocationSettings(),
+      ).timeout(const Duration(seconds: 15));
+    } catch (error) {
+      if (!Platform.isIOS || !_isPluginNotInitializedError(error)) {
+        rethrow;
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      return Geolocator.getCurrentPosition(
+        locationSettings: LocationAccessService.currentLocationSettings(),
+      ).timeout(const Duration(seconds: 15));
+    }
+  }
+
+  Future<LocationAccessResult> _ensureLocationAccessWithRetry() async {
+    try {
+      return await LocationAccessService.ensureAccess();
+    } catch (error) {
+      if (!Platform.isIOS || !_isPluginNotInitializedError(error)) {
+        rethrow;
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      return LocationAccessService.ensureAccess();
+    }
+  }
+
+  bool _isPluginNotInitializedError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    return normalized.contains('notinitializederror') ||
+        normalized.contains('notlnitializederror') ||
+        normalized.contains('not initialized');
+  }
+
+  String _currentLocationFailureMessage(Object error) {
+    if (Platform.isIOS && _isPluginNotInitializedError(error)) {
+      return 'Location is still starting on this iPhone. Please try again in a moment, or restart the app if it continues.';
+    }
+
+    if (error is TimeoutException) {
+      return 'Current location took too long. Please check your signal and try again.';
+    }
+
+    return 'Failed to get current location. Please check location access and try again.';
   }
 
   void _showSnackBar(String message, {bool isError = false}) {

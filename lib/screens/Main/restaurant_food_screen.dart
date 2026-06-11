@@ -86,10 +86,13 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
   String? _errorMessage;
   double? _customerLatitude;
   double? _customerLongitude;
+  late final bool _openedDirectlyToVendor;
 
   @override
   void initState() {
     super.initState();
+    _openedDirectlyToVendor =
+        widget.initialVendorId != null || widget.initialVendorName != null;
     _selectedVendorId = widget.initialVendorId;
     _selectedVendorName = widget.initialVendorName;
     _loadFoods();
@@ -396,8 +399,9 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
   @override
   Widget build(BuildContext context) {
     final inVendorMenu = _selectedVendorId != null;
+    final shouldPopToPreviousScreen = inVendorMenu && _openedDirectlyToVendor;
     return PopScope(
-      canPop: !inVendorMenu,
+      canPop: !inVendorMenu || shouldPopToPreviousScreen,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && inVendorMenu) {
           _showAllRestaurants();
@@ -409,7 +413,9 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
           leading: inVendorMenu
               ? IconButton(
                   icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: _showAllRestaurants,
+                  onPressed: shouldPopToPreviousScreen
+                      ? () => Navigator.of(context).maybePop()
+                      : _showAllRestaurants,
                 )
               : null,
           title: Text(
