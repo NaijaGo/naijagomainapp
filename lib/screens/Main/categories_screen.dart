@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:ionicons/ionicons.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
@@ -252,30 +251,30 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   };
 
   final Map<String, IconData> _categoryIcons = {
-    'Home & Office': Ionicons.home_outline,
-    'Phones & Tablets': Ionicons.phone_portrait_outline,
-    'Fashion': Ionicons.shirt_outline,
-    'Health & Beauty': Ionicons.heart_outline,
-    'Electronics': Ionicons.hardware_chip_outline,
-    'Computing': Ionicons.laptop_outline,
-    'Groceries': Ionicons.cart_outline,
-    'Automobiles': Ionicons.car_outline,
-    'Sporting Goods': Ionicons.football_outline,
-    'Gaming': Ionicons.game_controller_outline,
-    'Baby Products': Ionicons.happy_outline,
-    'Books & Stationery': Ionicons.book_outline,
-    'Animal Products': Ionicons.paw_outline,
-    'Building & Construction': Ionicons.build_outline,
-    'Industrial & Scientific': Ionicons.construct_outline,
-    'Music & Instruments': Ionicons.musical_notes_outline,
-    'Arts & Crafts': Ionicons.color_palette_outline,
-    'Agriculture': Ionicons.leaf_outline,
-    'Jewelry & Watches': Ionicons.diamond_outline,
-    'Toys & Games': Ionicons.rocket_outline,
-    'Photography': Ionicons.camera_outline,
-    'Food & Beverage': Ionicons.restaurant_outline,
-    'Travel & Tourism': Ionicons.airplane_outline,
-    'Wedding & Events': Ionicons.heart_circle_outline,
+    'Home & Office': Icons.home_outlined,
+    'Phones & Tablets': Icons.phone_iphone_outlined,
+    'Fashion': Icons.checkroom_outlined,
+    'Health & Beauty': Icons.favorite_border,
+    'Electronics': Icons.memory_outlined,
+    'Computing': Icons.laptop_mac_outlined,
+    'Groceries': Icons.shopping_cart_outlined,
+    'Automobiles': Icons.directions_car_outlined,
+    'Sporting Goods': Icons.sports_soccer_outlined,
+    'Gaming': Icons.sports_esports_outlined,
+    'Baby Products': Icons.child_friendly_outlined,
+    'Books & Stationery': Icons.menu_book_outlined,
+    'Animal Products': Icons.pets_outlined,
+    'Building & Construction': Icons.construction_outlined,
+    'Industrial & Scientific': Icons.precision_manufacturing_outlined,
+    'Music & Instruments': Icons.music_note_outlined,
+    'Arts & Crafts': Icons.palette_outlined,
+    'Agriculture': Icons.eco_outlined,
+    'Jewelry & Watches': Icons.diamond_outlined,
+    'Toys & Games': Icons.rocket_launch_outlined,
+    'Photography': Icons.camera_alt_outlined,
+    'Food & Beverage': Icons.restaurant_outlined,
+    'Travel & Tourism': Icons.flight_outlined,
+    'Wedding & Events': Icons.favorite_border,
   };
 
   final Map<String, String> _subCategoryImages = {
@@ -1153,7 +1152,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                _categoryIcons[section] ?? Ionicons.grid_outline,
+                _categoryIcons[section] ?? Icons.grid_view_outlined,
                 color: primaryNavy,
               ),
             ),
