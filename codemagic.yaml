@@ -31,10 +31,12 @@ workflows:
           flutter clean
           flutter pub get
 
-      - name: Install pods
+      - name: Install iOS pods
         script: |
+          ruby --version
+          pod --version
           cd ios
-          pod install
+          pod install --repo-update
           cd ..
 
       - name: Setup signing
