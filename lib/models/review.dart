@@ -1,4 +1,3 @@
-
 class Review {
   final String id;
   final String productId;
@@ -21,36 +20,36 @@ class Review {
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
-    String productId;
-    String? productName;
-    String userId;
-    String? userName;
-
-    if (json['product'] is Map) {
-      productId = json['product']['_id'] as String;
-      productName = json['product']['name'] as String?;
-    } else {
-      productId = json['product'] as String;
-      productName = null;
-    }
-
-    if (json['user'] is Map) {
-      userId = json['user']['_id'] as String;
-      userName = '${json['user']['firstName']} ${json['user']['lastName']}';
-    } else {
-      userId = json['user'] as String;
-      userName = null;
-    }
+    final product = json['product'];
+    final user = json['user'];
+    final productMap = product is Map
+        ? Map<String, dynamic>.from(product)
+        : null;
+    final userMap = user is Map ? Map<String, dynamic>.from(user) : null;
+    final userFirstName = _readString(userMap?['firstName']);
+    final userLastName = _readString(userMap?['lastName']);
+    final userName = [
+      userFirstName,
+      userLastName,
+    ].where((part) => part != null && part.trim().isNotEmpty).join(' ');
 
     return Review(
-      id: json['_id'] as String,
-      productId: productId,
-      productName: productName,
-      userId: userId,
-      userName: userName,
-      rating: (json['rating'] as num).toDouble(),
-      comment: json['comment'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      id: _readString(json['_id']) ?? _readString(json['id']) ?? '',
+      productId:
+          _readString(productMap?['_id']) ??
+          _readString(productMap?['id']) ??
+          _readString(product) ??
+          '',
+      productName: _readString(productMap?['name']),
+      userId:
+          _readString(userMap?['_id']) ??
+          _readString(userMap?['id']) ??
+          _readString(user) ??
+          '',
+      userName: userName.isEmpty ? null : userName,
+      rating: _readDouble(json['rating']) ?? 0,
+      comment: _readString(json['comment']) ?? '',
+      createdAt: _readDateTime(json['createdAt']) ?? DateTime.now(),
     );
   }
 
@@ -63,5 +62,28 @@ class Review {
       'comment': comment,
       'createdAt': createdAt.toIso8601String(),
     };
+  }
+
+  static String? _readString(Object? value) {
+    if (value == null) return null;
+    if (value is String) return value;
+    if (value is Map) {
+      return _readString(value['_id']) ??
+          _readString(value['id']) ??
+          _readString(value['\$oid']);
+    }
+    return value.toString();
+  }
+
+  static double? _readDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static DateTime? _readDateTime(Object? value) {
+    final dateText = _readString(value);
+    if (dateText == null || dateText.isEmpty) return null;
+    return DateTime.tryParse(dateText);
   }
 }

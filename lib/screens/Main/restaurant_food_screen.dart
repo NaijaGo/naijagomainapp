@@ -87,6 +87,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
   double? _customerLatitude;
   double? _customerLongitude;
   late final bool _openedDirectlyToVendor;
+  LocalHistoryEntry? _restaurantMenuHistoryEntry;
 
   @override
   void initState() {
@@ -96,6 +97,12 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
     _selectedVendorId = widget.initialVendorId;
     _selectedVendorName = widget.initialVendorName;
     _loadFoods();
+  }
+
+  @override
+  void dispose() {
+    _restaurantMenuHistoryEntry = null;
+    super.dispose();
   }
 
   Future<void> _loadFoods() async {
@@ -388,7 +395,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
     return '$baseUrl/$url';
   }
 
-  void _showAllRestaurants() {
+  void _clearSelectedRestaurant() {
     setState(() {
       _selectedVendorId = null;
       _selectedVendorName = null;
@@ -396,146 +403,168 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
     });
   }
 
+  void _showAllRestaurants() {
+    final historyEntry = _restaurantMenuHistoryEntry;
+    if (historyEntry != null) {
+      historyEntry.remove();
+      return;
+    }
+
+    _clearSelectedRestaurant();
+  }
+
+  void _addRestaurantMenuHistoryEntry() {
+    if (_openedDirectlyToVendor || _restaurantMenuHistoryEntry != null) {
+      return;
+    }
+
+    final route = ModalRoute.of(context);
+    if (route == null) {
+      return;
+    }
+
+    final historyEntry = LocalHistoryEntry(
+      onRemove: () {
+        _restaurantMenuHistoryEntry = null;
+        if (mounted) {
+          _clearSelectedRestaurant();
+        }
+      },
+    );
+    _restaurantMenuHistoryEntry = historyEntry;
+    route.addLocalHistoryEntry(historyEntry);
+  }
+
   @override
   Widget build(BuildContext context) {
     final inVendorMenu = _selectedVendorId != null;
-    final shouldPopToPreviousScreen = inVendorMenu && _openedDirectlyToVendor;
-    return PopScope(
-      canPop: !inVendorMenu || shouldPopToPreviousScreen,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && inVendorMenu) {
-          _showAllRestaurants();
-        }
-      },
-      child: Scaffold(
-        backgroundColor: softGrey,
-        appBar: AppBar(
-          leading: inVendorMenu
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: shouldPopToPreviousScreen
-                      ? () => Navigator.of(context).maybePop()
-                      : _showAllRestaurants,
-                )
-              : null,
-          title: Text(
-            inVendorMenu
-                ? (_selectedVendorName ?? 'Restaurant menu')
-                : 'Restaurants',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: secondaryBlack,
-              fontWeight: FontWeight.w800,
-            ),
+    return Scaffold(
+      backgroundColor: softGrey,
+      appBar: AppBar(
+        leading: inVendorMenu
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () async {
+                  final didPop = await Navigator.of(context).maybePop();
+                  if (!didPop && mounted) {
+                    _showAllRestaurants();
+                  }
+                },
+              )
+            : null,
+        title: Text(
+          inVendorMenu
+              ? (_selectedVendorName ?? 'Restaurant menu')
+              : 'Restaurants',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: secondaryBlack,
+            fontWeight: FontWeight.w800,
           ),
-          backgroundColor: white,
-          foregroundColor: secondaryBlack,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
         ),
-        body: RefreshIndicator(
-          color: primaryNavy,
-          onRefresh: _loadFoods,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              SliverToBoxAdapter(child: _buildHeader()),
-              SliverToBoxAdapter(child: _buildFilters()),
-              if (inVendorMenu)
-                SliverToBoxAdapter(child: _buildFoodCategories()),
-              if (_isLoading)
-                SliverPadding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  sliver: SliverGrid.builder(
-                    itemCount: 6,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: AppSpacing.md,
-                          mainAxisSpacing: AppSpacing.md,
-                          mainAxisExtent: 330,
-                        ),
-                    itemBuilder: (_, _) => _buildSkeletonCard(),
+        backgroundColor: white,
+        foregroundColor: secondaryBlack,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: RefreshIndicator(
+        color: primaryNavy,
+        onRefresh: _loadFoods,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader()),
+            SliverToBoxAdapter(child: _buildFilters()),
+            if (inVendorMenu) SliverToBoxAdapter(child: _buildFoodCategories()),
+            if (_isLoading)
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                sliver: SliverGrid.builder(
+                  itemCount: 6,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: AppSpacing.md,
+                    mainAxisSpacing: AppSpacing.md,
+                    mainAxisExtent: 330,
                   ),
-                )
-              else if (_errorMessage != null)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _buildState(
-                    Icons.wifi_off_rounded,
-                    _errorMessage!,
-                    action: 'Retry',
-                    onTap: _loadFoods,
-                  ),
-                )
-              else if (inVendorMenu && _visibleProducts.isEmpty)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Text(
-                      'No restaurant food available for this filter.',
-                      style: TextStyle(
-                        color: lightGrey,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  itemBuilder: (_, _) => _buildSkeletonCard(),
+                ),
+              )
+            else if (_errorMessage != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _buildState(
+                  Icons.wifi_off_rounded,
+                  _errorMessage!,
+                  action: 'Retry',
+                  onTap: _loadFoods,
+                ),
+              )
+            else if (inVendorMenu && _visibleProducts.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text(
+                    'No restaurant food available for this filter.',
+                    style: TextStyle(
+                      color: lightGrey,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                )
-              else if (!inVendorMenu && _restaurantGroups.isEmpty)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Text(
-                      'No restaurants available for this filter.',
-                      style: TextStyle(
-                        color: lightGrey,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                )
-              else if (!inVendorMenu)
-                SliverPadding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  sliver: SliverGrid.builder(
-                    itemCount: _restaurantGroups.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: AppSpacing.md,
-                          mainAxisSpacing: AppSpacing.md,
-                          mainAxisExtent: 326,
-                        ),
-                    itemBuilder: (context, index) {
-                      return _buildRestaurantCard(
-                        _restaurantGroups[index],
-                        index,
-                      );
-                    },
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  sliver: SliverGrid.builder(
-                    itemCount: _visibleProducts.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: AppSpacing.md,
-                          mainAxisSpacing: AppSpacing.md,
-                          mainAxisExtent: 356,
-                        ),
-                    itemBuilder: (context, index) {
-                      return _buildFoodCard(_visibleProducts[index], index);
-                    },
                   ),
                 ),
-            ],
-          ),
+              )
+            else if (!inVendorMenu && _restaurantGroups.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text(
+                    'No restaurants available for this filter.',
+                    style: TextStyle(
+                      color: lightGrey,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              )
+            else if (!inVendorMenu)
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                sliver: SliverGrid.builder(
+                  itemCount: _restaurantGroups.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: AppSpacing.md,
+                    mainAxisSpacing: AppSpacing.md,
+                    mainAxisExtent: 326,
+                  ),
+                  itemBuilder: (context, index) {
+                    return _buildRestaurantCard(
+                      _restaurantGroups[index],
+                      index,
+                    );
+                  },
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                sliver: SliverGrid.builder(
+                  itemCount: _visibleProducts.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: AppSpacing.md,
+                    mainAxisSpacing: AppSpacing.md,
+                    mainAxisExtent: 356,
+                  ),
+                  itemBuilder: (context, index) {
+                    return _buildFoodCard(_visibleProducts[index], index);
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -933,6 +962,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
   }
 
   void _openRestaurantMenu(_RestaurantVendorGroup group) {
+    _addRestaurantMenuHistoryEntry();
     setState(() {
       _selectedVendorId = group.vendorId;
       _selectedVendorName = group.restaurantName;

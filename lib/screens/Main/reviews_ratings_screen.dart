@@ -69,9 +69,14 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> reviewsJson = jsonDecode(response.body);
+        final decodedBody = jsonDecode(response.body);
+        final reviewsJson = _extractReviews(decodedBody);
+        final parsedReviews = reviewsJson
+            .whereType<Map>()
+            .map((json) => Review.fromJson(Map<String, dynamic>.from(json)))
+            .toList();
         setState(() {
-          _reviews = reviewsJson.map((json) => Review.fromJson(json)).toList();
+          _reviews = parsedReviews;
         });
       } else {
         final responseData = jsonDecode(response.body);
@@ -90,6 +95,21 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  List<dynamic> _extractReviews(dynamic decodedBody) {
+    if (decodedBody is List) {
+      return decodedBody;
+    }
+
+    if (decodedBody is Map<String, dynamic>) {
+      final reviews = decodedBody['reviews'] ?? decodedBody['data'];
+      if (reviews is List) {
+        return reviews;
+      }
+    }
+
+    return const [];
   }
 
   @override
