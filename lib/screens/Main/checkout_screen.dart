@@ -576,20 +576,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<Position> _getCurrentPositionWithRetry() async {
-    try {
-      return await Geolocator.getCurrentPosition(
-        locationSettings: LocationAccessService.currentLocationSettings(),
-      ).timeout(const Duration(seconds: 15));
-    } catch (error) {
-      if (!Platform.isIOS || !_isPluginNotInitializedError(error)) {
-        rethrow;
-      }
+    Object? lastError;
+    StackTrace? lastStackTrace;
 
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      return Geolocator.getCurrentPosition(
-        locationSettings: LocationAccessService.currentLocationSettings(),
-      ).timeout(const Duration(seconds: 15));
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await Geolocator.getCurrentPosition(
+          locationSettings: LocationAccessService.currentLocationSettings(),
+        ).timeout(const Duration(seconds: 18));
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+        final shouldRetry =
+            _isPluginNotInitializedError(error) || error is TimeoutException;
+        if (!shouldRetry || attempt == 3) {
+          break;
+        }
+
+        await Future<void>.delayed(Duration(milliseconds: 500 + attempt * 300));
+      }
     }
+
+    final lastKnownPosition = await Geolocator.getLastKnownPosition();
+    if (lastKnownPosition != null) {
+      return lastKnownPosition;
+    }
+
+    Error.throwWithStackTrace(lastError!, lastStackTrace!);
   }
 
   Future<LocationAccessResult> _ensureLocationAccessWithRetry() async {
@@ -613,8 +626,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   String _currentLocationFailureMessage(Object error) {
-    if (Platform.isIOS && _isPluginNotInitializedError(error)) {
-      return 'Location is still starting on this iPhone. Please try again in a moment, or restart the app if it continues.';
+    if (_isPluginNotInitializedError(error)) {
+      return 'Location is still starting on this phone. Please try again in a moment, or restart the app if it continues.';
     }
 
     if (error is TimeoutException) {

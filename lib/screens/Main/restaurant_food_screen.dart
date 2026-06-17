@@ -438,13 +438,19 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
   @override
   Widget build(BuildContext context) {
     final inVendorMenu = _selectedVendorId != null;
+    final canPopRoute = Navigator.of(context).canPop();
     return Scaffold(
       backgroundColor: softGrey,
       appBar: AppBar(
-        leading: inVendorMenu
+        leading: inVendorMenu || canPopRoute
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_rounded),
                 onPressed: () async {
+                  if (inVendorMenu && _restaurantMenuHistoryEntry != null) {
+                    _showAllRestaurants();
+                    return;
+                  }
+
                   final didPop = await Navigator.of(context).maybePop();
                   if (!didPop && mounted) {
                     _showAllRestaurants();
