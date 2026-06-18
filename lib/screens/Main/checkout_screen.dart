@@ -530,21 +530,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final position = await _getCurrentPositionWithRetry();
 
-      final resolvedAddress =
-          await AddressResolutionService.resolveFromCoordinates(
-            position.latitude,
-            position.longitude,
-          ).timeout(const Duration(seconds: 10));
+      ResolvedAddress? resolvedAddress;
+      try {
+        resolvedAddress = await AddressResolutionService.resolveFromCoordinates(
+          position.latitude,
+          position.longitude,
+        ).timeout(const Duration(seconds: 10));
+      } catch (error) {
+        debugPrint('Checkout reverse geocoding failed: $error');
+      }
 
-      _addressController.text = resolvedAddress.addressLine;
-      _cityController.text = resolvedAddress.city;
-      _postalCodeController.text = resolvedAddress.postalCode;
-      _countryController.text = resolvedAddress.country;
+      if (resolvedAddress != null) {
+        _addressController.text = resolvedAddress.addressLine;
+        _cityController.text = resolvedAddress.city;
+        _postalCodeController.text = resolvedAddress.postalCode;
+        _countryController.text = resolvedAddress.country;
+      } else {
+        _addressController.text = 'Current GPS location';
+        _cityController.text = _cityController.text.trim();
+        _postalCodeController.text = _postalCodeController.text.trim();
+        _countryController.text = _countryController.text.trim().isNotEmpty
+            ? _countryController.text.trim()
+            : 'Nigeria';
+      }
 
       // iOS-specific hint (only show on iPhone — Android usually has good data)
       if (Platform.isIOS) {
         _showSnackBar(
-          resolvedAddress.hasPostalCode
+          resolvedAddress == null
+              ? 'Precise iPhone location loaded. Please confirm the address details before placing your order.'
+              : resolvedAddress.hasPostalCode
               ? 'Precise iPhone location loaded successfully.'
               : 'Precise iPhone location loaded. Please confirm the postal code before placing your order.',
           isError: false,
@@ -685,6 +700,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     if (_useSavedAddress && _selectedAddress != null) {
+      final savedLatitude = _selectedAddress!.latitude;
+      final savedLongitude = _selectedAddress!.longitude;
+      if (savedLatitude != null && savedLongitude != null) {
+        setState(() {
+          _userLatitude = savedLatitude;
+          _userLongitude = savedLongitude;
+        });
+        if (shouldFetchSummary && !_isFetchingSummary) {
+          await _fetchOrderSummary();
+        }
+        return true;
+      }
+
       try {
         final addressStr =
             '${_selectedAddress!.fullAddress}, ${_selectedAddress!.city}, ${_selectedAddress!.country}';
@@ -706,12 +734,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     }
 
-    final builtAddress =
-        '${_addressController.text.trim()}, ${_cityController.text.trim()}, ${_countryController.text.trim()}';
-    if (builtAddress.trim().isNotEmpty) {
+    final builtAddressParts = [
+      _addressController.text.trim(),
+      _cityController.text.trim(),
+      _postalCodeController.text.trim(),
+      _countryController.text.trim(),
+    ].where((part) => part.isNotEmpty).toList();
+    if (builtAddressParts.isNotEmpty) {
       try {
         final locations = await locationFromAddress(
-          builtAddress,
+          builtAddressParts.join(', '),
         ).timeout(const Duration(seconds: 10));
         if (locations.isNotEmpty) {
           setState(() {
