@@ -5,9 +5,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants.dart';
 import '../../models/user.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutterwave_standard/flutterwave.dart';
-import 'package:uuid/uuid.dart';
+import '../../services/payment_service.dart';
 import 'withdrawal_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tech_glow_background.dart';
@@ -39,14 +37,6 @@ class _MyWalletScreenState extends State<MyWalletScreen> {
   // New state variables for saved bank details and password
   List<Map<String, String>> _savedBankCredentials = [];
   final TextEditingController _passwordController = TextEditingController();
-
-  String? _readEnv(String key) {
-    try {
-      return dotenv.env[key];
-    } catch (_) {
-      return null;
-    }
-  }
 
   @override
   void initState() {
@@ -158,35 +148,31 @@ class _MyWalletScreenState extends State<MyWalletScreen> {
       return;
     }
 
-    final publicKey = _readEnv('FLUTTERWAVE_PUBLIC_KEY') ?? '';
-    if (publicKey.isEmpty) {
-      _showSnack('Flutterwave public key not set in .env');
-      return;
-    }
-
-    final bool isTestMode =
-        (_readEnv('FLUTTERWAVE_TEST_MODE') ?? 'true') == 'true';
-    final txRef = 'FLW_${const Uuid().v4()}';
-
-    final flutterwave = Flutterwave(
-      publicKey: publicKey,
-      currency: 'NGN',
-      redirectUrl: 'https://your-redirect-url.com',
-      txRef: txRef,
-      amount: amount.toString(),
-      customer: Customer(name: 'NaijaGo User', email: userEmail),
-      paymentOptions: 'card, ussd, banktransfer',
-      customization: Customization(title: 'NaijaGo Wallet Top Up'),
-      isTestMode: isTestMode,
-    );
-
     try {
       if (!mounted) return;
-      final ChargeResponse response = await flutterwave.charge(context);
+      final response = await PaymentService().startFlutterwavePayment(
+        context: context,
+        amount: amount,
+        email: userEmail,
+        name: 'NaijaGo User',
+        phoneNumber: '',
+        title: 'NaijaGo Wallet Top Up',
+      );
+
+      if (response == null) {
+        _showSnack('Payment was not started or was cancelled.');
+        return;
+      }
 
       if (response.success == true) {
+        final transactionRef = response.txRef;
+        if (transactionRef == null || transactionRef.trim().isEmpty) {
+          _showSnack('Payment reference missing. Please contact support.');
+          return;
+        }
+
         _amountController.clear();
-        await _verifyTransactionOnBackend(txRef);
+        await _verifyTransactionOnBackend(transactionRef);
       } else {
         _showSnack('Payment cancelled or failed');
       }

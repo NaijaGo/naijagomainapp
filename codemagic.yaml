@@ -15,6 +15,8 @@ workflows:
 
       vars:
         BUNDLE_ID: com.naijago.naijaGo
+        FLUTTERWAVE_TEST_MODE: "false"
+        FLUTTERWAVE_REDIRECT_URL: "https://naijago.com/payment-redirect"
 
       ios_signing:
         distribution_type: app_store
@@ -45,7 +47,15 @@ workflows:
 
       - name: Build IPA
         script: |
-          flutter build ipa --release --export-method app-store
+          if [ -z "$FLUTTERWAVE_PUBLIC_KEY" ]; then
+            echo "Missing FLUTTERWAVE_PUBLIC_KEY. Add it to Codemagic environment variables before building."
+            exit 1
+          fi
+
+          flutter build ipa --release --export-method app-store \
+            --dart-define=FLUTTERWAVE_PUBLIC_KEY="$FLUTTERWAVE_PUBLIC_KEY" \
+            --dart-define=FLUTTERWAVE_TEST_MODE="$FLUTTERWAVE_TEST_MODE" \
+            --dart-define=FLUTTERWAVE_REDIRECT_URL="$FLUTTERWAVE_REDIRECT_URL"
 
     artifacts:
       - build/ios/ipa/*.ipa
