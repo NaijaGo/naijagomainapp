@@ -309,6 +309,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    final missingAddressFields = _missingShippingAddressFields();
+    if (missingAddressFields.isNotEmpty) {
+      _showSnackBar(
+        'Please complete ${missingAddressFields.join(' and ')} before calculating delivery.',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() {
       _isSummaryLoading = true;
       _isFetchingSummary = true;
@@ -566,6 +575,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       }
 
+      final missingAddressFields = _missingShippingAddressFields();
+      if (missingAddressFields.isNotEmpty) {
+        setState(() {
+          _isManualAddress = true;
+          _addressSelectedOrFetched = false;
+          _userLatitude = position.latitude;
+          _userLongitude = position.longitude;
+        });
+        _showSnackBar(
+          'Please add ${missingAddressFields.join(' and ')} to complete this iPhone address.',
+          isError: true,
+        );
+        return;
+      }
+
       setState(() {
         _addressSelectedOrFetched = true;
         _userLatitude = position.latitude;
@@ -591,45 +615,68 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<Position> _getCurrentPositionWithRetry() async {
-    Object? lastError;
-    StackTrace? lastStackTrace;
+    return _retryIosLocationStartup(() async {
+      Object? lastError;
+      StackTrace? lastStackTrace;
 
-    for (var attempt = 0; attempt < 4; attempt++) {
-      try {
-        return await Geolocator.getCurrentPosition(
-          locationSettings: LocationAccessService.currentLocationSettings(),
-        ).timeout(const Duration(seconds: 18));
-      } catch (error, stackTrace) {
-        lastError = error;
-        lastStackTrace = stackTrace;
-        final shouldRetry =
-            _isPluginNotInitializedError(error) || error is TimeoutException;
-        if (!shouldRetry || attempt == 3) {
-          break;
+      for (var attempt = 0; attempt < 4; attempt++) {
+        try {
+          return await Geolocator.getCurrentPosition(
+            locationSettings: LocationAccessService.currentLocationSettings(),
+          ).timeout(const Duration(seconds: 20));
+        } catch (error, stackTrace) {
+          lastError = error;
+          lastStackTrace = stackTrace;
+          final shouldRetry =
+              _isPluginNotInitializedError(error) || error is TimeoutException;
+          if (!shouldRetry || attempt == 3) {
+            break;
+          }
+
+          await Future<void>.delayed(
+            Duration(milliseconds: 500 + attempt * 300),
+          );
         }
-
-        await Future<void>.delayed(Duration(milliseconds: 500 + attempt * 300));
       }
-    }
 
-    final lastKnownPosition = await Geolocator.getLastKnownPosition();
-    if (lastKnownPosition != null) {
-      return lastKnownPosition;
-    }
+      final lastKnownPosition = await Geolocator.getLastKnownPosition();
+      if (lastKnownPosition != null) {
+        return lastKnownPosition;
+      }
 
-    Error.throwWithStackTrace(lastError!, lastStackTrace!);
+      Error.throwWithStackTrace(lastError!, lastStackTrace!);
+    });
   }
 
   Future<LocationAccessResult> _ensureLocationAccessWithRetry() async {
-    try {
-      return await LocationAccessService.ensureAccess();
-    } catch (error) {
-      if (!Platform.isIOS || !_isPluginNotInitializedError(error)) {
-        rethrow;
-      }
+    return _retryIosLocationStartup(LocationAccessService.ensureAccess);
+  }
 
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      return LocationAccessService.ensureAccess();
+  Future<T> _retryIosLocationStartup<T>(Future<T> Function() action) async {
+    const retryDelays = <Duration>[
+      Duration(milliseconds: 350),
+      Duration(milliseconds: 750),
+      Duration(milliseconds: 1250),
+      Duration(seconds: 2),
+      Duration(seconds: 3),
+    ];
+
+    for (var attempt = 0; ; attempt += 1) {
+      try {
+        return await action();
+      } catch (error) {
+        final shouldRetry =
+            Platform.isIOS &&
+            _isPluginNotInitializedError(error) &&
+            attempt < retryDelays.length &&
+            mounted;
+
+        if (!shouldRetry) {
+          rethrow;
+        }
+
+        await Future<void>.delayed(retryDelays[attempt]);
+      }
     }
   }
 
@@ -642,6 +689,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   String _currentLocationFailureMessage(Object error) {
     if (_isPluginNotInitializedError(error)) {
+      if (Platform.isIOS) {
+        return 'Location is still starting on this iPhone. Please wait a few seconds and tap Use current location again.';
+      }
       return 'Location is still starting on this phone. Please try again in a moment, or restart the app if it continues.';
     }
 
@@ -776,6 +826,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (_selectedPaymentMethod == null) {
       _showSnackBar('Please select a payment method', isError: true);
+      return false;
+    }
+
+    final missingAddressFields = _missingShippingAddressFields();
+    if (missingAddressFields.isNotEmpty) {
+      _showSnackBar(
+        'Please complete ${missingAddressFields.join(' and ')} before placing your order.',
+        isError: true,
+      );
       return false;
     }
 
@@ -2628,7 +2687,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Map<String, dynamic> _buildShippingAddressPayload() {
     if (_useSavedAddress && _selectedAddress != null) {
-      return _selectedAddress!.toJson();
+      final address = _selectedAddress!;
+      return {
+        ...address.toJson(),
+        'address': address.addressLine.trim(),
+        'city': address.city.trim(),
+        'postalCode': address.postalCode.trim(),
+        'country': address.country.trim(),
+      };
     }
 
     return {
@@ -2637,6 +2703,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       'postalCode': _postalCodeController.text.trim(),
       'country': _countryController.text.trim(),
     };
+  }
+
+  List<String> _missingShippingAddressFields() {
+    final payload = _buildShippingAddressPayload();
+    final missing = <String>[];
+
+    if ((payload['address']?.toString().trim() ?? '').isEmpty) {
+      missing.add('street address');
+    }
+    if ((payload['city']?.toString().trim() ?? '').isEmpty) {
+      missing.add('city');
+    }
+    if ((payload['postalCode']?.toString().trim() ?? '').isEmpty) {
+      missing.add('postal code');
+    }
+    if ((payload['country']?.toString().trim() ?? '').isEmpty) {
+      missing.add('country');
+    }
+
+    return missing;
   }
 
   void _activateManualAddress() {
