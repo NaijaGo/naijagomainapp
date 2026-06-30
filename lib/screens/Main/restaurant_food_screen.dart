@@ -60,11 +60,13 @@ class _RestaurantVendorGroup {
 class RestaurantFoodScreen extends StatefulWidget {
   final String? initialVendorId;
   final String? initialVendorName;
+  final VoidCallback? onReturnToDashboard;
 
   const RestaurantFoodScreen({
     super.key,
     this.initialVendorId,
     this.initialVendorName,
+    this.onReturnToDashboard,
   });
 
   @override
@@ -405,10 +407,25 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
     _clearSelectedRestaurant();
   }
 
+  Future<void> _returnToDashboard() async {
+    final didPop = await Navigator.of(context).maybePop();
+    if (!mounted) return;
+
+    if (widget.onReturnToDashboard != null) {
+      widget.onReturnToDashboard!();
+      return;
+    }
+
+    if (!didPop) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final inVendorMenu = _selectedVendorId != null;
     final canPopRoute = Navigator.of(context).canPop();
+    final canReturnToDashboard = widget.onReturnToDashboard != null;
     return PopScope(
       canPop: !inVendorMenu || _openedDirectlyToVendor,
       onPopInvokedWithResult: (didPop, _) {
@@ -419,7 +436,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
       child: Scaffold(
         backgroundColor: softGrey,
         appBar: AppBar(
-          leading: inVendorMenu || canPopRoute
+          leading: inVendorMenu || canPopRoute || canReturnToDashboard
               ? IconButton(
                   icon: const Icon(Icons.arrow_back_rounded),
                   onPressed: () async {
@@ -428,10 +445,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                       return;
                     }
 
-                    final didPop = await Navigator.of(context).maybePop();
-                    if (!didPop && mounted && inVendorMenu) {
-                      _showAllRestaurants();
-                    }
+                    await _returnToDashboard();
                   },
                 )
               : null,

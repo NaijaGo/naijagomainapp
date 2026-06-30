@@ -519,7 +519,9 @@ extension _MealMomentCopy on _MealMoment {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onReturnToDashboard;
+
+  const HomeScreen({super.key, this.onReturnToDashboard});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -1072,9 +1074,13 @@ class _HomeScreenState extends State<HomeScreen> {
         'restaurantCount': _restaurantVendorProducts.length,
       },
     );
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const RestaurantFoodScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RestaurantFoodScreen(
+          onReturnToDashboard: widget.onReturnToDashboard,
+        ),
+      ),
+    );
   }
 
   Future<void> _handleCarouselSlideTap(HomeCarouselSlide slide) async {
@@ -1101,8 +1107,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'pharmacy':
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const CategoryProductsScreen(
+            builder: (_) => CategoryProductsScreen(
               category: 'Health & Beauty > Medicine',
+              onReturnToDashboard: widget.onReturnToDashboard,
             ),
           ),
         );
@@ -1111,7 +1118,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (actionValue.isNotEmpty) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => CategoryProductsScreen(category: actionValue),
+              builder: (_) => CategoryProductsScreen(
+                category: actionValue,
+                onReturnToDashboard: widget.onReturnToDashboard,
+              ),
             ),
           );
         }
@@ -1127,6 +1137,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? RestaurantFoodScreen(
                       initialVendorId: product.vendorId,
                       initialVendorName: product.displayRestaurantName,
+                      onReturnToDashboard: widget.onReturnToDashboard,
                     )
                   : ProductDetailScreen(
                       product: product,
@@ -1524,6 +1535,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 searchController: _searchController,
                 userFirstName: _userFirstName,
                 homeCategories: _homeCategories,
+                onReturnToDashboard: widget.onReturnToDashboard,
               ),
             ),
             SliverToBoxAdapter(child: _buildBannerCarousel()),
@@ -1544,6 +1556,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   customerLongitude: _customerLongitude,
                   showFlashBadge: false,
                   showNewBadge: false,
+                  onReturnToDashboard: widget.onReturnToDashboard,
                 ),
               ),
             ],
@@ -1570,6 +1583,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   customerLongitude: _customerLongitude,
                   showFlashBadge: true,
                   showNewBadge: false,
+                  onReturnToDashboard: widget.onReturnToDashboard,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
@@ -1581,7 +1595,9 @@ class _HomeScreenState extends State<HomeScreen> {
               onSeeAll: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const CategoriesScreen(),
+                    builder: (context) => CategoriesScreen(
+                      onReturnToDashboard: widget.onReturnToDashboard,
+                    ),
                   ),
                 );
               },
@@ -1600,6 +1616,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   customerLongitude: _customerLongitude,
                   showFlashBadge: false,
                   showNewBadge: true,
+                  onReturnToDashboard: widget.onReturnToDashboard,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
@@ -2105,7 +2122,11 @@ class _HomeScreenState extends State<HomeScreen> {
       child: GestureDetector(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const CategoriesScreen()),
+            MaterialPageRoute(
+              builder: (context) => CategoriesScreen(
+                onReturnToDashboard: widget.onReturnToDashboard,
+              ),
+            ),
           );
         },
         child: Container(
@@ -2229,11 +2250,13 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
   final TextEditingController searchController;
   final String userFirstName;
   final List<Map<String, String>> homeCategories;
+  final VoidCallback? onReturnToDashboard;
 
   _CollapsingSearchHeader({
     required this.searchController,
     required this.userFirstName,
     required this.homeCategories,
+    this.onReturnToDashboard,
   });
 
   void _showPharmacyOptions(BuildContext context) {
@@ -2298,8 +2321,9 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const CategoryProductsScreen(
+                      builder: (_) => CategoryProductsScreen(
                         category: 'Health & Beauty > Medicine',
+                        onReturnToDashboard: onReturnToDashboard,
                       ),
                     ),
                   );
@@ -2515,8 +2539,10 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                CategoryProductsScreen(category: query),
+                            builder: (_) => CategoryProductsScreen(
+                              category: query,
+                              onReturnToDashboard: onReturnToDashboard,
+                            ),
                           ),
                         );
                       } else {
@@ -2640,6 +2666,7 @@ class ProductListHorizontal extends StatelessWidget {
   final bool showNewBadge;
   final double? customerLatitude;
   final double? customerLongitude;
+  final VoidCallback? onReturnToDashboard;
 
   const ProductListHorizontal({
     super.key,
@@ -2649,6 +2676,7 @@ class ProductListHorizontal extends StatelessWidget {
     this.showNewBadge = false,
     this.customerLatitude,
     this.customerLongitude,
+    this.onReturnToDashboard,
   });
 
   @override
@@ -2672,6 +2700,7 @@ class ProductListHorizontal extends StatelessWidget {
               showNewBadge: showNewBadge,
               customerLatitude: customerLatitude,
               customerLongitude: customerLongitude,
+              onReturnToDashboard: onReturnToDashboard,
             ),
           );
         },
@@ -2937,6 +2966,7 @@ class ProductCard extends StatelessWidget {
   final bool showNewBadge;
   final double? customerLatitude;
   final double? customerLongitude;
+  final VoidCallback? onReturnToDashboard;
 
   const ProductCard({
     super.key,
@@ -2946,6 +2976,7 @@ class ProductCard extends StatelessWidget {
     this.showNewBadge = false,
     this.customerLatitude,
     this.customerLongitude,
+    this.onReturnToDashboard,
   });
 
   String _formatPrice(double price) {
@@ -3008,6 +3039,7 @@ class ProductCard extends StatelessWidget {
                     ? RestaurantFoodScreen(
                         initialVendorId: product.vendorId,
                         initialVendorName: product.displayRestaurantName,
+                        onReturnToDashboard: onReturnToDashboard,
                       )
                     : ProductDetailScreen(product: product, heroTag: heroTag),
               ),

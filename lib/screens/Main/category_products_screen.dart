@@ -23,8 +23,13 @@ const Color lightGrey = AppTheme.mutedText;
 
 class CategoryProductsScreen extends StatefulWidget {
   final String category;
+  final VoidCallback? onReturnToDashboard;
 
-  const CategoryProductsScreen({super.key, required this.category});
+  const CategoryProductsScreen({
+    super.key,
+    required this.category,
+    this.onReturnToDashboard,
+  });
 
   @override
   State<CategoryProductsScreen> createState() => _CategoryProductsScreenState();
@@ -354,6 +359,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                   ? RestaurantFoodScreen(
                       initialVendorId: product.vendorId,
                       initialVendorName: product.displayRestaurantName,
+                      onReturnToDashboard: widget.onReturnToDashboard,
                     )
                   : ProductDetailScreen(product: product, heroTag: heroTag),
             ),

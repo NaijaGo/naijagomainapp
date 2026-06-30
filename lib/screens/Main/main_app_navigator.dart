@@ -235,8 +235,11 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   }
 
   List<Widget> get _widgetOptions {
-    const homeScreen = HomeScreen();
-    const categoriesScreen = CategoriesScreen(showAppBar: false);
+    final homeScreen = HomeScreen(onReturnToDashboard: _returnToDashboard);
+    final categoriesScreen = CategoriesScreen(
+      showAppBar: false,
+      onReturnToDashboard: _returnToDashboard,
+    );
 
     final protectedCartScreen = GuestPlaceholderScreen(
       title: 'Shopping Cart',
@@ -352,6 +355,11 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  void _returnToDashboard() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _onItemTapped(0);
   }
 
   Future<void> _connectUserNotifications(String? userId) async {

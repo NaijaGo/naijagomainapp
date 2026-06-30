@@ -16,8 +16,13 @@ const Color lightGrey = AppTheme.mutedText;
 
 class CategoriesScreen extends StatefulWidget {
   final bool showAppBar;
+  final VoidCallback? onReturnToDashboard;
 
-  const CategoriesScreen({super.key, this.showAppBar = true});
+  const CategoriesScreen({
+    super.key,
+    this.showAppBar = true,
+    this.onReturnToDashboard,
+  });
 
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
@@ -617,8 +622,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const CategoryProductsScreen(
+                      builder: (_) => CategoryProductsScreen(
                         category: 'Health & Beauty > Medicine',
+                        onReturnToDashboard: widget.onReturnToDashboard,
                       ),
                     ),
                   );
@@ -708,7 +714,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CategoryProductsScreen(category: categoryString),
+        builder: (_) => CategoryProductsScreen(
+          category: categoryString,
+          onReturnToDashboard: widget.onReturnToDashboard,
+        ),
       ),
     );
   }
