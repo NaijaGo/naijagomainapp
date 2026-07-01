@@ -1204,7 +1204,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'Flutterwave client response → txRef: $txRef | status: ${chargeResponse.status ?? "—"} | success: ${chargeResponse.success ?? "—"} | full: ${chargeResponse.toJson()}',
         );
 
-        // Always try to confirm with backend when we have txRef
+        final paymentSucceeded =
+            chargeResponse.success == true &&
+            (chargeResponse.status?.toLowerCase() == 'successful' ||
+                chargeResponse.status?.toLowerCase() == 'success');
+
+        if (!paymentSucceeded) {
+          _errorMessage = chargeResponse.status?.toLowerCase() == 'cancelled'
+              ? 'Payment was cancelled.'
+              : 'Payment was not completed. Please try again.';
+          _showSnackBar(_errorMessage!, isError: true);
+          return;
+        }
+
+        // Confirm with backend only after Flutterwave reports success.
         final paymentRef = txRef; // prefer txRef — more reliable from client
 
         final payUrl = Uri.parse('$baseUrl/api/orders/$orderId/pay');
