@@ -11,7 +11,7 @@ class PaymentService {
   // Flutterwave public keys are client-side identifiers. Keep secret keys on
   // the backend only.
   static const String _publicKeyFallback =
-      'FLWPUBK-7b0e2085af482499a6b524e4360e938e-X';
+      'FLWPUBK-772dd96b7e735ec7acf62240aaaf1989-X';
   static const String _testModeFromBuild = String.fromEnvironment(
     'FLUTTERWAVE_TEST_MODE',
   );

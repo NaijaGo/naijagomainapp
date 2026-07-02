@@ -73,7 +73,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     if (_customerLatitude != null && _customerLongitude != null) {
       query['lat'] = _customerLatitude!.toString();
       query['lng'] = _customerLongitude!.toString();
-      query['radiusKm'] = '15';
+      query['radiusKm'] = temporaryTestDeliveryRadiusKm.toStringAsFixed(0);
     }
     query['limit'] = '100';
 

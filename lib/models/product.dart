@@ -1,6 +1,8 @@
 // lib/models/product.dart
 import 'dart:math' as math;
 
+const double temporaryTestDeliveryRadiusKm = 1000;
+
 class Product {
   final String id;
   final String name;
@@ -48,7 +50,7 @@ class Product {
     this.vendorOperatingHours = const [],
     this.vendorTemporarilyClosed = false,
     this.vendorClosureReason,
-    this.deliveryRadiusKm = 15,
+    this.deliveryRadiusKm = temporaryTestDeliveryRadiusKm,
     this.prepTimeMinutes = 30,
     this.restaurantName,
     this.foodInformation,
@@ -89,7 +91,7 @@ class Product {
     List<Map<String, dynamic>> vendorOperatingHours = const [];
     bool vendorTemporarilyClosed = false;
     String? vendorClosureReason;
-    double deliveryRadiusKm = 15;
+    double deliveryRadiusKm = temporaryTestDeliveryRadiusKm;
     int prepTimeMinutes = 30;
 
     final productLocation = json['productLocation'] is Map
@@ -115,8 +117,11 @@ class Product {
           .toList();
       vendorTemporarilyClosed = vendor['isTemporarilyClosed'] == true;
       vendorClosureReason = vendor['temporaryClosureReason']?.toString();
-      deliveryRadiusKm =
-          _parseDouble(vendor['deliveryRadiusKm']) ?? deliveryRadiusKm;
+      final vendorDeliveryRadius = _parseDouble(vendor['deliveryRadiusKm']);
+      deliveryRadiusKm = math.max(
+        vendorDeliveryRadius ?? deliveryRadiusKm,
+        temporaryTestDeliveryRadiusKm,
+      );
       prepTimeMinutes =
           int.tryParse(vendor['prepTimeMinutes']?.toString() ?? '') ??
           prepTimeMinutes;

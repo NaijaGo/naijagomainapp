@@ -451,7 +451,7 @@ class ProductService {
   Future<List<Product>> fetchRestaurantProducts({
     double? latitude,
     double? longitude,
-    double radiusKm = 15,
+    double radiusKm = temporaryTestDeliveryRadiusKm,
   }) {
     final query = <String, String>{};
     if (latitude != null && longitude != null) {
@@ -879,7 +879,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 product.vendorLatitude!,
                 product.vendorLongitude!,
               ) <=
-              15;
+              temporaryTestDeliveryRadiusKm;
         }).toList()..sort((a, b) {
           final aDistance = _distanceKm(
             _customerLatitude!,

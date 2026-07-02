@@ -119,7 +119,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
     if (_customerLatitude != null && _customerLongitude != null) {
       query['lat'] = _customerLatitude!.toString();
       query['lng'] = _customerLongitude!.toString();
-      query['radiusKm'] = '15';
+      query['radiusKm'] = temporaryTestDeliveryRadiusKm.toStringAsFixed(0);
       query['sort'] = 'nearby';
     }
     query['limit'] = '100';
