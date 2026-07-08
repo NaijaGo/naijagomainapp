@@ -29,33 +29,79 @@ class PaymentService {
 
   String? get publicKey {
     if (_publicKeyFromBuild.trim().isNotEmpty) {
-      return _publicKeyFromBuild.trim();
+      return _normalizeEnvValue(_publicKeyFromBuild);
     }
 
     final envValue = _readEnv('FLUTTERWAVE_PUBLIC_KEY')?.trim();
     if (envValue != null && envValue.isNotEmpty) {
-      return envValue;
+      return _normalizeEnvValue(envValue);
     }
 
     return _publicKeyFallback;
   }
 
   bool get isTestMode {
-    final rawValue = _testModeFromBuild.trim().isNotEmpty
-        ? _testModeFromBuild
-        : _readEnv('FLUTTERWAVE_TEST_MODE') ?? 'true';
+    final rawValue = _normalizeEnvValue(
+      _testModeFromBuild.trim().isNotEmpty
+          ? _testModeFromBuild
+          : _readEnv('FLUTTERWAVE_TEST_MODE') ?? 'false',
+    );
     return rawValue.toLowerCase() == 'true';
   }
 
   String get redirectUrl {
     if (_redirectUrlFromBuild.trim().isNotEmpty) {
-      return _redirectUrlFromBuild.trim();
+      return _normalizeEnvValue(_redirectUrlFromBuild);
     }
 
-    final envValue = _readEnv('FLUTTERWAVE_REDIRECT_URL')?.trim();
-    return envValue == null || envValue.isEmpty
-        ? 'https://naijago.com/payment-redirect'
-        : envValue;
+    final envValue = _normalizeEnvValue(_readEnv('FLUTTERWAVE_REDIRECT_URL'));
+    return envValue.isEmpty ? 'https://naijago.com/payment-redirect' : envValue;
+  }
+
+  String _normalizeEnvValue(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.length >= 2 &&
+        ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+            (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
+      return trimmed.substring(1, trimmed.length - 1).trim();
+    }
+    return trimmed;
+  }
+
+  String? _publicKeyConfigError(String? key) {
+    final normalized = _normalizeEnvValue(key);
+    if (normalized.isEmpty) {
+      return 'Missing FLUTTERWAVE_PUBLIC_KEY.';
+    }
+
+    if (normalized.contains(' ') ||
+        normalized.contains('\n') ||
+        normalized.contains('\r')) {
+      return 'FLUTTERWAVE_PUBLIC_KEY contains whitespace.';
+    }
+
+    if (normalized.startsWith('FLWSECK') ||
+        normalized.startsWith('FLWSECK_TEST')) {
+      return 'FLUTTERWAVE_PUBLIC_KEY is set to a secret key. Use the public key from Flutterwave instead.';
+    }
+
+    final isTestKey = normalized.startsWith('FLWPUBK_TEST-');
+    final isLiveKey =
+        normalized.startsWith('FLWPUBK-') &&
+        !normalized.startsWith('FLWPUBK_TEST-');
+    if (!isTestKey && !isLiveKey) {
+      return 'FLUTTERWAVE_PUBLIC_KEY has an invalid format. Expected FLWPUBK_TEST-... for test mode or FLWPUBK-... for live mode.';
+    }
+
+    if (isTestMode && !isTestKey) {
+      return 'FLUTTERWAVE_TEST_MODE is true, but FLUTTERWAVE_PUBLIC_KEY is not a test public key.';
+    }
+
+    if (!isTestMode && !isLiveKey) {
+      return 'FLUTTERWAVE_TEST_MODE is false, but FLUTTERWAVE_PUBLIC_KEY is not a live public key.';
+    }
+
+    return null;
   }
 
   Future<ChargeResponse?> startFlutterwavePayment({
@@ -68,10 +114,9 @@ class PaymentService {
     String title = 'NaijaGo Payment',
   }) async {
     final configuredPublicKey = publicKey;
-    if (configuredPublicKey == null || configuredPublicKey.isEmpty) {
-      debugPrint(
-        'Missing FLUTTERWAVE_PUBLIC_KEY. Set it in .env for local runs or pass it with --dart-define in CI.',
-      );
+    final configError = _publicKeyConfigError(configuredPublicKey);
+    if (configError != null) {
+      debugPrint('$configError Set it with --dart-define in CI/local builds.');
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Payment is not configured. Please contact support.'),
@@ -80,9 +125,10 @@ class PaymentService {
       return null;
     }
 
+    final flutterwavePublicKey = configuredPublicKey!;
     final txRef = 'FLW_${const Uuid().v4()}';
     final flutterwave = Flutterwave(
-      publicKey: configuredPublicKey,
+      publicKey: flutterwavePublicKey,
       currency: 'NGN',
       redirectUrl: redirectUrl,
       txRef: txRef,
