@@ -407,25 +407,30 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
     _clearSelectedRestaurant();
   }
 
-  Future<void> _returnToDashboard() async {
-    final didPop = await Navigator.of(context).maybePop();
-    if (!mounted) return;
-
-    if (widget.onReturnToDashboard != null) {
-      widget.onReturnToDashboard!();
+  void _handleBackPressed() {
+    if (_selectedVendorId != null && !_openedDirectlyToVendor) {
+      _showAllRestaurants();
       return;
     }
 
-    if (!didPop) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
     }
+
+    final returnToDashboard = widget.onReturnToDashboard;
+    if (returnToDashboard != null) {
+      returnToDashboard();
+      return;
+    }
+
+    navigator.popUntil((route) => route.isFirst);
   }
 
   @override
   Widget build(BuildContext context) {
     final inVendorMenu = _selectedVendorId != null;
-    final canPopRoute = Navigator.of(context).canPop();
-    final canReturnToDashboard = widget.onReturnToDashboard != null;
     return PopScope(
       canPop: !inVendorMenu || _openedDirectlyToVendor,
       onPopInvokedWithResult: (didPop, _) {
@@ -436,19 +441,13 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
       child: Scaffold(
         backgroundColor: softGrey,
         appBar: AppBar(
-          leading: inVendorMenu || canPopRoute || canReturnToDashboard
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: () async {
-                    if (inVendorMenu && !_openedDirectlyToVendor) {
-                      _showAllRestaurants();
-                      return;
-                    }
-
-                    await _returnToDashboard();
-                  },
-                )
-              : null,
+          leading: IconButton(
+            tooltip: inVendorMenu && !_openedDirectlyToVendor
+                ? 'All restaurants'
+                : 'Back',
+            icon: const Icon(Icons.arrow_back_rounded, color: secondaryBlack),
+            onPressed: _handleBackPressed,
+          ),
           title: Text(
             inVendorMenu
                 ? (_selectedVendorName ?? 'Restaurant menu')

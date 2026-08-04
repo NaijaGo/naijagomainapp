@@ -1171,54 +1171,45 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         final fullName = prefs.getString('fullName') ?? 'Test User';
         final phone = prefs.getString('phoneNumber') ?? '08012345678';
 
+        final intentResp = await http.post(
+          Uri.parse('$baseUrl/api/orders/$orderId/payment-intent'),
+          headers: {
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Authorization': 'Bearer $token',
+          },
+        );
+        final intentData = _safeJson(intentResp.body);
+        if (intentResp.statusCode != 200 && intentResp.statusCode != 201) {
+          _errorMessage = intentData['message'] ?? 'Unable to prepare payment';
+          _showSnackBar(_errorMessage!, isError: true);
+          return;
+        }
+        final txRef = intentData['tx_ref'] as String?;
+        final paymentAmount = (intentData['amount'] as num?)?.toDouble();
+        if (txRef == null || txRef.trim().isEmpty || paymentAmount == null) {
+          _showSnackBar('Invalid payment details received.', isError: true);
+          return;
+        }
+
         final paymentService = PaymentService();
         if (!mounted) return;
         final chargeResponse = await paymentService.startFlutterwavePayment(
           context: context,
-          amount: totalPrice,
+          amount: paymentAmount,
           email: userEmail,
           name: fullName,
           phoneNumber: phone,
+          transactionReference: txRef,
         );
-
-        if (chargeResponse == null) {
-          _errorMessage = 'Payment not initiated or cancelled';
-          _showSnackBar(_errorMessage!, isError: true);
-          return;
-        }
-
-        final txRef = chargeResponse.txRef;
-
-        if (txRef == null || txRef.trim().isEmpty) {
-          _errorMessage =
-              'Missing transaction reference – likely cancelled early';
-          _showSnackBar(_errorMessage!, isError: true);
-          debugPrint(
-            'No txRef → full ChargeResponse: ${chargeResponse.toJson()}',
-          );
-          return;
-        }
 
         // Log what we actually got from Flutterwave client-side
         debugPrint(
-          'Flutterwave client response → txRef: $txRef | status: ${chargeResponse.status ?? "—"} | success: ${chargeResponse.success ?? "—"} | full: ${chargeResponse.toJson()}',
+          'Flutterwave client response → txRef: $txRef | status: ${chargeResponse?.status ?? "—"} | success: ${chargeResponse?.success ?? "—"} | full: ${chargeResponse?.toJson()}',
         );
 
-        final paymentSucceeded =
-            chargeResponse.success == true &&
-            (chargeResponse.status?.toLowerCase() == 'successful' ||
-                chargeResponse.status?.toLowerCase() == 'success');
-
-        if (!paymentSucceeded) {
-          _errorMessage = chargeResponse.status?.toLowerCase() == 'cancelled'
-              ? 'Payment was cancelled.'
-              : 'Payment was not completed. Please try again.';
-          _showSnackBar(_errorMessage!, isError: true);
-          return;
-        }
-
-        // Confirm with backend only after Flutterwave reports success.
-        final paymentRef = txRef; // prefer txRef — more reliable from client
+        // The SDK callback is advisory. The authenticated backend is the
+        // authority even when the browser reports cancelled or returns null.
+        final paymentRef = txRef;
 
         final payUrl = Uri.parse('$baseUrl/api/orders/$orderId/pay');
         final payResp = await http.put(
@@ -1229,7 +1220,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           },
           body: jsonEncode({
             'transaction_id': paymentRef,
-            'status': chargeResponse.status ?? 'unknown_from_client',
+            'status': chargeResponse?.status ?? 'unknown_from_client',
             'update_time': DateTime.now().toIso8601String(),
             'email_address': userEmail,
           }),
@@ -1241,6 +1232,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           // ────────────────────────────────────────────────────────────────
           _successMessage =
               'Order created — payment confirmation in progress. You will be notified shortly.';
+          cartProvider.clearCart();
+          _showSnackBar(_successMessage!);
+          widget.onOrderSuccess();
+          if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+        } else if (payResp.statusCode == 202) {
+          _successMessage =
+              'Payment confirmation is pending. Please do not pay again.';
           cartProvider.clearCart();
           _showSnackBar(_successMessage!);
           widget.onOrderSuccess();

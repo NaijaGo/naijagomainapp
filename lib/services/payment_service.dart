@@ -111,6 +111,7 @@ class PaymentService {
     required String name,
     required String phoneNumber,
     String? userId,
+    String? transactionReference,
     String title = 'NaijaGo Payment',
   }) async {
     final configuredPublicKey = publicKey;
@@ -126,7 +127,10 @@ class PaymentService {
     }
 
     final flutterwavePublicKey = configuredPublicKey!;
-    final txRef = 'FLW_${const Uuid().v4()}';
+    final providedReference = transactionReference?.trim() ?? '';
+    final txRef = providedReference.isNotEmpty
+        ? providedReference
+        : 'FLW_${const Uuid().v4()}';
     final flutterwave = Flutterwave(
       publicKey: flutterwavePublicKey,
       currency: 'NGN',
