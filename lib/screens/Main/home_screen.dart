@@ -24,6 +24,7 @@ import '../../services/food_readiness_campaign_service.dart';
 import '../../services/home_carousel_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
+import '../../widgets/product_social_proof.dart';
 import 'categories_screen.dart'
     hide
         accentGreen,
@@ -3234,6 +3235,8 @@ class ProductCard extends StatelessWidget {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 4),
+                        ProductSocialProof(product: product),
                         const SizedBox(height: 4),
                         Row(
                           children: [

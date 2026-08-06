@@ -9,6 +9,7 @@ import '../../constants.dart';
 import '../../models/product.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tech_glow_background.dart';
+import '../../widgets/product_social_proof.dart';
 import 'product_detail_screen.dart';
 
 // Defined custom colors for consistency and enchantment
@@ -270,6 +271,8 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 5),
+                                ProductSocialProof(product: product),
                                 const SizedBox(height: 8),
                                 Text(
                                   '₦${product.price.toStringAsFixed(2)}',

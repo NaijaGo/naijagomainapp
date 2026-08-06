@@ -10,6 +10,7 @@ import 'package:shimmer/shimmer.dart';
 
 import '../../constants.dart';
 import '../../models/product.dart';
+import '../../widgets/product_social_proof.dart';
 import '../../providers/cart_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
@@ -1104,6 +1105,8 @@ class _RecentlyViewedProductCard extends StatelessWidget {
                           height: 1.3,
                         ),
                       ),
+                      const SizedBox(height: 5),
+                      ProductSocialProof(product: product),
                       const SizedBox(height: 8),
                       Text(
                         _formatPrice(product.price),

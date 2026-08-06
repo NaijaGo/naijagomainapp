@@ -10,6 +10,7 @@ import '../../models/product.dart';
 import '../../services/customer_location_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
+import '../../widgets/product_social_proof.dart';
 import 'product_detail_screen.dart';
 import 'restaurant_food_screen.dart';
 
@@ -41,6 +42,18 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
   String? _errorMessage;
   double? _customerLatitude;
   double? _customerLongitude;
+  double? _minimumPrice;
+  double? _maximumPrice;
+  double _minimumRating = 0;
+  bool _inStockOnly = false;
+  String _sort = 'newest';
+
+  int get _activeFilterCount =>
+      (_minimumPrice != null ? 1 : 0) +
+      (_maximumPrice != null ? 1 : 0) +
+      (_minimumRating > 0 ? 1 : 0) +
+      (_inStockOnly ? 1 : 0) +
+      (_sort != 'newest' ? 1 : 0);
 
   @override
   void initState() {
@@ -76,6 +89,11 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       query['radiusKm'] = temporaryTestDeliveryRadiusKm.toStringAsFixed(0);
     }
     query['limit'] = '100';
+    if (_minimumPrice != null) query['minPrice'] = _minimumPrice!.toString();
+    if (_maximumPrice != null) query['maxPrice'] = _maximumPrice!.toString();
+    if (_minimumRating > 0) query['minRating'] = _minimumRating.toString();
+    if (_inStockOnly) query['inStock'] = 'true';
+    query['sort'] = _sort;
 
     final endpoint = isRestaurantCategory
         ? '/api/products/restaurants'
@@ -120,6 +138,151 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     final url = product.imageUrls.first;
     if (url.startsWith('http')) return url;
     return '$baseUrl$url';
+  }
+
+  Future<void> _showFilters() async {
+    final minimumController = TextEditingController(
+      text: _minimumPrice?.toStringAsFixed(0) ?? '',
+    );
+    final maximumController = TextEditingController(
+      text: _maximumPrice?.toStringAsFixed(0) ?? '',
+    );
+    var draftRating = _minimumRating;
+    var draftInStock = _inStockOnly;
+    var draftSort = _sort;
+
+    final apply = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.viewInsetsOf(context).bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Filter and sort',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: minimumController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Minimum budget',
+                          prefixText: '₦ ',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: maximumController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Maximum budget',
+                          prefixText: '₦ ',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                DropdownButtonFormField<String>(
+                  initialValue: draftSort,
+                  decoration: const InputDecoration(labelText: 'Sort results'),
+                  items: const [
+                    DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                    DropdownMenuItem(
+                      value: 'popular',
+                      child: Text('Most popular'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'best_rated',
+                      child: Text('Best rated'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'price_low',
+                      child: Text('Price: low to high'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'price_high',
+                      child: Text('Price: high to low'),
+                    ),
+                  ],
+                  onChanged: (value) => draftSort = value ?? 'newest',
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Minimum rating: ${draftRating == 0 ? 'Any' : '${draftRating.toStringAsFixed(0)}+'}',
+                ),
+                Slider(
+                  value: draftRating,
+                  min: 0,
+                  max: 5,
+                  divisions: 5,
+                  onChanged: (value) =>
+                      setSheetState(() => draftRating = value),
+                ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('In-stock products only'),
+                  value: draftInStock,
+                  onChanged: (value) =>
+                      setSheetState(() => draftInStock = value),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        minimumController.clear();
+                        maximumController.clear();
+                        setSheetState(() {
+                          draftRating = 0;
+                          draftInStock = false;
+                          draftSort = 'newest';
+                        });
+                      },
+                      child: const Text('Clear'),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      child: const Text('Apply filters'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (apply != true || !mounted) return;
+    setState(() {
+      _minimumPrice = double.tryParse(minimumController.text.trim());
+      _maximumPrice = double.tryParse(maximumController.text.trim());
+      _minimumRating = draftRating;
+      _inStockOnly = draftInStock;
+      _sort = draftSort;
+    });
+    await _fetchFilteredProducts();
   }
 
   Widget _buildLoadingState() {
@@ -450,6 +613,8 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                           height: 1.3,
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      ProductSocialProof(product: product),
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -660,6 +825,41 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
             ),
           ],
         ),
+        actions: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                tooltip: 'Filter and sort',
+                onPressed: _showFilters,
+                icon: const Icon(Icons.tune_rounded),
+              ),
+              if (_activeFilterCount > 0)
+                Positioned(
+                  right: 5,
+                  top: 5,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: dangerRed,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$_activeFilterCount',
+                      style: const TextStyle(
+                        color: white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: borderGrey.withValues(alpha: 0.7)),

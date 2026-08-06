@@ -281,9 +281,15 @@ class _LoginScreenState extends State<LoginScreen> {
         _showSnack(responseData['message']?.toString() ?? 'Login successful!');
         widget.onLoginSuccess();
       } else if (response.statusCode == 403 &&
-          responseData['message'] ==
-              'New device detected. Please check your email to verify this device.') {
-        _showSnack(responseData['message'].toString());
+          responseData['code'] == 'DEVICE_VERIFICATION_REQUIRED') {
+        setState(() {
+          _errorMessage = null;
+        });
+        await _showDeviceVerificationDialog(
+          responseData['message']?.toString() ??
+              'New device detected. Please check your email to verify it.',
+          responseData['email']?.toString() ?? email,
+        );
       } else {
         setState(() {
           _errorMessage =
@@ -315,6 +321,46 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: secondaryBlack,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
+  Future<void> _showDeviceVerificationDialog(
+    String message,
+    String maskedEmail,
+  ) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        icon: const Icon(
+          Icons.mark_email_read_outlined,
+          color: primaryNavy,
+          size: 42,
+        ),
+        title: const Text('Verify this new device'),
+        content: Text(
+          '$message\n\nVerification was sent to $maskedEmail. After opening the link, return here and tap “Try login again”.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _loginRequest(
+                _emailController.text.trim(),
+                _passwordController.text,
+              );
+            },
+            child: const Text('Try login again'),
+          ),
+        ],
       ),
     );
   }

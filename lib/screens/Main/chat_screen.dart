@@ -38,7 +38,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
@@ -47,6 +47,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   io.Socket? _socket;
   Timer? _joinTimeoutTimer;
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  bool _isLiveConnected = false;
   String? _socketAuthToken;
   String? _sessionId;
   bool _isAssignedToPharmacist = false;
@@ -69,8 +72,17 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller.addListener(_handleComposerChanged);
     _bootstrapConversation();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _sessionId != null) {
+      _refreshHistoryFromRest();
+      _scheduleSocketReconnect(immediate: true);
+    }
   }
 
   void _handleComposerChanged() {
@@ -101,6 +113,7 @@ class _ChatScreenState extends State<ChatScreen> {
         });
         return;
       }
+      await _refreshHistoryFromRest(token: token);
       _connectSocket(token);
       return;
     }
@@ -204,6 +217,7 @@ class _ChatScreenState extends State<ChatScreen> {
           targetId: _sessionId,
           metadata: {'assignedToPharmacist': _isAssignedToPharmacist},
         );
+        await _refreshHistoryFromRest(token: token);
         _connectSocket(token);
       } else if (res.statusCode == 402) {
         _addSystemMessage(
@@ -505,6 +519,9 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     _socket!.onConnect((_) {
+      _reconnectTimer?.cancel();
+      _reconnectAttempt = 0;
+      if (mounted) setState(() => _isLiveConnected = true);
       _joinTimeoutTimer?.cancel();
       if (_sessionId == null) {
         _addSystemMessage(
@@ -577,7 +594,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socket!.onConnectError((err) {
       debugPrint('Socket connect error: $err');
-      if (!mounted || !_isBootstrapping) return;
+      if (!mounted) return;
+      setState(() => _isLiveConnected = false);
+      _scheduleSocketReconnect();
+      if (!_isBootstrapping) return;
       _joinTimeoutTimer?.cancel();
       _addSystemMessage(
         'Could not connect to live chat right now. Please check your network and try again.',
@@ -626,6 +646,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       setState(() {
         _globalPharmacistOnline = false;
+        _isLiveConnected = false;
       });
       _scheduleSocketReconnect();
     });
@@ -784,18 +805,54 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
-  void _scheduleSocketReconnect() {
+  void _scheduleSocketReconnect({bool immediate = false}) {
     final socket = _socket;
     if (socket == null || socket.connected) return;
+    if (_reconnectTimer?.isActive == true) return;
+    final boundedAttempt = _reconnectAttempt.clamp(0, 5).toInt();
+    final delaySeconds = immediate ? 0 : (1 << boundedAttempt);
+    _reconnectAttempt += 1;
+    _reconnectTimer = Timer(
+      Duration(seconds: delaySeconds.clamp(0, 30).toInt()),
+      () {
+        if (!mounted || socket.connected) return;
+        try {
+          socket.connect();
+        } catch (error) {
+          debugPrint('Pharmacy chat reconnect failed: $error');
+          _scheduleSocketReconnect();
+        }
+      },
+    );
+  }
 
-    Future<void>.delayed(const Duration(milliseconds: 700), () {
-      if (!mounted || socket.connected) return;
-      try {
-        socket.connect();
-      } catch (error) {
-        debugPrint('Pharmacy chat reconnect failed: $error');
-      }
-    });
+  Future<void> _refreshHistoryFromRest({String? token}) async {
+    final sessionId = _sessionId;
+    if (sessionId == null || !mounted) return;
+    try {
+      final authToken = token ?? await _getAuthToken();
+      if (authToken == null) return;
+      final response = await http.get(
+        Uri.parse('$_apiUrl/api/chat/$sessionId/messages'),
+        headers: {'Authorization': 'Bearer $authToken'},
+      );
+      if (response.statusCode != 200 || !mounted) return;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final messages = data['messages'] as List? ?? const [];
+      final session = data['session'] as Map? ?? const {};
+      setState(() {
+        _isAssignedToPharmacist =
+            widget.isPharmacistView || session['pharmacist'] != null;
+        for (final message in messages.whereType<Map>()) {
+          _appendMessageIfNew(
+            _formatSocketMessage(Map<String, dynamic>.from(message)),
+          );
+        }
+      });
+      _scrollToBottom();
+    } catch (error) {
+      debugPrint('Pharmacy chat history refresh failed: $error');
+    }
   }
 
   void _sendInitialConsultationTopicIfNeeded() {
@@ -1333,8 +1390,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_handleComposerChanged);
     _joinTimeoutTimer?.cancel();
+    _reconnectTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _socket?.disconnect();
@@ -1359,6 +1418,31 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: _buildConversationHeader(),
               ),
+              if (_sessionId != null)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 7,
+                  ),
+                  color: _isLiveConnected
+                      ? PharmacyUi.mint.withValues(alpha: 0.65)
+                      : const Color(0xFFFFF4E5),
+                  child: Text(
+                    _isLiveConnected
+                        ? 'Live connection active'
+                        : 'Reconnecting… Messages will be safely retried.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _isLiveConnected
+                          ? PharmacyUi.teal
+                          : const Color(0xFF9A4B00),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               Expanded(
                 child:
                     _sessionId == null &&

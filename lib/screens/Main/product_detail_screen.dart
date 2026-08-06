@@ -9,6 +9,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../../constants.dart';
 import '../../models/product.dart';
+import '../../widgets/product_social_proof.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/customer_location_service.dart';
 import 'chat_screen.dart';
@@ -1639,6 +1640,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       color: deepNavyBlue,
                     ),
                   ),
+                  const SizedBox(height: 5),
+                  ProductSocialProof(product: product),
                   const SizedBox(height: 4),
                   Text(
                     _formatPrice(product.price),
