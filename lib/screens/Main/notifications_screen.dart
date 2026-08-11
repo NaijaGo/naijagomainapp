@@ -105,7 +105,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       setState(() {
         _markingIds.remove(notificationId);
-        _errorMessage = 'An error occurred: $error';
+        _errorMessage = serverConnectionHelpMessage;
       });
     }
   }

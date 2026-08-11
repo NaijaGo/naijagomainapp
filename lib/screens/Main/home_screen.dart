@@ -225,24 +225,9 @@ class _SearchScreenState extends State<SearchScreen> {
       }
     } catch (e) {
       debugPrint('Search error: $e');
-      String friendlyMessage = 'An error occurred while searching';
-
-      if (e.toString().contains('404')) {
-        friendlyMessage =
-            'Search feature is not available yet (endpoint missing)';
-      } else if (e.toString().contains('500') ||
-          e.toString().contains('Server error')) {
-        friendlyMessage =
-            'Server is having issues right now... please try again in 30 seconds';
-      } else if (e.toString().contains('timeout') ||
-          e.toString().contains('Connection')) {
-        friendlyMessage =
-            'Connection problem. Server might be waking up — try again in 15–30 seconds';
-      }
-
       if (mounted) {
         setState(() {
-          _errorMessage = '$friendlyMessage\n\nDetails: $e';
+          _errorMessage = serverConnectionHelpMessage;
         });
       }
     } finally {

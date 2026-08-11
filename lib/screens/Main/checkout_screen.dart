@@ -394,7 +394,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Network error calculating fees: $e');
+      setState(() => _errorMessage = serverConnectionHelpMessage);
       debugPrint('Summary fetch error: $e');
     } finally {
       if (mounted) {
@@ -1264,7 +1264,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }
       }
     } catch (e, stack) {
-      _errorMessage = 'Error: $e';
+      _errorMessage = serverConnectionHelpMessage;
       _showSnackBar('Failed to place order. Try again.', isError: true);
       debugPrint('Place order error: $e\n$stack');
     } finally {

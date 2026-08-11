@@ -125,7 +125,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Please check your connection and try again.';
+        _errorMessage = serverConnectionHelpMessage;
       });
     }
   }

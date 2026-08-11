@@ -192,8 +192,7 @@ class _AccountScreenState extends State<AccountScreen>
       }
     } catch (e) {
       setState(() {
-        _errorMessage =
-            'An error occurred: $e. Please check your network connection.';
+        _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Fetch user data network error: $e');
     } finally {
@@ -212,7 +211,9 @@ class _AccountScreenState extends State<AccountScreen>
     final String? token = prefs.getString('jwt_token');
 
     if (token == null || token.isEmpty) {
-      _showSupportSnackBar('Authentication token not found. Please log in again.');
+      _showSupportSnackBar(
+        'Authentication token not found. Please log in again.',
+      );
       return;
     }
 
@@ -258,7 +259,9 @@ class _AccountScreenState extends State<AccountScreen>
       }
     } catch (e) {
       debugPrint('Notification preference update error: $e');
-      _showSupportSnackBar('Unable to update notification preferences right now.');
+      _showSupportSnackBar(
+        'Unable to update notification preferences right now.',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSavingNotificationPreferences = false);
@@ -328,7 +331,9 @@ class _AccountScreenState extends State<AccountScreen>
                               Text(
                                 'Choose how NaijaGo should alert you.',
                                 style: TextStyle(
-                                  color: color.onSurface.withValues(alpha: 0.62),
+                                  color: color.onSurface.withValues(
+                                    alpha: 0.62,
+                                  ),
                                   fontSize: 13,
                                 ),
                               ),
@@ -369,10 +374,10 @@ class _AccountScreenState extends State<AccountScreen>
                         onPressed: _isSavingNotificationPreferences
                             ? null
                             : () => _saveNotificationPreferences(
-                                  orderUpdates: orderUpdates,
-                                  promotions: promotions,
-                                  priceAlerts: priceAlerts,
-                                ),
+                                orderUpdates: orderUpdates,
+                                promotions: promotions,
+                                priceAlerts: priceAlerts,
+                              ),
                         style: FilledButton.styleFrom(
                           backgroundColor: color.primary,
                           shape: RoundedRectangleBorder(
@@ -1146,10 +1151,7 @@ class _AccountScreenState extends State<AccountScreen>
         }),
         title: Text(
           title,
-          style: TextStyle(
-            color: color.onSurface,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: color.onSurface, fontWeight: FontWeight.w700),
         ),
         subtitle: Text(
           subtitle,

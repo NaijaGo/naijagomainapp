@@ -172,7 +172,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Please check your connection and try again.';
+        _errorMessage = serverConnectionHelpMessage;
       });
     }
   }

@@ -100,8 +100,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage =
-            'An error occurred: $e. Check backend server and network.';
+        _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Error submitting review: $e');
     } finally {

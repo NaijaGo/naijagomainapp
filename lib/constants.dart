@@ -11,6 +11,11 @@ const String baseUrl = String.fromEnvironment(
 );
 const String customerSupportWhatsAppUrl = 'https://wa.me/7044332895';
 const String customerSupportPhoneNumber = '7044332895';
+const String serverConnectionHelpMessage =
+    'Connecting to server…\n'
+    '• Check your internet connection.\n'
+    '• Wait a moment, then try again.\n'
+    '• Tap Retry if this continues.';
 
 // Cloudinary Config
 const String cloudinaryUploadUrl =

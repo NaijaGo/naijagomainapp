@@ -322,7 +322,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'An error occurred while fetching user status.';
+        _errorMessage = serverConnectionHelpMessage;
         _isLoggedIn = false;
         _notifications = [];
       });

@@ -82,8 +82,7 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage =
-            'An error occurred: $e. Check your network connection and backend server.';
+        _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Error fetching saved products: $e');
     } finally {

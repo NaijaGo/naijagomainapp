@@ -32,7 +32,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       TextEditingController();
 
   File? _pickedImage;
-  String _currentProfilePicUrl = 'https://placehold.co/100x100/CCCCCC/000000?text=User';
+  String _currentProfilePicUrl =
+      'https://placehold.co/100x100/CCCCCC/000000?text=User';
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -57,17 +58,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (profilePicPath == null || profilePicPath.isEmpty) {
       return 'https://placehold.co/100x100/CCCCCC/000000?text=User';
     }
-    
+
     // If it's already a full URL, return as is
-    if (profilePicPath.startsWith('http://') || profilePicPath.startsWith('https://')) {
+    if (profilePicPath.startsWith('http://') ||
+        profilePicPath.startsWith('https://')) {
       return profilePicPath;
     }
-    
+
     // If it starts with /, append to baseUrl
     if (profilePicPath.startsWith('/')) {
       return '$baseUrl$profilePicPath';
     }
-    
+
     // Otherwise, assume it's relative to baseUrl/uploads/
     return '$baseUrl/uploads/$profilePicPath';
   }
@@ -110,18 +112,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _alternatePhoneNumberController.text = user.alternatePhoneNumber;
 
         setState(() {
-          final String? fetchedProfilePicPath = responseData['profilePicUrl']; 
+          final String? fetchedProfilePicPath = responseData['profilePicUrl'];
           _currentProfilePicUrl = _buildProfilePicUrl(fetchedProfilePicPath);
         });
       } else {
         final responseData = jsonDecode(response.body);
         setState(() {
-          _errorMessage = responseData['message'] ?? 'Failed to fetch profile data.';
+          _errorMessage =
+              responseData['message'] ?? 'Failed to fetch profile data.';
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'An error occurred: $e. Check network or backend.';
+        _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Error fetching user profile: $e');
     } finally {
@@ -133,7 +136,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
     if (image != null) {
       setState(() {
         _pickedImage = File(image.path);
@@ -191,36 +197,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (response.statusCode == 200) {
         final Map<String, dynamic>? updatedUser = responseData['user'];
         final String? newProfilePicPath = updatedUser?['profilePicUrl'];
-        
+
         if (newProfilePicPath != null && newProfilePicPath.isNotEmpty) {
           setState(() {
             // Use the helper method to build the URL
             _currentProfilePicUrl = _buildProfilePicUrl(newProfilePicPath);
-            
+
             // Add cache busting parameter for immediate refresh
             if (!_currentProfilePicUrl.contains('?')) {
-              _currentProfilePicUrl = '$_currentProfilePicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+              _currentProfilePicUrl =
+                  '$_currentProfilePicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
             }
-            
+
             _pickedImage = null; // clear local selection since backend has it
           });
         }
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'Profile updated successfully!')),
+          SnackBar(
+            content: Text(
+              responseData['message'] ?? 'Profile updated successfully!',
+            ),
+          ),
         );
 
         Navigator.of(context).pop(true);
       } else {
         setState(() {
-          _errorMessage = responseData['message'] ?? 'Failed to update profile.';
+          _errorMessage =
+              responseData['message'] ?? 'Failed to update profile.';
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'An error occurred: $e. Check network or backend.';
+          _errorMessage = serverConnectionHelpMessage;
         });
       }
       debugPrint('Error saving profile: $e');
@@ -259,7 +271,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 60,
-                            backgroundColor: deepNavyBlue.withValues(alpha: 0.2),
+                            backgroundColor: deepNavyBlue.withValues(
+                              alpha: 0.2,
+                            ),
                             child: ClipOval(
                               child: SizedBox.expand(
                                 child: _pickedImage != null
@@ -270,12 +284,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     : CachedNetworkImage(
                                         imageUrl: _currentProfilePicUrl,
                                         fit: BoxFit.cover,
-                                        placeholder: (context, url) => const Center(
-                                          child: CircularProgressIndicator(color: deepNavyBlue),
-                                        ),
+                                        placeholder: (context, url) =>
+                                            const Center(
+                                              child: CircularProgressIndicator(
+                                                color: deepNavyBlue,
+                                              ),
+                                            ),
                                         errorWidget: (context, url, error) {
                                           return const Center(
-                                              child: Icon(Icons.person, size: 60, color: Colors.grey));
+                                            child: Icon(
+                                              Icons.person,
+                                              size: 60,
+                                              color: Colors.grey,
+                                            ),
+                                          );
                                         },
                                       ),
                               ),
@@ -287,7 +309,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             child: CircleAvatar(
                               backgroundColor: deepNavyBlue,
                               radius: 20,
-                              child: const Icon(Icons.camera_alt, color: greenYellow, size: 20),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: greenYellow,
+                                size: 20,
+                              ),
                             ),
                           ),
                         ],
@@ -297,13 +323,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     TextFormField(
                       controller: _firstNameController,
                       decoration: _inputDecoration('First Name'),
-                      validator: (value) => value == null || value.isEmpty ? 'Please enter your first name' : null,
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Please enter your first name'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _lastNameController,
                       decoration: _inputDecoration('Last Name'),
-                      validator: (value) => value == null || value.isEmpty ? 'Please enter your last name' : null,
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Please enter your last name'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -311,8 +341,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       keyboardType: TextInputType.emailAddress,
                       decoration: _inputDecoration('Email'),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your email';
-                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return 'Enter a valid email address';
+                        if (value == null || value.isEmpty)
+                          return 'Please enter your email';
+                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value))
+                          return 'Enter a valid email address';
                         return null;
                       },
                     ),
@@ -321,7 +353,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       controller: _phoneNumberController,
                       keyboardType: TextInputType.phone,
                       decoration: _inputDecoration('Phone Number'),
-                      validator: (value) => value == null || value.isEmpty ? 'Please enter your phone number' : null,
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Please enter your phone number'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -355,16 +389,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: _isLoading
-                          ? const Center(child: CircularProgressIndicator(color: deepNavyBlue))
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: deepNavyBlue,
+                              ),
+                            )
                           : ElevatedButton(
                               onPressed: _saveProfile,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: deepNavyBlue,
                                 foregroundColor: greenYellow,
-                                padding: const EdgeInsets.symmetric(vertical: 15),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 15,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
-                              child: const Text('Update Profile', style: TextStyle(fontSize: 18)),
+                              child: const Text(
+                                'Update Profile',
+                                style: TextStyle(fontSize: 18),
+                              ),
                             ),
                     ),
                   ],

@@ -86,8 +86,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage =
-            'An error occurred: $e. Check backend server and network.';
+        _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Error fetching reviews: $e');
     } finally {
