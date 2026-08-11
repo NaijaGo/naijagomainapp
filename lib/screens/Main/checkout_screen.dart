@@ -26,6 +26,9 @@ import '../../theme/app_tokens.dart';
 // =========================================================================
 
 class ShipmentSummary {
+  final String sellerType;
+  final String? sellerId;
+  final String sellerName;
   final String vendorName;
   final double subtotal;
   final double shippingPrice;
@@ -40,6 +43,9 @@ class ShipmentSummary {
   final bool subscriptionFreeDeliveryApplied;
 
   ShipmentSummary({
+    required this.sellerType,
+    required this.sellerId,
+    required this.sellerName,
     required this.vendorName,
     required this.subtotal,
     required this.shippingPrice,
@@ -60,6 +66,12 @@ class ShipmentSummary {
         : <String, dynamic>{};
 
     return ShipmentSummary(
+      sellerType: json['sellerType'] as String? ?? 'vendor',
+      sellerId: json['sellerId']?.toString(),
+      sellerName:
+          json['sellerName'] as String? ??
+          json['vendorName'] as String? ??
+          'NaijaGo',
       vendorName: json['vendorName'] as String? ?? 'Unknown Vendor',
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
       shippingPrice: (json['shippingPrice'] as num?)?.toDouble() ?? 0.0,
@@ -91,6 +103,9 @@ class ShipmentSummary {
 
   Map<String, dynamic> toJson() {
     return {
+      'sellerType': sellerType,
+      'sellerId': sellerId,
+      'sellerName': sellerName,
       'vendorName': vendorName,
       'subtotal': subtotal,
       'shippingPrice': shippingPrice,
@@ -1089,10 +1104,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final orderItems = cartProvider.items.values
           .map((item) => item.toJson())
           .toList();
-
-      if (orderItems.any((i) => i['vendor'] == null)) {
-        throw Exception('Missing vendor info in cart');
-      }
 
       final summary = _fullOrderSummary!;
       final totalPrice = summary.totalPrice;

@@ -1322,7 +1322,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Sold by: ${widget.product.vendorBusinessName ?? 'Unknown Vendor'}',
+                    'Sold by: ${widget.product.sellerName}',
                     style: const TextStyle(
                       fontSize: 16,
                       color: deepNavyBlue,

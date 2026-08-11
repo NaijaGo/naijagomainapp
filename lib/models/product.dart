@@ -8,8 +8,15 @@ class Product {
   final String name;
   final String description;
   final double price;
+  final double? discountPrice;
+  final String brand;
   final String category;
+  final String subcategory;
+  final List<String> searchTags;
   final int stockQuantity;
+  final String sellerType;
+  final String? sellerId;
+  final String sellerName;
   final String vendorId;
   final String? vendorBusinessName;
   final String? vendorLocationAddress;
@@ -42,8 +49,15 @@ class Product {
     required this.name,
     required this.description,
     required this.price,
+    this.discountPrice,
+    this.brand = '',
     required this.category,
+    this.subcategory = '',
+    this.searchTags = const [],
     required this.stockQuantity,
+    this.sellerType = 'naijago',
+    this.sellerId,
+    this.sellerName = 'NaijaGo',
     required this.vendorId,
     this.vendorBusinessName,
     this.vendorLocationAddress,
@@ -190,13 +204,41 @@ class Product {
       }
     }
 
+    final parsedSellerType =
+        json['sellerType']?.toString().toLowerCase() == 'vendor'
+        ? 'vendor'
+        : 'naijago';
+    final parsedSellerId = json['sellerId'] is Map
+        ? (json['sellerId'] as Map)['_id']?.toString()
+        : json['sellerId']?.toString();
+    final resolvedSellerName = json['sellerName']?.toString().trim();
+    final regularPrice = _parseDouble(json['price']) ?? 0;
+    final parsedDiscountPrice = _parseDouble(json['discountPrice']);
+
     return Product(
       id: json['_id'] ?? '',
       name: json['name'] ?? '',
       description: json['description'] ?? '',
-      price: (json['price'] as num).toDouble(),
+      price:
+          _parseDouble(json['effectivePrice']) ??
+          parsedDiscountPrice ??
+          regularPrice,
+      discountPrice: parsedDiscountPrice,
+      brand: json['brand']?.toString() ?? '',
       category: json['category'] ?? '',
+      subcategory: json['subcategory']?.toString() ?? '',
+      searchTags: (json['searchTags'] as List? ?? const [])
+          .map((tag) => tag.toString())
+          .where((tag) => tag.isNotEmpty)
+          .toList(),
       stockQuantity: json['stockQuantity'] ?? 0,
+      sellerType: parsedSellerType,
+      sellerId: parsedSellerId,
+      sellerName: resolvedSellerName?.isNotEmpty == true
+          ? resolvedSellerName!
+          : parsedSellerType == 'naijago'
+          ? 'NaijaGo'
+          : vendorBusinessName ?? 'Vendor',
       vendorId: vendorId,
       vendorBusinessName: vendorBusinessName,
       vendorLocationAddress: productLocationAddress ?? vendorLocationAddress,
@@ -256,9 +298,16 @@ class Product {
     'name': name,
     'description': description,
     'price': price,
+    'discountPrice': discountPrice,
+    'brand': brand,
     'category': category,
+    'subcategory': subcategory,
+    'searchTags': searchTags,
     'stockQuantity': stockQuantity,
-    'vendor': vendorId,
+    'sellerType': sellerType,
+    'sellerId': sellerId,
+    'sellerName': sellerName,
+    'vendor': sellerType == 'vendor' ? vendorId : null,
     'vendorLocation': {
       'formattedAddress': vendorLocationAddress,
       'latitude': vendorLatitude,

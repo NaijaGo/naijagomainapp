@@ -22,7 +22,10 @@ class CartItem {
           : 'https://placehold.co/100x100/CCCCCC/000000?text=No+Image',
       'quantity': quantity,
       'price': product.price,
-      'vendor': product.vendorId,
+      'sellerType': product.sellerType,
+      'sellerId': product.sellerId,
+      'sellerName': product.sellerName,
+      'vendor': product.sellerType == 'vendor' ? product.vendorId : null,
       'selectedSize': selectedSize,
     };
   }

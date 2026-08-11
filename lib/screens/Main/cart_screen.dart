@@ -69,12 +69,12 @@ class _CartScreenState extends State<CartScreen> {
           _recentlyViewedProducts = allProducts.take(12).toList();
         });
       } else {
-        _createSimplePlaceholderProducts();
+        if (mounted) setState(() => _recentlyViewedProducts = []);
       }
     } catch (e) {
       debugPrint('Error fetching recently viewed: $e');
       if (!mounted) return;
-      _createSimplePlaceholderProducts();
+      if (mounted) setState(() => _recentlyViewedProducts = []);
     } finally {
       if (mounted) {
         setState(() {
@@ -407,8 +407,7 @@ class _CartScreenState extends State<CartScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      cartItem.product.vendorBusinessName ??
-                          'Vendor unavailable',
+                      cartItem.product.sellerName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1118,7 +1117,7 @@ class _RecentlyViewedProductCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Vendor: ${product.vendorBusinessName ?? 'N/A'}',
+                        'Seller: ${product.sellerName}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
