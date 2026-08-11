@@ -166,6 +166,20 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Product> _searchResults = [];
   bool _isLoading = true;
   String? _errorMessage;
+  String? _category;
+  double? _minimumPrice;
+  double? _maximumPrice;
+  double _minimumRating = 0;
+  bool _inStockOnly = false;
+  String _sort = 'newest';
+
+  int get _activeFilterCount =>
+      (_category?.isNotEmpty == true ? 1 : 0) +
+      (_minimumPrice != null ? 1 : 0) +
+      (_maximumPrice != null ? 1 : 0) +
+      (_minimumRating > 0 ? 1 : 0) +
+      (_inStockOnly ? 1 : 0) +
+      (_sort != 'newest' ? 1 : 0);
 
   @override
   void initState() {
@@ -195,7 +209,15 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final results = await _productService.searchProducts(query);
+      final results = await _productService.searchProducts(
+        query,
+        category: _category,
+        minPrice: _minimumPrice,
+        maxPrice: _maximumPrice,
+        minRating: _minimumRating,
+        inStock: _inStockOnly,
+        sort: _sort,
+      );
       if (mounted) {
         setState(() {
           _searchResults = results;
@@ -228,6 +250,159 @@ class _SearchScreenState extends State<SearchScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _showSearchFilters() async {
+    final categoryController = TextEditingController(text: _category ?? '');
+    final minimumController = TextEditingController(
+      text: _minimumPrice?.toStringAsFixed(0) ?? '',
+    );
+    final maximumController = TextEditingController(
+      text: _maximumPrice?.toStringAsFixed(0) ?? '',
+    );
+    var rating = _minimumRating;
+    var inStock = _inStockOnly;
+    var sort = _sort;
+    final apply = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.viewInsetsOf(context).bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Filter search results',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: categoryController,
+                  decoration: const InputDecoration(
+                    labelText: 'Category (optional)',
+                    hintText: 'Fashion',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: minimumController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Minimum budget',
+                          prefixText: '₦ ',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: maximumController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Maximum budget',
+                          prefixText: '₦ ',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: sort,
+                  decoration: const InputDecoration(labelText: 'Sort results'),
+                  items: const [
+                    DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                    DropdownMenuItem(
+                      value: 'popular',
+                      child: Text('Most popular'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'best_rated',
+                      child: Text('Best rated'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'price_low',
+                      child: Text('Price: low to high'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'price_high',
+                      child: Text('Price: high to low'),
+                    ),
+                  ],
+                  onChanged: (value) => sort = value ?? 'newest',
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Minimum rating: ${rating == 0 ? 'Any' : '${rating.toStringAsFixed(0)}+'}',
+                ),
+                Slider(
+                  value: rating,
+                  min: 0,
+                  max: 5,
+                  divisions: 5,
+                  onChanged: (value) => setSheetState(() => rating = value),
+                ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('In-stock products only'),
+                  value: inStock,
+                  onChanged: (value) => setSheetState(() => inStock = value),
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        categoryController.clear();
+                        minimumController.clear();
+                        maximumController.clear();
+                        setSheetState(() {
+                          rating = 0;
+                          inStock = false;
+                          sort = 'newest';
+                        });
+                      },
+                      child: const Text('Clear'),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (apply != true || !mounted) return;
+    setState(() {
+      _category = categoryController.text.trim().isEmpty
+          ? null
+          : categoryController.text.trim();
+      _minimumPrice = double.tryParse(minimumController.text.trim());
+      _maximumPrice = double.tryParse(maximumController.text.trim());
+      _minimumRating = rating;
+      _inStockOnly = inStock;
+      _sort = sort;
+    });
+    await _performSearch(_searchController.text.trim());
   }
 
   Widget _buildStateCard({
@@ -352,6 +527,18 @@ class _SearchScreenState extends State<SearchScreen> {
             style: const TextStyle(color: secondaryBlack),
           ),
         ),
+        actions: [
+          Badge(
+            isLabelVisible: _activeFilterCount > 0,
+            label: Text('$_activeFilterCount'),
+            child: IconButton(
+              tooltip: 'Filter search results',
+              onPressed: _showSearchFilters,
+              icon: const Icon(Icons.tune_rounded, color: primaryNavy),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _isLoading
           ? _buildStateCard(
@@ -465,9 +652,29 @@ class ProductService {
     return _fetchProducts('/api/products/restaurants$suffix');
   }
 
-  Future<List<Product>> searchProducts(String query) => _fetchProducts(
-    '/api/products/search?q=${Uri.encodeQueryComponent(query)}&limit=50',
-  );
+  Future<List<Product>> searchProducts(
+    String query, {
+    String? category,
+    double? minPrice,
+    double? maxPrice,
+    double minRating = 0,
+    bool inStock = false,
+    String sort = 'newest',
+  }) {
+    final parameters = <String, String>{
+      'query': query,
+      'limit': '100',
+      'sort': sort,
+      if (category?.isNotEmpty == true) 'category': category!,
+      if (minPrice != null) 'minPrice': minPrice.toString(),
+      if (maxPrice != null) 'maxPrice': maxPrice.toString(),
+      if (minRating > 0) 'minRating': minRating.toString(),
+      if (inStock) 'inStock': 'true',
+    };
+    return _fetchProducts(
+      '/api/products?${Uri(queryParameters: parameters).query}',
+    );
+  }
 
   Future<List<Product>> _fetchProducts(String endpoint) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
