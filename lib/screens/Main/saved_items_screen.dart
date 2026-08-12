@@ -283,7 +283,7 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Vendor: ${product.vendorBusinessName ?? 'N/A'}',
+                                  'Seller: ${product.sellerName}',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: mutedText,

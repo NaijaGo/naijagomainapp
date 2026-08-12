@@ -340,46 +340,14 @@ class Product {
     'sizeData': sizeData,
   };
 
-  int get _stableSeed {
-    var hash = 2166136261;
-    for (final unit in '$id|$category'.codeUnits) {
-      hash ^= unit;
-      hash = (hash * 16777619) & 0x7fffffff;
-    }
-    return hash;
-  }
+  bool get hasRealRating => averageRating > 0 && numReviews > 0;
 
-  double get displayRating {
-    if (averageRating > 0) return averageRating.clamp(1, 5).toDouble();
-    final normalized = category.toLowerCase();
-    final demandBase =
-        normalized.contains('phone') || normalized.contains('comput')
-        ? 4.5
-        : normalized.contains('fashion') || normalized.contains('beauty')
-        ? 4.4
-        : normalized.contains('restaurant') || normalized.contains('food')
-        ? 4.3
-        : normalized.contains('home') || normalized.contains('appliance')
-        ? 4.2
-        : 4.1;
-    final variation = ((_stableSeed % 7) - 3) / 10;
-    return (demandBase + variation).clamp(3.8, 4.8).toDouble();
-  }
+  double get displayRating => averageRating.clamp(0, 5).toDouble();
 
-  int get displaySoldCount {
-    if (salesCount > 0) return salesCount;
-    final normalized = category.toLowerCase();
-    final multiplier =
-        normalized.contains('phone') || normalized.contains('fashion')
-        ? 1400
-        : normalized.contains('beauty') || normalized.contains('food')
-        ? 950
-        : 520;
-    return 1200 + (_stableSeed % 72000) + ((_stableSeed % 80) * multiplier);
-  }
+  bool get hasRealSales => salesCount > 0;
 
-  String get formattedDisplaySoldCount {
-    final count = displaySoldCount;
+  String get formattedSalesCount {
+    final count = salesCount;
     if (count >= 1000000) {
       return '${(count / 1000000).toStringAsFixed(1)}m';
     }

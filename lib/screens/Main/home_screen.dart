@@ -3407,10 +3407,7 @@ class ProductCard extends StatelessWidget {
                               child: Text(
                                 isRestaurantItem
                                     ? product.displayRestaurantName
-                                    : product.vendorBusinessName?.isNotEmpty ==
-                                          true
-                                    ? product.vendorBusinessName!
-                                    : 'Vendor unavailable',
+                                    : product.sellerName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
