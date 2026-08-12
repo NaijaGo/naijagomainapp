@@ -580,7 +580,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             _sendInitialConsultationTopicIfNeeded();
           } else {
             _addSystemMessage(
-              'Failed to join chat room: ${data['error'] ?? 'Unknown error'}',
+              'Unable to join the chat right now. Please wait a moment and try again.',
             );
             if (mounted) {
               setState(() {

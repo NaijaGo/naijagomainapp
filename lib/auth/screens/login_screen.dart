@@ -302,7 +302,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       setState(() {
-        _errorMessage = 'An error occurred: $e';
+        _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Login network error: $e');
     } finally {

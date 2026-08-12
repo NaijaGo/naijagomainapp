@@ -516,7 +516,11 @@ Future<void> main() async {
   try {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
     // SDK v5.x FIX: Removed 'await' from initialize() since it returns void
-    OneSignal.initialize('76438b8d-4b39-49eb-805c-11eb934f5a66');
+    const oneSignalAppId = String.fromEnvironment(
+      'ONESIGNAL_APP_ID',
+      defaultValue: '76438b8d-4b39-49eb-805c-11eb934f5a66',
+    );
+    OneSignal.initialize(oneSignalAppId);
   } catch (error) {
     debugPrint('Unable to initialize OneSignal at startup: $error');
   }
