@@ -15,6 +15,8 @@ workflows:
 
       vars:
         BUNDLE_ID: com.naijago.naijaGo
+        API_BASE_URL: "https://naijago-backend.onrender.com"
+        ONESIGNAL_APP_ID: "76438b8d-4b39-49eb-805c-11eb934f5a66"
         FLUTTERWAVE_TEST_MODE: "false"
         FLUTTERWAVE_REDIRECT_URL: "https://naijago.com/payment-redirect"
 
@@ -53,6 +55,8 @@ workflows:
           fi
 
           flutter build ipa --release --export-method app-store \
+            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=ONESIGNAL_APP_ID="$ONESIGNAL_APP_ID" \
             --dart-define=FLUTTERWAVE_PUBLIC_KEY="$FLUTTERWAVE_PUBLIC_KEY" \
             --dart-define=FLUTTERWAVE_TEST_MODE="$FLUTTERWAVE_TEST_MODE" \
             --dart-define=FLUTTERWAVE_REDIRECT_URL="$FLUTTERWAVE_REDIRECT_URL"
