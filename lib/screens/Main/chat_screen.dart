@@ -66,8 +66,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _subscriptionPlans = [];
   List<Map<String, dynamic>> _pharmacistChoices = [];
   double _walletBalance = 0;
+  String? _authenticatedChatRole;
 
-  String get _myRole => widget.isPharmacistView ? 'pharmacist' : 'user';
+  String get _myRole =>
+      _authenticatedChatRole ??
+      (widget.isPharmacistView ? 'pharmacist' : 'user');
 
   @override
   void initState() {
@@ -168,6 +171,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() => _isLoadingPharmacists = false);
       }
+    }
+
+    // Keep a live presence connection open while the customer is choosing.
+    // Otherwise newly-online pharmacists are not visible until a manual reload.
+    if (mounted && _sessionId == null) {
+      _connectSocket(token);
     }
   }
 
@@ -524,14 +533,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (mounted) setState(() => _isLiveConnected = true);
       _joinTimeoutTimer?.cancel();
       if (_sessionId == null) {
-        _addSystemMessage(
-          'Could not join consultation because the session ID is missing.',
-        );
-        if (mounted) {
-          setState(() {
-            _isBootstrapping = false;
-          });
-        }
+        // Presence-only connection. A room is joined after a session is made.
         return;
       }
 
@@ -554,9 +556,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (data['success'] == true) {
             final List<dynamic> messages = data['messages'] ?? [];
             final session = data['session'] ?? {};
+            final actorRole = data['actorRole']?.toString();
 
             if (!mounted) return;
             setState(() {
+              if (actorRole == 'user' || actorRole == 'pharmacist') {
+                _authenticatedChatRole = actorRole;
+              }
               _isAssignedToPharmacist =
                   widget.isPharmacistView || session['pharmacist'] != null;
               _messages.clear();
@@ -608,9 +614,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
 
     _socket!.on('pharmacistStatus', (data) {
-      if (!mounted || widget.isPharmacistView) return;
+      if (!mounted || widget.isPharmacistView || data is! Map) return;
+      final pharmacists = data['pharmacists'];
       setState(() {
-        _globalPharmacistOnline = data['online'] ?? false;
+        if (pharmacists is List) {
+          _pharmacistChoices = pharmacists
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+          _hasLoadedPharmacistChoices = true;
+        }
+        _globalPharmacistOnline =
+            _pharmacistChoices.isNotEmpty || data['online'] == true;
       });
     });
 
@@ -916,7 +931,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildBubble(Map<String, dynamic> msg) {
     final isSystem = msg['from'] == 'system';
     final isPharmacist = msg['from'] == 'pharmacist';
-    final isMine = msg['from'] == _myRole;
+    final isCustomer = msg['from'] == 'user';
 
     if (isSystem) {
       return Center(
@@ -941,35 +956,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
 
-    final senderLabel = isPharmacist
-        ? 'Pharmacist'
-        : widget.isPharmacistView
-        ? 'Customer'
-        : '';
+    final senderLabel = isPharmacist ? 'Pharmacist' : 'Customer';
 
-    final Color bubbleColor = isMine
-        ? (widget.isPharmacistView ? PharmacyUi.teal : PharmacyUi.deepNavy)
-        : isPharmacist
-        ? PharmacyUi.mint
-        : PharmacyUi.card;
+    final Color bubbleColor = isCustomer
+        ? PharmacyUi.deepNavy
+        : PharmacyUi.mint;
 
-    final Color textColor = isMine ? PharmacyUi.card : PharmacyUi.deepNavy;
-    final Border? border = isMine
+    final Color textColor = isCustomer ? PharmacyUi.card : PharmacyUi.deepNavy;
+    final Border? border = isCustomer
         ? null
-        : Border.all(
-            color: isPharmacist
-                ? PharmacyUi.teal.withValues(alpha: 0.18)
-                : PharmacyUi.border,
-          );
+        : Border.all(color: PharmacyUi.teal.withValues(alpha: 0.18));
 
     return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isCustomer ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
-        crossAxisAlignment: isMine
+        crossAxisAlignment: isCustomer
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          if (senderLabel.isNotEmpty && !isMine)
+          if (senderLabel.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(
                 top: 8,
@@ -998,8 +1003,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(18),
                 topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(isMine ? 18 : 4),
-                bottomRight: Radius.circular(isMine ? 4 : 18),
+                bottomLeft: Radius.circular(isCustomer ? 18 : 4),
+                bottomRight: Radius.circular(isCustomer ? 4 : 18),
               ),
             ),
             child: Text(
