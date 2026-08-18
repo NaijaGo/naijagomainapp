@@ -27,6 +27,28 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
   List<PlatformFile> _attachments = [];
   bool _isLoading = false;
 
+  List<Map<String, dynamic>> get _selectableOrders {
+    final ordersById = <String, Map<String, dynamic>>{};
+    for (final rawOrder in widget.orders) {
+      if (rawOrder is! Map) continue;
+      final order = Map<String, dynamic>.from(rawOrder);
+      final id = order['_id']?.toString().trim() ?? '';
+      if (id.isEmpty) continue;
+      ordersById.putIfAbsent(id, () => order);
+    }
+    return ordersById.values.toList(growable: false);
+  }
+
+  String? get _validSelectedOrderId {
+    final selected = _selectedOrderId;
+    if (selected == null) return null;
+    return _selectableOrders.any(
+          (order) => order['_id']?.toString() == selected,
+        )
+        ? selected
+        : null;
+  }
+
   Future<void> _pickFiles() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -87,7 +109,8 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
   }
 
   Future<void> _submitDispute() async {
-    if (_selectedOrderId == null || _reasonController.text.isEmpty) {
+    final selectedOrderId = _validSelectedOrderId;
+    if (selectedOrderId == null || _reasonController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please select order and provide reason")),
       );
@@ -133,8 +156,8 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
           "Authorization": "Bearer $token",
         },
         body: jsonEncode({
-          "orderId": _selectedOrderId,
-          "reason": _reasonController.text,
+          "orderId": selectedOrderId,
+          "reason": _reasonController.text.trim(),
           "attachments": attachmentUrls,
         }),
       );
@@ -167,6 +190,9 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selectableOrders = _selectableOrders;
+    final selectedOrderId = _validSelectedOrderId;
+
     return TechGlowBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -201,11 +227,11 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedOrderId,
+                  initialValue: selectedOrderId,
                   style: const TextStyle(color: deepNavyBlue),
-                  items: widget.orders.map((order) {
+                  items: selectableOrders.map((order) {
                     return DropdownMenuItem<String>(
-                      value: order['_id'] as String,
+                      value: order['_id'].toString(),
                       child: Container(
                         color: whiteSmoke,
                         padding: const EdgeInsets.all(8.0),

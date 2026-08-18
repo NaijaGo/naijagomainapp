@@ -149,7 +149,14 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     );
     var draftRating = _minimumRating;
     var draftInStock = _inStockOnly;
-    var draftSort = _sort;
+    const supportedSorts = {
+      'newest',
+      'popular',
+      'best_rated',
+      'price_low',
+      'price_high',
+    };
+    var draftSort = supportedSorts.contains(_sort) ? _sort : 'newest';
 
     final apply = await showModalBottomSheet<bool>(
       context: context,

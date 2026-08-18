@@ -247,7 +247,14 @@ class _SearchScreenState extends State<SearchScreen> {
     );
     var rating = _minimumRating;
     var inStock = _inStockOnly;
-    var sort = _sort;
+    const supportedSorts = {
+      'newest',
+      'popular',
+      'best_rated',
+      'price_low',
+      'price_high',
+    };
+    var sort = supportedSorts.contains(_sort) ? _sort : 'newest';
     final apply = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
