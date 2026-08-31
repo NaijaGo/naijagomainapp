@@ -9,6 +9,7 @@ import '../../constants.dart';
 // import '../../admin/screens/admin_panel_screen.dart'; // Import for Admin Panel
 // Import LoginScreen
 import 'my_orders_screen.dart'; // Import MyOrdersScreen
+import 'pickup_orders_screen.dart';
 import 'saved_items_screen.dart'; // Import SavedItemsScreen
 import 'delivery_addresses_screen.dart'; // Import DeliveryAddressesScreen
 import 'edit_profile_screen.dart'; // Import EditProfileScreen
@@ -809,6 +810,16 @@ class _AccountScreenState extends State<AccountScreen>
               MaterialPageRoute(builder: (context) => const MyOrdersScreen()),
             );
           },
+        ),
+        _buildAccountListItem(
+          context,
+          color,
+          Icons.storefront_outlined,
+          'Pickup Orders',
+          'Track preparation and show your pickup QR code',
+          () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const PickupOrdersScreen())),
         ),
         _buildAccountListItem(
           context,

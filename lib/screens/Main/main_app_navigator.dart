@@ -639,15 +639,35 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       elevation: 0,
       scrolledUnderElevation: 0,
       titleSpacing: 16,
-      title: Text(
-        _getAppBarTitle(_selectedIndex),
-        style: const TextStyle(
-          color: AppUi.secondaryBlack,
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.2,
-        ),
-      ),
+      title: _selectedIndex == 0
+          ? const Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Naija',
+                    style: TextStyle(color: Color(0xFF4169E1)),
+                  ),
+                  TextSpan(
+                    text: 'Go',
+                    style: TextStyle(color: Color(0xFFADFF2F)),
+                  ),
+                ],
+              ),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            )
+          : Text(
+              _getAppBarTitle(_selectedIndex),
+              style: const TextStyle(
+                color: AppUi.secondaryBlack,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(

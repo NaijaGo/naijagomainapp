@@ -492,6 +492,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           child: TextField(
             controller: _searchController,
+            textAlignVertical: TextAlignVertical.center,
             autofocus: true,
             textInputAction: TextInputAction.search,
             onSubmitted: _performSearch,
@@ -1308,7 +1309,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => CategoryProductsScreen(
-              category: 'Health & Beauty > Medicine',
+              category: 'Cosmetics & Beauty > Medicine',
               onReturnToDashboard: widget.onReturnToDashboard,
             ),
           ),
@@ -1739,6 +1740,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             SliverToBoxAdapter(child: _buildBannerCarousel()),
+            SliverToBoxAdapter(child: _buildCostLowEntryCard()),
             SliverToBoxAdapter(
               child: _buildRestaurantEntryCard(_activeFoodCampaign),
             ),
@@ -2139,6 +2141,128 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openCostLowStore() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CategoryProductsScreen(
+          category: 'Cost-Low',
+          endpointPath: '/api/products/featured/cost-low',
+          screenSubtitle: 'Official Cost-Low store',
+          onReturnToDashboard: widget.onReturnToDashboard,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCostLowEntryCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: _openCostLowStore,
+          borderRadius: BorderRadius.circular(24),
+          child: Ink(
+            height: 148,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4169E1).withValues(alpha: 0.20),
+                  blurRadius: 26,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/lowcost_world.jpeg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Container(color: const Color(0xFF12214A)),
+                  ),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Color(0xE611214A),
+                          Color(0x9911214A),
+                          Color(0x2211214A),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'COST-LOW WORLD',
+                                style: TextStyle(
+                                  color: Color(0xFFADFF2F),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 7),
+                              const Text(
+                                'Big value. Lower prices.',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.05,
+                                ),
+                              ),
+                              const SizedBox(height: 7),
+                              Text(
+                                'Shop every Cost-Low product in one place.',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.84),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFADFF2F),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Color(0xFF12214A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPromoCarousel() {
     final promoSlides = _effectivePromoSlides;
     if (promoSlides.isEmpty) {
@@ -2522,7 +2646,7 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                     context,
                     MaterialPageRoute(
                       builder: (_) => CategoryProductsScreen(
-                        category: 'Health & Beauty > Medicine',
+                        category: 'Cosmetics & Beauty > Medicine',
                         onReturnToDashboard: onReturnToDashboard,
                       ),
                     ),
@@ -2727,6 +2851,7 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                 ),
                 child: TextField(
                   controller: searchController,
+                  textAlignVertical: TextAlignVertical.center,
                   textInputAction: TextInputAction.search,
                   onSubmitted: (query) {
                     if (query.trim().isNotEmpty) {
@@ -2766,7 +2891,10 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                       color: Color(0xFF667085),
                     ),
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 1),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 14,
+                    ),
                     suffixIcon: ValueListenableBuilder<TextEditingValue>(
                       valueListenable: searchController,
                       builder: (context, value, _) {

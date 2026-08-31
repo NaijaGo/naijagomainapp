@@ -655,6 +655,28 @@ class _CartScreenState extends State<CartScreen> {
               return _buildCartItem(context, cartItems[index], index);
             },
           ),
+          if (cartItems.any((item) => item.product.isRestaurantItem)) ...[
+            const SizedBox(height: 14),
+            TextFormField(
+              initialValue: cartProvider.restaurantOrderNote,
+              maxLength: 500,
+              minLines: 2,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: cartProvider.setRestaurantOrderNote,
+              decoration: InputDecoration(
+                labelText: 'Special instructions for the restaurant',
+                hintText: 'Example: No onions, mild spice, or pack separately',
+                helperText:
+                    'Requests cannot add unpaid items or change the price.',
+                prefixIcon: const Icon(Icons.edit_note_rounded),
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

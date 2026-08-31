@@ -50,8 +50,18 @@ class CartItem {
 
 class CartProvider with ChangeNotifier {
   final Map<String, CartItem> _items = {};
+  String _restaurantOrderNote = '';
 
   Map<String, CartItem> get items => {..._items};
+  String get restaurantOrderNote => _restaurantOrderNote;
+
+  void setRestaurantOrderNote(String value) {
+    final sanitized = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    _restaurantOrderNote = sanitized.length > 500
+        ? sanitized.substring(0, 500)
+        : sanitized;
+    notifyListeners();
+  }
 
   CartItem? restaurantVendorConflict(Product product) {
     if (!product.isRestaurantItem) return null;
@@ -218,6 +228,7 @@ class CartProvider with ChangeNotifier {
 
   void clearCart() {
     _items.clear();
+    _restaurantOrderNote = '';
     notifyListeners();
   }
 }

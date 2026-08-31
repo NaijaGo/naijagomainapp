@@ -24,11 +24,15 @@ const Color lightGrey = AppTheme.mutedText;
 
 class CategoryProductsScreen extends StatefulWidget {
   final String category;
+  final String? endpointPath;
+  final String screenSubtitle;
   final VoidCallback? onReturnToDashboard;
 
   const CategoryProductsScreen({
     super.key,
     required this.category,
+    this.endpointPath,
+    this.screenSubtitle = 'Category products',
     this.onReturnToDashboard,
   });
 
@@ -78,9 +82,11 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       _errorMessage = null;
     });
 
-    final isRestaurantCategory = widget.category.toLowerCase() == 'restaurant';
+    final isRestaurantCategory =
+        widget.endpointPath == null &&
+        widget.category.toLowerCase() == 'restaurant';
     final query = <String, String>{};
-    if (!isRestaurantCategory) {
+    if (!isRestaurantCategory && widget.endpointPath == null) {
       query['category'] = widget.category;
     }
     if (_customerLatitude != null && _customerLongitude != null) {
@@ -95,9 +101,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     if (_inStockOnly) query['inStock'] = 'true';
     query['sort'] = _sort;
 
-    final endpoint = isRestaurantCategory
-        ? '/api/products/restaurants'
-        : '/api/products';
+    final endpoint =
+        widget.endpointPath ??
+        (isRestaurantCategory ? '/api/products/restaurants' : '/api/products');
     final Uri url = Uri.parse(
       '$baseUrl$endpoint?${Uri(queryParameters: query).query}',
     );
@@ -819,9 +825,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                 letterSpacing: -0.2,
               ),
             ),
-            const Text(
-              'Category products',
-              style: TextStyle(
+            Text(
+              widget.screenSubtitle,
+              style: const TextStyle(
                 color: lightGrey,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,

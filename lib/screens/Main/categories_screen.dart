@@ -81,7 +81,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'Underwear & Lingerie',
       'Sportswear',
     ],
-    'Health & Beauty': [
+    'Cosmetics & Beauty': [
       'Make Up',
       'Fragrance',
       'Hair Care',
@@ -251,15 +251,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'Kitchen Utensils',
       'Food Packaging',
     ],
-    'Travel & Tourism': ['Travel Accessories', 'Luggage', 'Hotel Supplies'],
-    'Wedding & Events': ['Wedding Attire'],
   };
 
   final Map<String, IconData> _categoryIcons = {
     'Home & Office': Icons.home_outlined,
     'Phones & Tablets': Icons.phone_iphone_outlined,
     'Fashion': Icons.checkroom_outlined,
-    'Health & Beauty': Icons.favorite_border,
+    'Cosmetics & Beauty': Icons.favorite_border,
     'Electronics': Icons.memory_outlined,
     'Computing': Icons.laptop_mac_outlined,
     'Groceries': Icons.shopping_cart_outlined,
@@ -278,8 +276,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     'Toys & Games': Icons.rocket_launch_outlined,
     'Photography': Icons.camera_alt_outlined,
     'Food & Beverage': Icons.restaurant_outlined,
-    'Travel & Tourism': Icons.flight_outlined,
-    'Wedding & Events': Icons.favorite_border,
   };
 
   final Map<String, String> _subCategoryImages = {
@@ -623,7 +619,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => CategoryProductsScreen(
-                        category: 'Health & Beauty > Medicine',
+                        category: 'Cosmetics & Beauty > Medicine',
                         onReturnToDashboard: widget.onReturnToDashboard,
                       ),
                     ),
@@ -866,10 +862,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
+              textAlignVertical: TextAlignVertical.center,
               decoration: const InputDecoration(
                 hintText: 'Search categories or products...',
                 hintStyle: TextStyle(color: lightGrey, fontSize: 14),
                 border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
               ),
               style: const TextStyle(color: secondaryBlack),
             ),

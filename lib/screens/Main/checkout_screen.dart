@@ -41,6 +41,10 @@ class ShipmentSummary {
   final double originalShippingPrice;
   final double subscriptionDeliveryDiscount;
   final bool subscriptionFreeDeliveryApplied;
+  final bool pickupAvailable;
+  final String fulfillmentMethod;
+  final Map<String, dynamic>? pickupOption;
+  final Map<String, dynamic>? pickupDetails;
 
   ShipmentSummary({
     required this.sellerType,
@@ -58,6 +62,10 @@ class ShipmentSummary {
     required this.originalShippingPrice,
     required this.subscriptionDeliveryDiscount,
     required this.subscriptionFreeDeliveryApplied,
+    required this.pickupAvailable,
+    required this.fulfillmentMethod,
+    this.pickupOption,
+    this.pickupDetails,
   });
 
   factory ShipmentSummary.fromJson(Map<String, dynamic> json) {
@@ -98,6 +106,16 @@ class ShipmentSummary {
           (json['subscriptionDeliveryDiscount'] as num?)?.toDouble() ?? 0.0,
       subscriptionFreeDeliveryApplied:
           json['subscriptionFreeDeliveryApplied'] == true,
+      pickupAvailable: json['pickupAvailable'] == true,
+      fulfillmentMethod: json['fulfillmentMethod']?.toString() == 'pickup'
+          ? 'pickup'
+          : 'delivery',
+      pickupOption: json['pickupOption'] is Map
+          ? Map<String, dynamic>.from(json['pickupOption'] as Map)
+          : null,
+      pickupDetails: json['pickupDetails'] is Map
+          ? Map<String, dynamic>.from(json['pickupDetails'] as Map)
+          : null,
     );
   }
 
@@ -112,6 +130,10 @@ class ShipmentSummary {
       'originalShippingPrice': originalShippingPrice,
       'subscriptionDeliveryDiscount': subscriptionDeliveryDiscount,
       'subscriptionFreeDeliveryApplied': subscriptionFreeDeliveryApplied,
+      'pickupAvailable': pickupAvailable,
+      'fulfillmentMethod': fulfillmentMethod,
+      'pickupOption': pickupOption,
+      'pickupDetails': pickupDetails,
       'platformFee': platformFee,
       'items': items,
       'vendor': vendorId,
@@ -232,6 +254,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double? _userLongitude;
 
   FullOrderSummary? _fullOrderSummary;
+  final Map<String, String> _fulfillmentSelections = {};
   bool _isSummaryCalculated = false;
 
   // Lock to prevent concurrent location fetching
@@ -370,6 +393,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 'latitude': _userLatitude,
                 'longitude': _userLongitude,
               },
+              'fulfillmentSelections': _fulfillmentSelections.map(
+                (key, method) => MapEntry(key, {'method': method}),
+              ),
             }),
           )
           .timeout(const Duration(seconds: 20));
@@ -1110,6 +1136,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final requestBody = {
         'orderItems': orderItems,
+        'restaurantOrderNote': cartProvider.restaurantOrderNote,
         'shippingAddress': _buildShippingAddressPayload(),
         'paymentMethod': _selectedPaymentMethod,
         'totalSubtotal': summary.totalSubtotal,
@@ -1520,6 +1547,84 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  String _fulfillmentKey(ShipmentSummary shipment) {
+    if (shipment.sellerType == 'naijago') return 'naijago';
+    final id = shipment.sellerId?.isNotEmpty == true
+        ? shipment.sellerId!
+        : shipment.vendorId;
+    return 'vendor:$id';
+  }
+
+  Future<void> _selectFulfillment(
+    ShipmentSummary shipment,
+    String method,
+  ) async {
+    if (method == 'pickup' && !shipment.pickupAvailable) return;
+    final key = _fulfillmentKey(shipment);
+    setState(() => _fulfillmentSelections[key] = method);
+    await _fetchOrderSummary();
+  }
+
+  Widget _buildFulfillmentChoice(
+    ShipmentSummary shipment, {
+    required String value,
+    required String label,
+    required IconData icon,
+    required bool enabled,
+  }) {
+    final selected = shipment.fulfillmentMethod == value;
+    return Expanded(
+      child: InkWell(
+        onTap: enabled && !_isSummaryLoading
+            ? () => _selectFulfillment(shipment, value)
+            : null,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppTheme.primaryNavy
+                : enabled
+                ? Colors.white
+                : AppTheme.softGrey,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? AppTheme.primaryNavy : AppTheme.borderGrey,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected
+                    ? Colors.white
+                    : enabled
+                    ? AppTheme.secondaryBlack
+                    : AppTheme.mutedText,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected
+                      ? Colors.white
+                      : enabled
+                      ? AppTheme.secondaryBlack
+                      : AppTheme.mutedText,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildShipmentSummaryCard(ShipmentSummary shipment) {
     final vendorZone = _vendorZoneLabel(shipment);
     final vendorDistance = _vendorDistanceLabel(shipment);
@@ -1618,12 +1723,92 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ],
           ),
           const SizedBox(height: 14),
+          Row(
+            children: [
+              _buildFulfillmentChoice(
+                shipment,
+                value: 'delivery',
+                label: 'Delivery',
+                icon: Icons.delivery_dining_outlined,
+                enabled: true,
+              ),
+              const SizedBox(width: 10),
+              _buildFulfillmentChoice(
+                shipment,
+                value: 'pickup',
+                label: 'Pick up',
+                icon: Icons.storefront_outlined,
+                enabled: shipment.pickupAvailable,
+              ),
+            ],
+          ),
+          if (!shipment.pickupAvailable) ...[
+            const SizedBox(height: 7),
+            const Text(
+              'This shop has not enabled customer pickup.',
+              style: TextStyle(
+                color: AppTheme.mutedText,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (shipment.fulfillmentMethod == 'pickup') ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF3),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFABEFC6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    shipment.pickupOption?['location']?['shopName']
+                            ?.toString() ??
+                        shipment.vendorName,
+                    style: const TextStyle(
+                      color: Color(0xFF067647),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    shipment.pickupOption?['location']?['formattedAddress']
+                            ?.toString() ??
+                        'Pickup address will appear with your order.',
+                    style: const TextStyle(
+                      color: Color(0xFF344054),
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Usually ready in ${shipment.pickupOption?['estimatedPreparationMinutes'] ?? 30} minutes',
+                    style: const TextStyle(
+                      color: Color(0xFF067647),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
           _buildSummaryRow(
             'Item subtotal',
             _formatPriceWithCommas(shipment.subtotal),
           ),
           _buildSummaryRow(
-            'Delivery fee',
+            shipment.fulfillmentMethod == 'pickup'
+                ? 'Pickup fee'
+                : 'Delivery fee',
             _formatPriceWithCommas(shipment.shippingPrice),
           ),
         ],

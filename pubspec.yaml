@@ -41,6 +41,7 @@ dependencies:
   onesignal_flutter: ^5.1.2
   equatable: any
   app_links: ^6.4.1
+  qr_flutter: 4.1.0
 
 dev_dependencies:
   flutter_test:
