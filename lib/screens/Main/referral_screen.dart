@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -88,6 +90,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             'Referral Program',
             style: TextStyle(color: brandSoftText),

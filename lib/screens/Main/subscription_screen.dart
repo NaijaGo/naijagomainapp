@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -369,6 +371,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return Scaffold(
       backgroundColor: AppTheme.softGrey,
       appBar: AppBar(
+          leading: const VisibleBackButton(),
         title: const Text('NaijaGo Subscription'),
         backgroundColor: AppTheme.cardWhite,
         surfaceTintColor: Colors.transparent,

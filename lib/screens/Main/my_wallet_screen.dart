@@ -1,5 +1,7 @@
 // lib/screens/Main/my_wallet_screen.dart
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -233,6 +235,7 @@ class _MyWalletScreenState extends State<MyWalletScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             'My Wallet & Payments',
             style: TextStyle(color: brandSoftText),

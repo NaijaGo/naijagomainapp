@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -170,7 +172,8 @@ class _PickupOrdersScreenState extends State<PickupOrdersScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Pickup Orders')),
+    appBar: AppBar(
+          leading: const VisibleBackButton(),title: const Text('Pickup Orders')),
     body: RefreshIndicator(
       onRefresh: _load,
       child: _loading

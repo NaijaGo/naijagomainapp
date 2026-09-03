@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -1412,6 +1414,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       data: PharmacyUi.theme,
       child: Scaffold(
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: Text(
             widget.isPharmacistView ? 'Live Consultation' : 'Pharmacy Support',
           ),

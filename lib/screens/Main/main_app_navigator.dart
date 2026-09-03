@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:naija_go/auth/screens/login_screen.dart';
@@ -235,7 +237,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   }
 
   List<Widget> get _widgetOptions {
-    final homeScreen = HomeScreen(onReturnToDashboard: _returnToDashboard);
+    final homeScreen = HomeScreen(
+      onReturnToDashboard: _returnToDashboard,
+      onCartTapped: () => _onItemTapped(1),
+    );
     final categoriesScreen = CategoriesScreen(
       showAppBar: false,
       onReturnToDashboard: _returnToDashboard,
@@ -638,7 +643,13 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleSpacing: 16,
+      leading: _selectedIndex == 0
+          ? null
+          : VisibleBackButton(
+              tooltip: 'Back to home',
+              onPressed: () => _onItemTapped(0),
+            ),
+      titleSpacing: _selectedIndex == 0 ? 16 : 0,
       title: _selectedIndex == 0
           ? const Text.rich(
               TextSpan(

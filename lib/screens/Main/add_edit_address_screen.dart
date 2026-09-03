@@ -1,6 +1,8 @@
 // lib/screens/Main/add_edit_address_screen.dart
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -208,6 +210,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: Text(
             isEditing ? 'Edit Address' : 'Add New Address',
             style: const TextStyle(color: whiteBackground),

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -1315,6 +1317,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Scaffold(
       backgroundColor: AppTheme.softGrey,
       appBar: AppBar(
+          leading: const VisibleBackButton(),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.secondaryBlack,
         surfaceTintColor: Colors.transparent,
@@ -1745,7 +1748,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           if (!shipment.pickupAvailable) ...[
             const SizedBox(height: 7),
             const Text(
-              'This shop has not enabled customer pickup.',
+              'Pickup is not available from this shop yet. You can still choose delivery.',
               style: TextStyle(
                 color: AppTheme.mutedText,
                 fontSize: 11.5,

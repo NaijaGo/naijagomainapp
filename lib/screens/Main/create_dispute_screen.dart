@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:naija_go/constants.dart';
@@ -197,6 +199,7 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             "Create Dispute",
             style: TextStyle(color: whiteBackground),

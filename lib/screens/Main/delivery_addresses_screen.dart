@@ -1,5 +1,7 @@
 // lib/screens/Main/delivery_addresses_screen.dart
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -256,6 +258,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             'Delivery Addresses',
             style: TextStyle(color: greenYellow),

@@ -1,5 +1,7 @@
 // lib/screens/Main/faq_screen.dart
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import '../../widgets/tech_glow_background.dart';
 
 // Color constants
@@ -136,6 +138,7 @@ class _FAQScreenState extends State<FAQScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text("FAQs", style: TextStyle(color: whiteBackground)),
           backgroundColor: Colors.transparent,
           iconTheme: const IconThemeData(color: whiteBackground),
@@ -149,6 +152,10 @@ class _FAQScreenState extends State<FAQScreen> {
               padding: const EdgeInsets.all(16.0),
               child: TextField(
                 controller: _searchController,
+                autocorrect: false,
+                enableSuggestions: false,
+                spellCheckConfiguration:
+                    const SpellCheckConfiguration.disabled(),
                 decoration: InputDecoration(
                   hintText: "Search FAQs...",
                   hintStyle: TextStyle(

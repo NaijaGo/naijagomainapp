@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
 
@@ -122,9 +126,17 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
           _isLoading = false;
         });
       } else {
+        String message = 'Unable to load products for this category.';
+        try {
+          final body = jsonDecode(response.body);
+          if (body is Map &&
+              body['message']?.toString().trim().isNotEmpty == true) {
+            message = body['message'].toString().trim();
+          }
+        } catch (_) {}
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Unable to load products for this category.';
+          _errorMessage = message;
         });
       }
     } catch (e) {
@@ -408,13 +420,15 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                 ),
               ],
             ),
-            child: const Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.inventory_2_outlined, size: 42, color: lightGrey),
                 SizedBox(height: 12),
                 Text(
-                  'No products found in this category.',
+                  widget.endpointPath != null
+                      ? 'This store has no active products yet.'
+                      : 'No products found in this category.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: secondaryBlack,
@@ -424,7 +438,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Try another category or check back later.',
+                  widget.endpointPath != null
+                      ? 'The store will update automatically when its catalogue is published.'
+                      : 'Try another category or check back later.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: lightGrey,
@@ -808,6 +824,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     return Scaffold(
       backgroundColor: softGrey,
       appBar: AppBar(
+          leading: const VisibleBackButton(),
         backgroundColor: white,
         foregroundColor: secondaryBlack,
         surfaceTintColor: Colors.transparent,

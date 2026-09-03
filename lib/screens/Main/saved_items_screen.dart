@@ -1,6 +1,8 @@
 // lib/screens/Main/saved_items_screen.dart
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -101,6 +103,7 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             'Saved Items',
             style: TextStyle(color: greenYellow), // AppBar title green yellow

@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/visible_back_button.dart';
+
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import 'category_products_screen.dart';
@@ -862,6 +864,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
+              autocorrect: false,
+              enableSuggestions: false,
+              spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
               textAlignVertical: TextAlignVertical.center,
               decoration: const InputDecoration(
                 hintText: 'Search categories or products...',
@@ -915,6 +920,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       backgroundColor: white,
       appBar: widget.showAppBar
           ? AppBar(
+              leading: const VisibleBackButton(),
               backgroundColor: white,
               foregroundColor: secondaryBlack,
               surfaceTintColor: Colors.transparent,

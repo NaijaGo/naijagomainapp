@@ -1,6 +1,8 @@
 // lib/screens/Main/write_review_screen.dart
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -118,6 +120,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             'Write a Review',
             style: TextStyle(color: Colors.white),

@@ -1,6 +1,8 @@
 // lib/screens/Main/EditProfileScreen.dart
 
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -250,6 +252,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Scaffold(
       backgroundColor: whiteBackground,
       appBar: AppBar(
+          leading: const VisibleBackButton(),
         title: const Text('Edit Profile', style: TextStyle(color: greenYellow)),
         backgroundColor: deepNavyBlue,
         elevation: 1,

@@ -1,5 +1,7 @@
 // my_orders_screen.dart - FIXED VERSION
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
@@ -1227,6 +1229,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text('My Orders'),
           backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,

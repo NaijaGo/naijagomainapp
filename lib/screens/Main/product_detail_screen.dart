@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -1837,6 +1839,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
+          leading: const VisibleBackButton(),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: deepNavyBlue),

@@ -1,6 +1,8 @@
 // lib/screens/disputes/dispute_chat_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:naija_go/constants.dart';
@@ -118,6 +120,7 @@ class _DisputeChatScreenState extends State<DisputeChatScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          leading: const VisibleBackButton(),
           title: const Text(
             "Dispute Chat",
             style: TextStyle(color: whiteBackground),

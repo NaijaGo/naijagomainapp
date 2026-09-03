@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -441,11 +443,10 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
       child: Scaffold(
         backgroundColor: softGrey,
         appBar: AppBar(
-          leading: IconButton(
+          leading: VisibleBackButton(
             tooltip: inVendorMenu && !_openedDirectlyToVendor
                 ? 'All restaurants'
                 : 'Back',
-            icon: const Icon(Icons.arrow_back_rounded, color: secondaryBlack),
             onPressed: _handleBackPressed,
           ),
           title: Text(

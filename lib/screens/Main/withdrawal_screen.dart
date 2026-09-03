@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -152,6 +154,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   children: [
                     TextField(
                       controller: searchController,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
                       decoration: const InputDecoration(
                         labelText: 'Search bank',
                         prefixIcon: Icon(Icons.search),
@@ -368,6 +373,7 @@ Future<void> _requestOtp() async {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+          leading: const VisibleBackButton(),
         title: const Text('Withdraw Funds'),
         backgroundColor: deepNavyBlue,
       ),
