@@ -227,7 +227,7 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DropdownButtonFormField<String>(
-                  initialValue: selectedOrderId,
+                  value: selectedOrderId,
                   style: const TextStyle(color: deepNavyBlue),
                   items: selectableOrders.map((order) {
                     return DropdownMenuItem<String>(

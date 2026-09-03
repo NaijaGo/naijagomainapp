@@ -216,7 +216,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                 ),
                 const SizedBox(height: 18),
                 DropdownButtonFormField<String>(
-                  initialValue: draftSort,
+                  value: draftSort,
                   decoration: const InputDecoration(labelText: 'Sort results'),
                   items: const [
                     DropdownMenuItem(value: 'newest', child: Text('Newest')),

@@ -315,7 +315,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: sort,
+                  value: sort,
                   decoration: const InputDecoration(labelText: 'Sort results'),
                   items: const [
                     DropdownMenuItem(value: 'newest', child: Text('Newest')),
