@@ -2145,9 +2145,9 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => CategoryProductsScreen(
-          category: 'Cost-Low',
+          category: 'Low Cost',
           endpointPath: '/api/products/featured/cost-low',
-          screenSubtitle: 'Official Cost-Low store',
+          screenSubtitle: 'Official Low Cost store',
           onReturnToDashboard: widget.onReturnToDashboard,
         ),
       ),
@@ -2209,7 +2209,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Text(
-                                'COST-LOW WORLD',
+                                'LOW COST WORLD',
                                 style: TextStyle(
                                   color: Color(0xFFADFF2F),
                                   fontSize: 11,
@@ -2229,7 +2229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 7),
                               Text(
-                                'Shop every Cost-Low product in one place.',
+                                'Shop every Low Cost product in one place.',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.84),
                                   fontSize: 12.5,
