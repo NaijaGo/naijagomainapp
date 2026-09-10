@@ -18,6 +18,7 @@ import '../../models/address.dart';
 import '../../models/product.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/address_resolution_service.dart';
+import '../../services/address_autocomplete_service.dart';
 import '../../services/location_access_service.dart';
 import '../../services/payment_service.dart';
 import '../../theme/app_theme.dart';
@@ -232,6 +233,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _postalCodeController = TextEditingController();
   final TextEditingController _countryController = TextEditingController();
+  final AddressAutocompleteService _autocompleteService =
+      AddressAutocompleteService();
+  Timer? _addressSearchDebounce;
+  List<AddressSuggestion> _addressSuggestions = const [];
+  bool _isSearchingAddress = false;
+  String? _addressSearchMessage;
 
   bool _useSavedAddress = false;
   bool _isManualAddress = false;
@@ -272,6 +279,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    _addressSearchDebounce?.cancel();
     _addressController.dispose();
     _cityController.dispose();
     _postalCodeController.dispose();
@@ -1317,7 +1325,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Scaffold(
       backgroundColor: AppTheme.softGrey,
       appBar: AppBar(
-          leading: const VisibleBackButton(),
+        leading: const VisibleBackButton(),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.secondaryBlack,
         surfaceTintColor: Colors.transparent,
@@ -2968,6 +2976,70 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  void _handleStreetAddressChanged(String value) {
+    _handleManualAddressChanged(value);
+    _addressSearchDebounce?.cancel();
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _addressSuggestions = const [];
+        _isSearchingAddress = false;
+        _addressSearchMessage = null;
+      });
+      return;
+    }
+    _addressSearchDebounce = Timer(const Duration(milliseconds: 450), () {
+      _searchCheckoutAddresses(query);
+    });
+  }
+
+  Future<void> _searchCheckoutAddresses(String query) async {
+    if (!mounted) return;
+    setState(() {
+      _isSearchingAddress = true;
+      _addressSearchMessage = null;
+    });
+    try {
+      final results = await _autocompleteService.search(query);
+      if (!mounted || _addressController.text.trim() != query) return;
+      setState(() {
+        _addressSuggestions = results;
+        _addressSearchMessage = results.isEmpty
+            ? 'No matching address found.'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted || _addressController.text.trim() != query) return;
+      setState(() {
+        _addressSuggestions = const [];
+        _addressSearchMessage =
+            'Suggestions are unavailable. Check your connection or enter the address manually.';
+      });
+    } finally {
+      if (mounted && _addressController.text.trim() == query) {
+        setState(() => _isSearchingAddress = false);
+      }
+    }
+  }
+
+  void _selectCheckoutAddress(AddressSuggestion suggestion) {
+    setState(() {
+      _addressController.text = suggestion.address;
+      _cityController.text = suggestion.city;
+      if (suggestion.postalCode.isNotEmpty) {
+        _postalCodeController.text = suggestion.postalCode;
+      }
+      _countryController.text = suggestion.country;
+      _userLatitude = suggestion.latitude;
+      _userLongitude = suggestion.longitude;
+      _addressSuggestions = const [];
+      _addressSearchMessage = null;
+      _addressSelectedOrFetched = false;
+      _isSummaryCalculated = false;
+      _fullOrderSummary = null;
+    });
+  }
+
   Future<void> _applyManualAddress() async {
     final address = _addressController.text.trim();
     final city = _cityController.text.trim();
@@ -2989,8 +3061,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _addressSelectedOrFetched = false;
       _isSummaryCalculated = false;
       _fullOrderSummary = null;
-      _userLatitude = null;
-      _userLongitude = null;
       _isLoading = true;
     });
 
@@ -3050,7 +3120,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             controller: _addressController,
             label: 'Street address',
             icon: Icons.home_outlined,
+            onChanged: _handleStreetAddressChanged,
           ),
+          if (_isSearchingAddress)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+          if (_addressSuggestions.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppTheme.borderGrey),
+              ),
+              child: Column(
+                children: _addressSuggestions.map((suggestion) {
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.location_on_outlined),
+                    title: Text(
+                      suggestion.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => _selectCheckoutAddress(suggestion),
+                  );
+                }).toList(),
+              ),
+            ),
+          if (_addressSearchMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _addressSearchMessage!,
+                style: const TextStyle(color: AppTheme.mutedText, fontSize: 12),
+              ),
+            ),
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -3121,10 +3228,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    ValueChanged<String>? onChanged,
   }) {
     return TextFormField(
       controller: controller,
-      onChanged: _handleManualAddressChanged,
+      onChanged: onChanged ?? _handleManualAddressChanged,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),

@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+
 import '../../widgets/visible_back_button.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -10,6 +12,7 @@ import 'package:geocoding/geocoding.dart';
 import '../../constants.dart'; // Import constants for colors
 import '../../models/address.dart';
 import '../../services/address_resolution_service.dart';
+import '../../services/address_autocomplete_service.dart';
 import '../../widgets/tech_glow_background.dart';
 // Import the Address model
 
@@ -53,10 +56,80 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   bool _isLoading = false; // Add a loading state for geocoding
   double? _latitude;
   double? _longitude;
+  final AddressAutocompleteService _autocompleteService =
+      AddressAutocompleteService();
+  Timer? _searchDebounce;
+  List<AddressSuggestion> _suggestions = const [];
+  bool _isSearchingAddress = false;
+  String? _searchMessage;
+
+  void _onAddressChanged(String value) {
+    _latitude = null;
+    _longitude = null;
+    _searchDebounce?.cancel();
+    final query = value.trim();
+    if (query.length < 3) {
+      setState(() {
+        _suggestions = const [];
+        _isSearchingAddress = false;
+        _searchMessage = null;
+      });
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      _searchAddresses(query);
+    });
+  }
 
   void _invalidateCoordinates(String _) {
     _latitude = null;
     _longitude = null;
+  }
+
+  Future<void> _searchAddresses(String query) async {
+    if (!mounted) return;
+    setState(() {
+      _isSearchingAddress = true;
+      _searchMessage = null;
+    });
+    try {
+      final results = await _autocompleteService.search(
+        query,
+        latitude: _latitude,
+        longitude: _longitude,
+      );
+      if (!mounted || _addressController.text.trim() != query) return;
+      setState(() {
+        _suggestions = results;
+        _searchMessage = results.isEmpty ? 'No matching address found.' : null;
+      });
+    } catch (_) {
+      if (!mounted || _addressController.text.trim() != query) return;
+      setState(() {
+        _suggestions = const [];
+        _searchMessage =
+            'Address suggestions are unavailable. You can still enter the address manually.';
+      });
+    } finally {
+      if (mounted && _addressController.text.trim() == query) {
+        setState(() => _isSearchingAddress = false);
+      }
+    }
+  }
+
+  void _selectSuggestion(AddressSuggestion suggestion) {
+    setState(() {
+      _addressController.text = suggestion.address;
+      _cityController.text = suggestion.city;
+      if (suggestion.postalCode.isNotEmpty) {
+        _postalCodeController.text = suggestion.postalCode;
+      }
+      _countryController.text = suggestion.country;
+      _latitude = suggestion.latitude;
+      _longitude = suggestion.longitude;
+      _suggestions = const [];
+      _searchMessage = null;
+    });
   }
 
   @override
@@ -130,6 +203,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _addressController.dispose();
     _phoneNumberController.dispose();
     _cityController.dispose();
@@ -295,7 +369,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       children: [
                         TextFormField(
                           controller: _addressController,
-                          onChanged: _invalidateCoordinates,
+                          onChanged: _onAddressChanged,
                           decoration: InputDecoration(
                             labelText: 'Address',
                             labelStyle: const TextStyle(color: deepNavyBlue),
@@ -320,6 +394,50 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                           validator: (value) =>
                               value!.isEmpty ? 'Please enter an address' : null,
                         ),
+                        if (_isSearchingAddress)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: LinearProgressIndicator(minHeight: 2),
+                          ),
+                        if (_suggestions.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: deepNavyBlue.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Column(
+                              children: _suggestions.map((suggestion) {
+                                return ListTile(
+                                  dense: true,
+                                  leading: const Icon(
+                                    Icons.location_on_outlined,
+                                    color: deepNavyBlue,
+                                  ),
+                                  title: Text(
+                                    suggestion.label,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () => _selectSuggestion(suggestion),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        if (_searchMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              _searchMessage!,
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 20),
                         TextFormField(
                           controller: _phoneNumberController,
