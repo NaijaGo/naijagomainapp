@@ -6,6 +6,7 @@ import '../../widgets/visible_back_button.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geocoding/geocoding.dart';
 import '../../constants.dart'; // Import constants for colors
 import '../../models/address.dart';
 import '../../services/address_resolution_service.dart';
@@ -50,6 +51,13 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   late TextEditingController _countryController;
   bool _isDefault = false;
   bool _isLoading = false; // Add a loading state for geocoding
+  double? _latitude;
+  double? _longitude;
+
+  void _invalidateCoordinates(String _) {
+    _latitude = null;
+    _longitude = null;
+  }
 
   @override
   void initState() {
@@ -75,6 +83,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       _postalCodeController.text = existingAddress.postalCode;
       _countryController.text = existingAddress.country;
       _isDefault = existingAddress.isDefault;
+      _latitude = existingAddress.latitude;
+      _longitude = existingAddress.longitude;
       return;
     }
 
@@ -84,6 +94,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
     // If adding a new address from geolocation
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      _latitude = widget.initialLatitude;
+      _longitude = widget.initialLongitude;
       setState(() {
         _isLoading = true;
       });
@@ -128,6 +140,42 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
   Future<void> _saveAddress() async {
     if (_formKey.currentState!.validate()) {
+      if (_latitude == null || _longitude == null) {
+        setState(() => _isLoading = true);
+        try {
+          final query = [
+            _addressController.text.trim(),
+            _cityController.text.trim(),
+            _postalCodeController.text.trim(),
+            _countryController.text.trim(),
+          ].where((part) => part.isNotEmpty).join(', ');
+          final locations = await locationFromAddress(
+            query,
+          ).timeout(const Duration(seconds: 10));
+          if (locations.isNotEmpty) {
+            _latitude = locations.first.latitude;
+            _longitude = locations.first.longitude;
+          }
+        } catch (_) {
+          // The user receives one concise, actionable message below.
+        } finally {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      }
+
+      if (_latitude == null || _longitude == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'We could not locate that address. Check it or use your current location.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('jwt_token');
 
@@ -150,6 +198,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         'city': _cityController.text.trim(),
         'postalCode': _postalCodeController.text.trim(),
         'country': _countryController.text.trim(),
+        'latitude': _latitude,
+        'longitude': _longitude,
         'isDefault': _isDefault,
       };
 
@@ -245,6 +295,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       children: [
                         TextFormField(
                           controller: _addressController,
+                          onChanged: _invalidateCoordinates,
                           decoration: InputDecoration(
                             labelText: 'Address',
                             labelStyle: const TextStyle(color: deepNavyBlue),
@@ -308,6 +359,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         const SizedBox(height: 20),
                         TextFormField(
                           controller: _cityController,
+                          onChanged: _invalidateCoordinates,
                           decoration: InputDecoration(
                             labelText: 'City',
                             labelStyle: const TextStyle(color: deepNavyBlue),
@@ -335,6 +387,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         const SizedBox(height: 20),
                         TextFormField(
                           controller: _postalCodeController,
+                          onChanged: _invalidateCoordinates,
                           decoration: InputDecoration(
                             labelText: 'Postal Code',
                             labelStyle: const TextStyle(color: deepNavyBlue),
@@ -363,6 +416,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         const SizedBox(height: 20),
                         TextFormField(
                           controller: _countryController,
+                          onChanged: _invalidateCoordinates,
                           decoration: InputDecoration(
                             labelText: 'Country',
                             labelStyle: const TextStyle(color: deepNavyBlue),
