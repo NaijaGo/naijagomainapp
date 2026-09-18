@@ -1248,16 +1248,71 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           return;
         }
 
-        final paymentService = PaymentService();
+        final provider = (intentData['provider'] as String? ?? 'flutterwave')
+            .trim()
+            .toLowerCase();
+        var clientPaymentStatus = 'unknown_from_client';
+        dynamic chargeResponse;
         if (!mounted) return;
-        final chargeResponse = await paymentService.startFlutterwavePayment(
-          context: context,
-          amount: paymentAmount,
-          email: userEmail,
-          name: fullName,
-          phoneNumber: phone,
-          transactionReference: txRef,
-        );
+        if (provider == 'squad') {
+          final checkoutUrl = intentData['checkout_url'] as String?;
+          final checkoutUri = checkoutUrl == null
+              ? null
+              : Uri.tryParse(checkoutUrl);
+          if (checkoutUri == null || !checkoutUri.hasScheme) {
+            _showSnackBar(
+              'Unable to open the secure payment page.',
+              isError: true,
+            );
+            return;
+          }
+          final launched = await launchUrl(
+            checkoutUri,
+            mode: LaunchMode.externalApplication,
+          );
+          if (!launched) {
+            _showSnackBar(
+              'Unable to open the secure payment page.',
+              isError: true,
+            );
+            return;
+          }
+          if (!mounted) return;
+          final completed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Complete your payment'),
+              content: const Text(
+                'Finish payment on the secure Squad page, return to NaijaGo, then tap Verify payment. Do not pay twice.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('I did not pay'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Verify payment'),
+                ),
+              ],
+            ),
+          );
+          clientPaymentStatus = completed == true
+              ? 'customer_requested_verification'
+              : 'customer_did_not_complete';
+        } else {
+          final paymentService = PaymentService();
+          chargeResponse = await paymentService.startFlutterwavePayment(
+            context: context,
+            amount: paymentAmount,
+            email: userEmail,
+            name: fullName,
+            phoneNumber: phone,
+            transactionReference: txRef,
+          );
+          clientPaymentStatus = chargeResponse?.status ?? 'unknown_from_client';
+        }
 
         // Log what we actually got from Flutterwave client-side
         debugPrint(
@@ -1277,7 +1332,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           },
           body: jsonEncode({
             'transaction_id': paymentRef,
-            'status': chargeResponse?.status ?? 'unknown_from_client',
+            'status': clientPaymentStatus,
             'update_time': DateTime.now().toIso8601String(),
             'email_address': userEmail,
           }),
