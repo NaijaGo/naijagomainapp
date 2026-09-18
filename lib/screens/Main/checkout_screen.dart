@@ -233,12 +233,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _postalCodeController = TextEditingController();
   final TextEditingController _countryController = TextEditingController();
+  final GlobalKey _manualAddressFieldKey = GlobalKey();
+  final FocusNode _manualAddressFocusNode = FocusNode();
   final AddressAutocompleteService _autocompleteService =
       AddressAutocompleteService();
   Timer? _addressSearchDebounce;
+  final ScrollController _addressSuggestionsScrollController =
+      ScrollController();
   List<AddressSuggestion> _addressSuggestions = const [];
   bool _isSearchingAddress = false;
   String? _addressSearchMessage;
+  double? _addressSearchBiasLatitude;
+  double? _addressSearchBiasLongitude;
 
   bool _useSavedAddress = false;
   bool _isManualAddress = false;
@@ -274,12 +280,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    _manualAddressFocusNode.addListener(_ensureManualAddressVisible);
     _fetchAddressesAndWallet();
   }
 
   @override
   void dispose() {
     _addressSearchDebounce?.cancel();
+    _addressSuggestionsScrollController.dispose();
+    _manualAddressFocusNode.dispose();
     _addressController.dispose();
     _cityController.dispose();
     _postalCodeController.dispose();
@@ -2944,6 +2953,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _activateManualAddress() {
+    _addressSearchBiasLatitude ??= _userLatitude;
+    _addressSearchBiasLongitude ??= _userLongitude;
     setState(() {
       _useSavedAddress = false;
       _isManualAddress = true;
@@ -2977,6 +2988,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _handleStreetAddressChanged(String value) {
+    _addressSearchBiasLatitude ??= _userLatitude;
+    _addressSearchBiasLongitude ??= _userLongitude;
     _handleManualAddressChanged(value);
     _addressSearchDebounce?.cancel();
     final query = value.trim();
@@ -2988,8 +3001,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
       return;
     }
-    _addressSearchDebounce = Timer(const Duration(milliseconds: 220), () {
+    final cached = _autocompleteService.cachedSuggestions(query);
+    final shouldSearchImmediately =
+        cached.isEmpty && !_isSearchingAddress && _addressSuggestions.isEmpty;
+    setState(() {
+      if (cached.isNotEmpty) _addressSuggestions = cached;
+      _isSearchingAddress = true;
+      _addressSearchMessage = null;
+    });
+    if (shouldSearchImmediately) {
       _searchCheckoutAddresses(query);
+    } else {
+      _addressSearchDebounce = Timer(const Duration(milliseconds: 120), () {
+        _searchCheckoutAddresses(query);
+      });
+    }
+  }
+
+  void _ensureManualAddressVisible() {
+    if (!_manualAddressFocusNode.hasFocus) return;
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      final context = _manualAddressFieldKey.currentContext;
+      if (mounted && context != null) {
+        Scrollable.ensureVisible(
+          context,
+          alignment: 0.08,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
@@ -3000,7 +3040,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _addressSearchMessage = null;
     });
     try {
-      final results = await _autocompleteService.search(query);
+      final results = await _autocompleteService.search(
+        query,
+        latitude: _addressSearchBiasLatitude,
+        longitude: _addressSearchBiasLongitude,
+      );
       if (!mounted || _addressController.text.trim() != query) return;
       setState(() {
         _addressSuggestions = results;
@@ -3032,6 +3076,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _countryController.text = suggestion.country;
       _userLatitude = suggestion.latitude;
       _userLongitude = suggestion.longitude;
+      _addressSearchBiasLatitude = suggestion.latitude;
+      _addressSearchBiasLongitude = suggestion.longitude;
       _addressSuggestions = const [];
       _addressSearchMessage = null;
       _addressSelectedOrFetched = false;
@@ -3121,46 +3167,49 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             label: 'Street address',
             icon: Icons.home_outlined,
             onChanged: _handleStreetAddressChanged,
+            fieldKey: _manualAddressFieldKey,
+            focusNode: _manualAddressFocusNode,
           ),
           if (_isSearchingAddress)
             const Padding(
               padding: EdgeInsets.only(top: 8),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Searching locations…',
-                    style: TextStyle(color: AppTheme.mutedText, fontSize: 12),
-                  ),
-                ],
-              ),
+              child: LinearProgressIndicator(minHeight: 2),
             ),
           if (_addressSuggestions.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(top: 8),
+              constraints: const BoxConstraints(maxHeight: 224),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(color: AppTheme.borderGrey),
               ),
-              child: Column(
-                children: _addressSuggestions.map((suggestion) {
-                  return ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.location_on_outlined),
-                    title: Text(
-                      suggestion.label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => _selectCheckoutAddress(suggestion),
-                  );
-                }).toList(),
+              child: RawScrollbar(
+                controller: _addressSuggestionsScrollController,
+                thumbVisibility: true,
+                thumbColor: const Color(0xFFCBD5E1),
+                radius: const Radius.circular(8),
+                thickness: 3,
+                child: ListView.separated(
+                  controller: _addressSuggestionsScrollController,
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: _addressSuggestions.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final suggestion = _addressSuggestions[index];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.location_on_outlined),
+                      title: Text(
+                        suggestion.label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _selectCheckoutAddress(suggestion),
+                    );
+                  },
+                ),
               ),
             ),
           if (_addressSearchMessage != null)
@@ -3242,9 +3291,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     required String label,
     required IconData icon,
     ValueChanged<String>? onChanged,
+    Key? fieldKey,
+    FocusNode? focusNode,
   }) {
     return TextFormField(
+      key: fieldKey,
       controller: controller,
+      focusNode: focusNode,
       onChanged: onChanged ?? _handleManualAddressChanged,
       decoration: InputDecoration(
         labelText: label,

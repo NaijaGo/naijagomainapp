@@ -52,18 +52,25 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   late TextEditingController _cityController;
   late TextEditingController _postalCodeController;
   late TextEditingController _countryController;
+  final GlobalKey _addressFieldKey = GlobalKey();
+  final FocusNode _addressFocusNode = FocusNode();
   bool _isDefault = false;
   bool _isLoading = false; // Add a loading state for geocoding
   double? _latitude;
   double? _longitude;
+  double? _searchBiasLatitude;
+  double? _searchBiasLongitude;
   final AddressAutocompleteService _autocompleteService =
       AddressAutocompleteService();
   Timer? _searchDebounce;
+  final ScrollController _suggestionsScrollController = ScrollController();
   List<AddressSuggestion> _suggestions = const [];
   bool _isSearchingAddress = false;
   String? _searchMessage;
 
   void _onAddressChanged(String value) {
+    _searchBiasLatitude ??= _latitude;
+    _searchBiasLongitude ??= _longitude;
     _latitude = null;
     _longitude = null;
     _searchDebounce?.cancel();
@@ -76,8 +83,35 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       });
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 220), () {
+    final cached = _autocompleteService.cachedSuggestions(query);
+    final shouldSearchImmediately =
+        cached.isEmpty && !_isSearchingAddress && _suggestions.isEmpty;
+    setState(() {
+      if (cached.isNotEmpty) _suggestions = cached;
+      _isSearchingAddress = true;
+      _searchMessage = null;
+    });
+    if (shouldSearchImmediately) {
       _searchAddresses(query);
+    } else {
+      _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+        _searchAddresses(query);
+      });
+    }
+  }
+
+  void _ensureAddressFieldVisible() {
+    if (!_addressFocusNode.hasFocus) return;
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      final context = _addressFieldKey.currentContext;
+      if (mounted && context != null) {
+        Scrollable.ensureVisible(
+          context,
+          alignment: 0.12,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
@@ -95,8 +129,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     try {
       final results = await _autocompleteService.search(
         query,
-        latitude: _latitude,
-        longitude: _longitude,
+        latitude: _searchBiasLatitude,
+        longitude: _searchBiasLongitude,
       );
       if (!mounted || _addressController.text.trim() != query) return;
       setState(() {
@@ -127,6 +161,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       _countryController.text = suggestion.country;
       _latitude = suggestion.latitude;
       _longitude = suggestion.longitude;
+      _searchBiasLatitude = suggestion.latitude;
+      _searchBiasLongitude = suggestion.longitude;
       _suggestions = const [];
       _searchMessage = null;
     });
@@ -140,6 +176,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _cityController = TextEditingController();
     _postalCodeController = TextEditingController();
     _countryController = TextEditingController();
+    _addressFocusNode.addListener(_ensureAddressFieldVisible);
     _loadInitialData();
   }
 
@@ -158,6 +195,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       _isDefault = existingAddress.isDefault;
       _latitude = existingAddress.latitude;
       _longitude = existingAddress.longitude;
+      _searchBiasLatitude = existingAddress.latitude;
+      _searchBiasLongitude = existingAddress.longitude;
       return;
     }
 
@@ -169,6 +208,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
       _latitude = widget.initialLatitude;
       _longitude = widget.initialLongitude;
+      _searchBiasLatitude = widget.initialLatitude;
+      _searchBiasLongitude = widget.initialLongitude;
       setState(() {
         _isLoading = true;
       });
@@ -204,6 +245,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _suggestionsScrollController.dispose();
+    _addressFocusNode.dispose();
     _addressController.dispose();
     _phoneNumberController.dispose();
     _cityController.dispose();
@@ -368,7 +411,9 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                     child: ListView(
                       children: [
                         TextFormField(
+                          key: _addressFieldKey,
                           controller: _addressController,
+                          focusNode: _addressFocusNode,
                           onChanged: _onAddressChanged,
                           decoration: InputDecoration(
                             labelText: 'Address',
@@ -397,29 +442,12 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         if (_isSearchingAddress)
                           const Padding(
                             padding: EdgeInsets.only(top: 8),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Searching locations…',
-                                  style: TextStyle(
-                                    color: Colors.black54,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: LinearProgressIndicator(minHeight: 2),
                           ),
                         if (_suggestions.isNotEmpty)
                           Container(
                             margin: const EdgeInsets.only(top: 8),
+                            constraints: const BoxConstraints(maxHeight: 224),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(10),
@@ -427,22 +455,36 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                                 color: deepNavyBlue.withValues(alpha: 0.2),
                               ),
                             ),
-                            child: Column(
-                              children: _suggestions.map((suggestion) {
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(
-                                    Icons.location_on_outlined,
-                                    color: deepNavyBlue,
-                                  ),
-                                  title: Text(
-                                    suggestion.label,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  onTap: () => _selectSuggestion(suggestion),
-                                );
-                              }).toList(),
+                            child: RawScrollbar(
+                              controller: _suggestionsScrollController,
+                              thumbVisibility: true,
+                              thumbColor: const Color(0xFFCBD5E1),
+                              radius: const Radius.circular(8),
+                              thickness: 3,
+                              child: ListView.separated(
+                                controller: _suggestionsScrollController,
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                itemCount: _suggestions.length,
+                                separatorBuilder: (_, _) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final suggestion = _suggestions[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                      Icons.location_on_outlined,
+                                      color: deepNavyBlue,
+                                    ),
+                                    title: Text(
+                                      suggestion.label,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onTap: () => _selectSuggestion(suggestion),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         if (_searchMessage != null)
