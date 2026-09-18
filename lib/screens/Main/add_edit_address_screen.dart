@@ -68,7 +68,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _longitude = null;
     _searchDebounce?.cancel();
     final query = value.trim();
-    if (query.length < 3) {
+    if (query.length < 2) {
       setState(() {
         _suggestions = const [];
         _isSearchingAddress = false;
@@ -76,7 +76,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       });
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+    _searchDebounce = Timer(const Duration(milliseconds: 220), () {
       _searchAddresses(query);
     });
   }
@@ -397,7 +397,25 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         if (_isSearchingAddress)
                           const Padding(
                             padding: EdgeInsets.only(top: 8),
-                            child: LinearProgressIndicator(minHeight: 2),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Searching locations…',
+                                  style: TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         if (_suggestions.isNotEmpty)
                           Container(

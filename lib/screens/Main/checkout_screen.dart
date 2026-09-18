@@ -2980,7 +2980,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _handleManualAddressChanged(value);
     _addressSearchDebounce?.cancel();
     final query = value.trim();
-    if (query.length < 3) {
+    if (query.length < 2) {
       setState(() {
         _addressSuggestions = const [];
         _isSearchingAddress = false;
@@ -2988,7 +2988,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
       return;
     }
-    _addressSearchDebounce = Timer(const Duration(milliseconds: 450), () {
+    _addressSearchDebounce = Timer(const Duration(milliseconds: 220), () {
       _searchCheckoutAddresses(query);
     });
   }
@@ -3125,7 +3125,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           if (_isSearchingAddress)
             const Padding(
               padding: EdgeInsets.only(top: 8),
-              child: LinearProgressIndicator(minHeight: 2),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Searching locations…',
+                    style: TextStyle(color: AppTheme.mutedText, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           if (_addressSuggestions.isNotEmpty)
             Container(
