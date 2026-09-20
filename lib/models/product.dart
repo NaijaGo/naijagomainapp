@@ -36,6 +36,7 @@ class Product {
   final bool requiresPharmacistApproval;
   final bool isOverTheCounter;
   final List<String> imageUrls;
+  final String? videoAssetId;
   final int salesCount;
   final double averageRating;
   final int numReviews;
@@ -46,6 +47,7 @@ class Product {
 
   Product({
     required this.id,
+    this.videoAssetId,
     required this.name,
     required this.description,
     required this.price,
@@ -277,6 +279,7 @@ class Product {
       isOverTheCounter:
           json['isOverTheCounter'] == true || json['isOTC'] == true,
       imageUrls: parsedImageUrls,
+      videoAssetId: json['videoAssetId']?.toString(),
       salesCount: json['salesCount'] ?? 0,
       averageRating: _parseDouble(json['averageRating']) ?? 0,
       numReviews: int.tryParse(json['numReviews']?.toString() ?? '') ?? 0,
@@ -332,6 +335,7 @@ class Product {
     'requiresPharmacistApproval': requiresPharmacistApproval,
     'isOverTheCounter': isOverTheCounter,
     'imageUrls': imageUrls,
+    'videoAssetId': videoAssetId,
     'salesCount': salesCount,
     'averageRating': averageRating,
     'numReviews': numReviews,

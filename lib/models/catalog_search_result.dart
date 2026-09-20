@@ -1,0 +1,30 @@
+import 'product.dart';
+
+class CatalogSearchResult {
+  const CatalogSearchResult({
+    required this.products,
+    required this.total,
+    required this.page,
+    required this.hasMore,
+    this.collection,
+  });
+  final List<Product> products;
+  final int total;
+  final int page;
+  final bool hasMore;
+  final Map<String, dynamic>? collection;
+
+  factory CatalogSearchResult.fromJson(Map<String, dynamic> json) =>
+      CatalogSearchResult(
+        products: (json['products'] as List? ?? [])
+            .whereType<Map>()
+            .map((item) => Product.fromJson(Map<String, dynamic>.from(item)))
+            .toList(),
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        page: (json['page'] as num?)?.toInt() ?? 1,
+        hasMore: json['hasMore'] == true,
+        collection: json['collection'] is Map
+            ? Map<String, dynamic>.from(json['collection'] as Map)
+            : null,
+      );
+}

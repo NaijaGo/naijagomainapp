@@ -12,6 +12,7 @@ import 'package:photo_view/photo_view_gallery.dart';
 import '../../constants.dart';
 import '../../models/product.dart';
 import '../../widgets/product_social_proof.dart';
+import '../../widgets/product_video_section.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/customer_location_service.dart';
 import 'chat_screen.dart';
@@ -1879,6 +1880,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           children: [
             _buildProductImage(),
             _buildExtraImagesGallery(),
+            ProductVideoSection(productId: widget.product.id, assetId: widget.product.videoAssetId),
             const SizedBox(height: 18),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
