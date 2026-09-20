@@ -15,6 +15,8 @@ import '../../constants.dart';
 import '../../services/socket_service.dart';
 import '../../services/explore_service.dart';
 import '../../services/explore_notification_intent.dart';
+import '../../services/product_request_service.dart';
+import 'product_requests_screen.dart';
 import 'account_screen.dart';
 import 'cart_screen.dart';
 import 'categories_screen.dart'
@@ -212,9 +214,20 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     _fetchUserStatus();
     _loadExploreConfiguration();
     ExploreNotificationIntent.changed.addListener(_openExploreNotification);
+    ProductRequestIntent.changed.addListener(_openRequestNotification);
+  }
+
+  void _openRequestNotification() {
+    if (!_isLoggedIn) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isLoggedIn) return;
+      final id = ProductRequestIntent.take();
+      if (id != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductRequestScreen(requestId: id)));
+    });
   }
 
   void _openExploreNotification() {
+    _openRequestNotification();
     if (!_isLoggedIn) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isLoggedIn) return;
@@ -240,6 +253,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   @override
   void dispose() {
     ExploreNotificationIntent.changed.removeListener(_openExploreNotification);
+    ProductRequestIntent.changed.removeListener(_openRequestNotification);
     _socketService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

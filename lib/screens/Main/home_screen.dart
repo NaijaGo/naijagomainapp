@@ -21,6 +21,8 @@ import '../../models/food_readiness_campaign.dart';
 import '../../models/home_carousel_slide.dart';
 import '../../models/product.dart';
 import '../../models/catalog_search_result.dart';
+import '../../services/product_request_service.dart';
+import 'product_requests_screen.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/food_readiness_campaign_service.dart';
@@ -185,6 +187,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String _submittedQuery = '';
   bool _allowSmartMatching = true;
   bool _usedSmartMatching = false;
+  bool _productRequestsEnabled = false;
   bool _isLoading = true;
   String? _errorMessage;
   String? _category;
@@ -208,6 +211,27 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _searchController.text = widget.initialQuery;
     _performSearch(widget.initialQuery);
+    _loadProductRequestConfig();
+  }
+
+  Future<void> _loadProductRequestConfig() async {
+    final service = ProductRequestService();
+    try {
+      final config = await service.config();
+      if (mounted) setState(() => _productRequestsEnabled = config['enabled'] == true);
+    } catch (_) { /* Search remains usable if the optional feature is offline. */ }
+    finally { service.dispose(); }
+  }
+
+  void _requestMissingProduct() {
+    FocusScope.of(context).unfocus();
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ProductRequestScreen(query: _submittedQuery, criteria: {
+      if (_category?.isNotEmpty == true) 'category': _category!,
+      if (_minimumPrice != null) 'minPrice': _minimumPrice.toString(),
+      if (_maximumPrice != null) 'maxPrice': _maximumPrice.toString(),
+      if (_productType != null) 'productType': _productType!,
+      if (widget.vendorId != null) 'vendor': widget.vendorId!,
+    })));
   }
 
   @override
@@ -599,6 +623,8 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         actions: [
+          if (_productRequestsEnabled) IconButton(tooltip: 'My product requests', icon: const Icon(Icons.manage_search),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductRequestsScreen()))),
           Badge(
             isLabelVisible: _activeFilterCount > 0,
             label: Text('$_activeFilterCount'),
@@ -650,13 +676,15 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             )
           : _searchResults.isEmpty
-          ? _buildStateCard(
+          ? SingleChildScrollView(child: _buildStateCard(
               icon: Icons.inventory_2_outlined,
               iconColor: primaryNavy,
               title: 'No products found',
               message:
                   'Try another keyword, category, or product name to explore more results.',
-            )
+              action: _productRequestsEnabled && _submittedQuery.length >= 3 && _total == 0
+                  ? FilledButton.icon(onPressed: _requestMissingProduct, icon: const Icon(Icons.manage_search), label: const Text('Request This Product')) : null,
+            ))
           : CustomScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [

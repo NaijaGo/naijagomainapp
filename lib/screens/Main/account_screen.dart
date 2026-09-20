@@ -10,6 +10,8 @@ import '../../constants.dart';
 // Import LoginScreen
 import 'my_orders_screen.dart'; // Import MyOrdersScreen
 import 'pickup_orders_screen.dart';
+import 'product_requests_screen.dart';
+import '../../services/product_request_service.dart';
 import 'saved_items_screen.dart'; // Import SavedItemsScreen
 import 'delivery_addresses_screen.dart'; // Import DeliveryAddressesScreen
 import 'edit_profile_screen.dart'; // Import EditProfileScreen
@@ -59,12 +61,21 @@ class _AccountScreenState extends State<AccountScreen>
   bool _priceAlertsEnabled = true;
   bool _exploreActivityEnabled = true;
   bool _isSavingNotificationPreferences = false;
+  bool _productRequestsEnabled = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _fetchUserData();
+    _loadProductRequestsConfig();
+  }
+
+  Future<void> _loadProductRequestsConfig() async {
+    final service = ProductRequestService();
+    try { final config = await service.config(); if (mounted) setState(() => _productRequestsEnabled = config['enabled'] == true); }
+    catch (_) { /* Optional request history must not block account tools. */ }
+    finally { service.dispose(); }
   }
 
   @override
@@ -832,6 +843,8 @@ class _AccountScreenState extends State<AccountScreen>
             );
           },
         ),
+        if (_productRequestsEnabled) _buildAccountListItem(context, color, Icons.manage_search, 'My product requests',
+          'Track products NaijaGo is sourcing for you', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProductRequestsScreen()))),
         _buildAccountListItem(
           context,
           color,

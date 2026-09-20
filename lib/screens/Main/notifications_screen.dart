@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
 import '../../services/explore_notification_intent.dart';
+import '../../services/product_request_service.dart';
+import 'product_requests_screen.dart';
 import 'explore_comments_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tech_glow_background.dart';
@@ -356,6 +358,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final notification = Map<String, dynamic>.from(rawNotification as Map);
     final notificationId = notification['_id']?.toString() ?? '';
     final exploreDestination = ExploreDestination.parse(notification);
+    final productRequestId = ProductRequestIntent.parse(notification);
     final isRead = notification['read'] == true;
     final isMarking =
         notificationId.isNotEmpty && _markingIds.contains(notificationId);
@@ -372,7 +375,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       padding: const EdgeInsets.only(bottom: 14),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
-        onTap: exploreDestination != null
+        onTap: productRequestId != null ? () {
+          if (!isRead && notificationId.isNotEmpty) unawaited(_markNotificationAsRead(notificationId));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => ProductRequestScreen(requestId: productRequestId)));
+        } : exploreDestination != null
             ? () => _openExplore(exploreDestination, notificationId, isRead)
             : !isRead && !isMarking && notificationId.isNotEmpty
             ? () => _markNotificationAsRead(notificationId)
