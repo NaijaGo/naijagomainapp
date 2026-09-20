@@ -7,12 +7,14 @@ class CatalogSearchResult {
     required this.page,
     required this.hasMore,
     this.collection,
+    this.interpretation = 'catalog_attributes',
   });
   final List<Product> products;
   final int total;
   final int page;
   final bool hasMore;
   final Map<String, dynamic>? collection;
+  final String interpretation;
 
   factory CatalogSearchResult.fromJson(Map<String, dynamic> json) =>
       CatalogSearchResult(
@@ -23,6 +25,9 @@ class CatalogSearchResult {
         total: (json['total'] as num?)?.toInt() ?? 0,
         page: (json['page'] as num?)?.toInt() ?? 1,
         hasMore: json['hasMore'] == true,
+        interpretation: json['interpretation'] == 'gemini_intent'
+            ? 'gemini_intent'
+            : 'catalog_attributes',
         collection: json['collection'] is Map
             ? Map<String, dynamic>.from(json['collection'] as Map)
             : null,

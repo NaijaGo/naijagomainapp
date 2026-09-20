@@ -83,6 +83,7 @@ class User {
       'whatsappOrderAlerts': true,
       'promotions': true,
       'priceAlerts': true,
+      'exploreActivity': true,
     },
     required this.createdAt,
   });
@@ -126,15 +127,15 @@ class User {
       vendorRequestDate: parseDate(json['vendorRequestDate']),
       vendorRejectionDate: parseDate(json['vendorRejectionDate']),
       businessName: json['businessName'] as String?,
-      businessCategories: (json['businessCategories'] as List?)
+      businessCategories:
+          (json['businessCategories'] as List?)
               ?.map((e) => e.toString())
               .toList() ??
           [],
       businessLogoUrl: json['businessLogoUrl'] as String?,
       businessWhatsAppNumber: json['businessWhatsAppNumber'] as String?,
       businessSupportPhone: json['businessSupportPhone'] as String?,
-      deliveryRadiusKm:
-          (json['deliveryRadiusKm'] as num?)?.toDouble() ?? 15.0,
+      deliveryRadiusKm: (json['deliveryRadiusKm'] as num?)?.toDouble() ?? 15.0,
       prepTimeMinutes: json['prepTimeMinutes'] as int? ?? 30,
       isTemporarilyClosed: json['isTemporarilyClosed'] as bool? ?? false,
       totalProducts: json['totalProducts'] as int? ?? 0,
@@ -145,13 +146,13 @@ class User {
           (json['vendorWalletBalance'] as num?)?.toDouble() ?? 0.0,
       appWalletBalance: (json['appWalletBalance'] as num?)?.toDouble() ?? 0.0,
       userWalletBalance: (json['userWalletBalance'] as num?)?.toDouble() ?? 0.0,
-      savedItems: (json['savedItems'] as List?)
-              ?.map(extractId)
-              .toList() ??
-          [],
-      deliveryAddresses: (json['deliveryAddresses'] as List?)
-              ?.map((addrJson) =>
-                  Address.fromJson(addrJson as Map<String, dynamic>))
+      savedItems: (json['savedItems'] as List?)?.map(extractId).toList() ?? [],
+      deliveryAddresses:
+          (json['deliveryAddresses'] as List?)
+              ?.map(
+                (addrJson) =>
+                    Address.fromJson(addrJson as Map<String, dynamic>),
+              )
               .toList() ??
           [],
       notifications: json['notifications'] as List? ?? [],
@@ -161,12 +162,13 @@ class User {
         'appOrderAlerts':
             rawNotificationPreferences?['appOrderAlerts'] as bool? ?? true,
         'whatsappOrderAlerts':
-            rawNotificationPreferences?['whatsappOrderAlerts'] as bool? ??
-                true,
+            rawNotificationPreferences?['whatsappOrderAlerts'] as bool? ?? true,
         'promotions':
             rawNotificationPreferences?['promotions'] as bool? ?? true,
         'priceAlerts':
             rawNotificationPreferences?['priceAlerts'] as bool? ?? true,
+        'exploreActivity':
+            rawNotificationPreferences?['exploreActivity'] as bool? ?? true,
       },
       createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
     );

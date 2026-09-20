@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
@@ -169,8 +170,15 @@ class _ProductVideoSectionState extends State<ProductVideoSection> {
 
 /// Full-screen, user-initiated playback; pause when the app loses focus.
 class ProductVideoPlayer extends StatefulWidget {
-  const ProductVideoPlayer({super.key, required this.url});
+  const ProductVideoPlayer({
+    super.key,
+    required this.url,
+    this.onQualifiedWatch,
+    this.expiresAfter,
+  });
   final String url;
+  final void Function(int milliseconds)? onQualifiedWatch;
+  final Duration? expiresAfter;
   @override
   State<ProductVideoPlayer> createState() => _ProductVideoPlayerState();
 }
@@ -180,16 +188,35 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
   VideoPlayerController? _controller;
   bool _failed = false;
   bool _initializing = false;
+  Timer? _watchTimer;
+  Timer? _expiryTimer;
+  bool _expired = false;
+  DateTime? _lastSample;
+  int _watchedMs = 0;
+  bool _watchReported = false;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final expiresAfter = widget.expiresAfter;
+    if (expiresAfter != null) {
+      _expiryTimer = Timer(
+        expiresAfter.isNegative ? Duration.zero : expiresAfter,
+        () {
+          _watchTimer?.cancel();
+          _controller?.pause();
+          if (mounted) setState(() => _expired = true);
+        },
+      );
+    }
     _initialize();
   }
 
   Future<void> _initialize() async {
-    if (_initializing) return;
+    if (_initializing || _expired) return;
+    _watchTimer?.cancel();
     setState(() {
       _failed = false;
       _initializing = true;
@@ -214,7 +241,37 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
       if (!mounted || _controller != controller) return;
       setState(() => _initializing = false);
       // The shopper opens this player explicitly. It begins muted.
-      await controller.play();
+      if (_foreground &&
+          !_expired &&
+          ModalRoute.of(context)?.isCurrent == true) {
+        await controller.play();
+      }
+      _watchTimer?.cancel();
+      _lastSample = DateTime.now();
+      _watchTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+        final current = DateTime.now();
+        final elapsed = current
+            .difference(_lastSample ?? current)
+            .inMilliseconds;
+        _lastSample = current;
+        if (!mounted ||
+            _watchReported ||
+            _expired ||
+            !_foreground ||
+            ModalRoute.of(context)?.isCurrent != true)
+          return;
+        final value = controller.value;
+        if (value.isPlaying &&
+            !value.isBuffering &&
+            !value.hasError &&
+            elapsed <= 1000)
+          _watchedMs += elapsed;
+        if (_watchedMs >= 3000) {
+          _watchReported = true;
+          widget.onQualifiedWatch?.call(_watchedMs);
+          _watchTimer?.cancel();
+        }
+      });
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -227,11 +284,14 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
     if (state != AppLifecycleState.resumed) _controller?.pause();
   }
 
   @override
   void dispose() {
+    _watchTimer?.cancel();
+    _expiryTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     super.dispose();
@@ -249,7 +309,12 @@ class _ProductVideoPlayerState extends State<ProductVideoPlayer>
       ),
       body: SafeArea(
         child: Center(
-          child: _failed
+          child: _expired
+              ? const Text(
+                  'This promotion has ended.',
+                  style: TextStyle(color: Colors.white),
+                )
+              : _failed
               ? Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

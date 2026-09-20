@@ -157,8 +157,15 @@ String getTimeBasedGreeting(String firstName) {
 // ────────────────────────────────────────────────
 class SearchScreen extends StatefulWidget {
   final String initialQuery;
+  final String? vendorId;
+  final String? vendorName;
 
-  const SearchScreen({super.key, required this.initialQuery});
+  const SearchScreen({
+    super.key,
+    required this.initialQuery,
+    this.vendorId,
+    this.vendorName,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -176,6 +183,8 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _loadingMore = false;
   String? _productType;
   String _submittedQuery = '';
+  bool _allowSmartMatching = true;
+  bool _usedSmartMatching = false;
   bool _isLoading = true;
   String? _errorMessage;
   String? _category;
@@ -192,7 +201,7 @@ class _SearchScreenState extends State<SearchScreen> {
       (_minimumRating > 0 ? 1 : 0) +
       (_inStockOnly ? 1 : 0) +
       (_sort != 'relevance' ? 1 : 0) +
-      (_productType != null ? 1 : 0);
+      (_productType != null && _productType != 'all' ? 1 : 0);
 
   @override
   void initState() {
@@ -214,7 +223,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _submittedQuery = query;
     final requestVersion = ++_requestVersion;
     final nextPage = loadMore ? _page + 1 : 1;
-    if (query.isEmpty) {
+    if (query.isEmpty && widget.vendorId == null) {
       setState(() {
         _isLoading = false;
         _loadingMore = false;
@@ -243,6 +252,8 @@ class _SearchScreenState extends State<SearchScreen> {
         sort: _sort,
         page: nextPage,
         productType: _productType,
+        vendor: widget.vendorId,
+        allowSmartMatching: _allowSmartMatching,
       );
       if (mounted && requestVersion == _requestVersion) {
         setState(() {
@@ -250,6 +261,7 @@ class _SearchScreenState extends State<SearchScreen> {
               ? [..._searchResults, ...results.products]
               : results.products;
           _collection = results.collection;
+          _usedSmartMatching = results.interpretation == 'gemini_intent';
           _total = results.total;
           _page = results.page;
           _hasMore = results.hasMore;
@@ -289,6 +301,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
     var rating = _minimumRating;
     var inStock = _inStockOnly;
+    var smartMatching = _allowSmartMatching;
     const supportedSorts = {
       'relevance',
       'newest',
@@ -398,6 +411,16 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Smart matching'),
+                  subtitle: const Text(
+                    'Allow AI to interpret unmatched searches. Only actual catalog products are shown.',
+                  ),
+                  value: smartMatching,
+                  onChanged: (value) =>
+                      setSheetState(() => smartMatching = value),
+                ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('In-stock products only'),
                   value: inStock,
                   onChanged: (value) => setSheetState(() => inStock = value),
@@ -413,6 +436,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           rating = 0;
                           inStock = false;
                           sort = 'relevance';
+                          smartMatching = true;
                         });
                       },
                       child: const Text('Clear'),
@@ -439,6 +463,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _maximumPrice = double.tryParse(maximumController.text.trim());
       _minimumRating = rating;
       _inStockOnly = inStock;
+      _allowSmartMatching = smartMatching;
       _sort = sort;
     });
     await _performSearch(_searchController.text.trim());
@@ -548,7 +573,9 @@ class _SearchScreenState extends State<SearchScreen> {
             textInputAction: TextInputAction.search,
             onSubmitted: _performSearch,
             decoration: InputDecoration(
-              hintText: 'Search products...',
+              hintText: widget.vendorName?.isNotEmpty == true
+                  ? 'Search ${widget.vendorName}'
+                  : 'Search products...',
               hintStyle: const TextStyle(color: lightGrey),
               border: InputBorder.none,
               prefixIcon: const Icon(Icons.search, color: lightGrey),
@@ -633,6 +660,23 @@ class _SearchScreenState extends State<SearchScreen> {
           : CustomScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
+                if (_usedSmartMatching)
+                  SliverToBoxAdapter(
+                    child: ListTile(
+                      leading: const Icon(Icons.auto_awesome_outlined),
+                      title: const Text('Smart matches'),
+                      subtitle: const Text(
+                        'AI interpreted your search. These are real catalog listings.',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () {
+                          _allowSmartMatching = false;
+                          _performSearch(_submittedQuery);
+                        },
+                        child: const Text('Original words'),
+                      ),
+                    ),
+                  ),
                 SliverToBoxAdapter(child: _buildCollection()),
                 SliverPadding(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -713,7 +757,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 TextButton(
                   onPressed: () {
-                    setState(() => _productType = null);
+                    setState(() => _productType = 'all');
                     _performSearch(_searchController.text.trim());
                   },
                   child: const Text('View all'),
@@ -732,7 +776,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         setState(
                           () => _productType = selected
                               ? chip['key'].toString()
-                              : null,
+                              : 'all',
                         );
                         _performSearch(_searchController.text.trim());
                       },
@@ -810,13 +854,17 @@ class ProductService {
     String sort = 'relevance',
     int page = 1,
     String? productType,
+    String? vendor,
+    bool allowSmartMatching = true,
   }) async {
     final parameters = <String, String>{
       'q': query,
       'format': 'discovery',
+      'ai': allowSmartMatching.toString(),
       'limit': '30',
       'page': page.toString(),
       if (productType != null) 'productType': productType,
+      if (vendor != null) 'vendor': vendor,
       'sort': sort,
       if (category?.isNotEmpty == true) 'category': category!,
       if (minPrice != null) 'minPrice': minPrice.toString(),
@@ -824,9 +872,12 @@ class ProductService {
       if (minRating > 0) 'minRating': minRating.toString(),
       if (inStock) 'inStock': 'true',
     };
-    final uri = Uri.parse('$baseUrl/api/products/search').replace(queryParameters: parameters);
-    final response = await (searchClient?.get(uri) ?? http.get(uri))
-        .timeout(const Duration(seconds: 20));
+    final uri = Uri.parse(
+      '$baseUrl/api/products/search',
+    ).replace(queryParameters: parameters);
+    final response = await (searchClient?.get(uri) ?? http.get(uri)).timeout(
+      const Duration(seconds: 20),
+    );
     if (response.statusCode != 200) throw Exception('Search unavailable');
     return CatalogSearchResult.fromJson(
       await decodeJsonMapInBackground(response.body),

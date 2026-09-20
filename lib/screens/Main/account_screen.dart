@@ -57,6 +57,7 @@ class _AccountScreenState extends State<AccountScreen>
   bool _orderUpdatesEnabled = true;
   bool _promotionsEnabled = true;
   bool _priceAlertsEnabled = true;
+  bool _exploreActivityEnabled = true;
   bool _isSavingNotificationPreferences = false;
 
   @override
@@ -179,6 +180,8 @@ class _AccountScreenState extends State<AccountScreen>
               notificationPreferences?['promotions'] as bool? ?? true;
           _priceAlertsEnabled =
               notificationPreferences?['priceAlerts'] as bool? ?? true;
+          _exploreActivityEnabled =
+              notificationPreferences?['exploreActivity'] as bool? ?? true;
         });
       } else {
         final responseData = jsonDecode(response.body);
@@ -207,6 +210,7 @@ class _AccountScreenState extends State<AccountScreen>
     required bool orderUpdates,
     required bool promotions,
     required bool priceAlerts,
+    required bool exploreActivity,
   }) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? token = prefs.getString('jwt_token');
@@ -231,6 +235,7 @@ class _AccountScreenState extends State<AccountScreen>
           'orderUpdates': orderUpdates,
           'promotions': promotions,
           'priceAlerts': priceAlerts,
+          'exploreActivity': exploreActivity,
         }),
       );
 
@@ -248,6 +253,8 @@ class _AccountScreenState extends State<AccountScreen>
               preferences?['promotions'] as bool? ?? promotions;
           _priceAlertsEnabled =
               preferences?['priceAlerts'] as bool? ?? priceAlerts;
+          _exploreActivityEnabled =
+              preferences?['exploreActivity'] as bool? ?? exploreActivity;
         });
         if (!mounted) return;
         Navigator.of(context).pop();
@@ -274,6 +281,7 @@ class _AccountScreenState extends State<AccountScreen>
     bool orderUpdates = _orderUpdatesEnabled;
     bool promotions = _promotionsEnabled;
     bool priceAlerts = _priceAlertsEnabled;
+    bool exploreActivity = _exploreActivityEnabled;
 
     showModalBottomSheet<void>(
       context: context,
@@ -297,108 +305,121 @@ class _AccountScreenState extends State<AccountScreen>
               ),
               child: SafeArea(
                 top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: color.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: color.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.notifications_active_outlined,
+                              color: color.primary,
+                            ),
                           ),
-                          child: Icon(
-                            Icons.notifications_active_outlined,
-                            color: color.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Notification Settings',
-                                style: TextStyle(
-                                  color: color.onSurface,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Choose how NaijaGo should alert you.',
-                                style: TextStyle(
-                                  color: color.onSurface.withValues(
-                                    alpha: 0.62,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Notification Settings',
+                                  style: TextStyle(
+                                    color: color.onSurface,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
                                   ),
-                                  fontSize: 13,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _buildNotificationSwitch(
-                      color: color,
-                      title: 'Order updates',
-                      subtitle: 'General buyer and seller order status alerts.',
-                      value: orderUpdates,
-                      onChanged: (value) =>
-                          setSheetState(() => orderUpdates = value),
-                    ),
-                    _buildNotificationSwitch(
-                      color: color,
-                      title: 'Promotions',
-                      subtitle: 'Deals, restaurant moments, and campaign news.',
-                      value: promotions,
-                      onChanged: (value) =>
-                          setSheetState(() => promotions = value),
-                    ),
-                    _buildNotificationSwitch(
-                      color: color,
-                      title: 'Price alerts',
-                      subtitle: 'Saved product and market price changes.',
-                      value: priceAlerts,
-                      onChanged: (value) =>
-                          setSheetState(() => priceAlerts = value),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _isSavingNotificationPreferences
-                            ? null
-                            : () => _saveNotificationPreferences(
-                                orderUpdates: orderUpdates,
-                                promotions: promotions,
-                                priceAlerts: priceAlerts,
-                              ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: color.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: _isSavingNotificationPreferences
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Choose how NaijaGo should alert you.',
+                                  style: TextStyle(
+                                    color: color.onSurface.withValues(
+                                      alpha: 0.62,
+                                    ),
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              )
-                            : const Text('Save preferences'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 18),
+                      _buildNotificationSwitch(
+                        color: color,
+                        title: 'Order updates',
+                        subtitle:
+                            'General buyer and seller order status alerts.',
+                        value: orderUpdates,
+                        onChanged: (value) =>
+                            setSheetState(() => orderUpdates = value),
+                      ),
+                      _buildNotificationSwitch(
+                        color: color,
+                        title: 'Promotions',
+                        subtitle:
+                            'Deals, restaurant moments, and campaign news.',
+                        value: promotions,
+                        onChanged: (value) =>
+                            setSheetState(() => promotions = value),
+                      ),
+                      _buildNotificationSwitch(
+                        color: color,
+                        title: 'Explore activity',
+                        subtitle: 'Reactions, comments and replies on Explore.',
+                        value: exploreActivity,
+                        onChanged: (value) =>
+                            setSheetState(() => exploreActivity = value),
+                      ),
+                      _buildNotificationSwitch(
+                        color: color,
+                        title: 'Price alerts',
+                        subtitle: 'Saved product and market price changes.',
+                        value: priceAlerts,
+                        onChanged: (value) =>
+                            setSheetState(() => priceAlerts = value),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _isSavingNotificationPreferences
+                              ? null
+                              : () => _saveNotificationPreferences(
+                                  orderUpdates: orderUpdates,
+                                  promotions: promotions,
+                                  priceAlerts: priceAlerts,
+                                  exploreActivity: exploreActivity,
+                                ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: color.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: _isSavingNotificationPreferences
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Save preferences'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

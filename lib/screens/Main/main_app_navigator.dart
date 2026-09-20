@@ -13,6 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
 import '../../services/socket_service.dart';
+import '../../services/explore_service.dart';
+import '../../services/explore_notification_intent.dart';
 import 'account_screen.dart';
 import 'cart_screen.dart';
 import 'categories_screen.dart'
@@ -26,6 +28,8 @@ import 'categories_screen.dart'
         white;
 import 'home_screen.dart';
 import 'notifications_screen.dart';
+import 'explore_screen.dart';
+import 'explore_comments_screen.dart';
 
 class AppUi {
   static const Color primaryNavy = Color(0xFF102B5C);
@@ -196,6 +200,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   int _selectedIndex = 0;
   bool _isLoading = false;
   bool _isLoggedIn = false;
+  bool _exploreEnabled = false;
   String? _errorMessage;
   List<dynamic> _notifications = [];
   final SocketService _socketService = SocketService();
@@ -205,10 +210,36 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _fetchUserStatus();
+    _loadExploreConfiguration();
+    ExploreNotificationIntent.changed.addListener(_openExploreNotification);
+  }
+
+  void _openExploreNotification() {
+    if (!_isLoggedIn) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isLoggedIn) return;
+      final destination = ExploreNotificationIntent.take();
+      if (destination == null) return;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExploreCommentsScreen(
+        type: destination.type, itemId: destination.id, parentId: destination.parentId)));
+    });
+  }
+
+  Future<void> _loadExploreConfiguration() async {
+    final service = ExploreService();
+    try {
+      final config = await service.config();
+      if (mounted) setState(() => _exploreEnabled = config['enabled'] == true);
+    } catch (_) {
+      /* Existing navigation stays available while the feed is offline. */
+    } finally {
+      service.dispose();
+    }
   }
 
   @override
   void dispose() {
+    ExploreNotificationIntent.changed.removeListener(_openExploreNotification);
     _socketService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -267,6 +298,15 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       _isLoggedIn
           ? AccountScreen(onLogout: widget.onLogout)
           : protectedAccountScreen,
+      if (_exploreEnabled)
+        _isLoggedIn
+            ? const ExploreScreen()
+            : GuestPlaceholderScreen(
+                title: 'Explore NaijaGo',
+                message:
+                    'Sign in to discover products, watch videos and join conversations.',
+                onLoginTapped: _navigateToLogin,
+              ),
     ];
   }
 
@@ -312,6 +352,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           ]);
         });
         unawaited(_connectUserNotifications(userId));
+        _openExploreNotification();
       } else {
         final responseData = jsonDecode(userResponse.body);
         setState(() {
@@ -351,6 +392,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         return 'Categories';
       case 3:
         return 'Account';
+      case 4:
+        return 'Explore';
       default:
         return 'NaijaGo';
     }
@@ -805,7 +848,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
             fontWeight: FontWeight.w500,
             fontSize: 12,
           ),
-          items: const <BottomNavigationBarItem>[
+          items: <BottomNavigationBarItem>[
             BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
               activeIcon: Icon(Icons.home),
@@ -826,6 +869,12 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               activeIcon: Icon(Icons.person),
               label: 'Account',
             ),
+            if (_exploreEnabled)
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.explore_outlined),
+                activeIcon: Icon(Icons.explore),
+                label: 'Explore',
+              ),
           ],
         ),
       ),
