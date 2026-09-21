@@ -1,4 +1,5 @@
 import 'dart:async'; // Added for timeouts
+import '../../models/order_payment_state.dart';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
@@ -1261,6 +1262,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _showSnackBar(_errorMessage!, isError: true);
           return;
         }
+        final intentState = OrderPaymentState.fromJson(intentData);
+        if (intentState.stopsNewPayment) {
+          cartProvider.clearCart();
+          _showSnackBar(intentState.message);
+          widget.onOrderSuccess();
+          if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+          return;
+        }
         final txRef = intentData['tx_ref'] as String?;
         final paymentAmount = (intentData['amount'] as num?)?.toDouble();
         if (txRef == null || txRef.trim().isEmpty || paymentAmount == null) {
@@ -1359,11 +1368,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
 
         if (payResp.statusCode == 200) {
-          // ────────────────────────────────────────────────────────────────
-          // PRODUCTION CHANGE: more honest / cautious message
-          // ────────────────────────────────────────────────────────────────
-          _successMessage =
-              'Order created — payment confirmation in progress. You will be notified shortly.';
+          _successMessage = OrderPaymentState.fromJson(
+            _safeJson(payResp.body),
+          ).message;
           cartProvider.clearCart();
           _showSnackBar(_successMessage!);
           widget.onOrderSuccess();

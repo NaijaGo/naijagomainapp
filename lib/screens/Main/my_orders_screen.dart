@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../constants.dart';
 import '../../models/user.dart';
+import '../../models/order_payment_state.dart';
+import '../../widgets/order_payment_review_notice.dart';
 import '../../services/socket_service.dart';
 import '../../widgets/order_tracking_widget.dart';
 import '../../widgets/tech_glow_background.dart';
@@ -448,8 +450,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       return;
     }
 
-      _patchOrderById(orderId, (order) {
-        final existingRider = order['rider'] is Map<String, dynamic>
+    _patchOrderById(orderId, (order) {
+      final existingRider = order['rider'] is Map<String, dynamic>
           ? Map<String, dynamic>.from(order['rider'] as Map<String, dynamic>)
           : <String, dynamic>{};
 
@@ -617,6 +619,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   }
 
   String _getOrderStatus(Map<String, dynamic> order) {
+    if (OrderPaymentState.fromJson(order).needsReview) return 'payment_review';
     return order['mainOrderStatus']?.toString() ?? 'pending_payment';
   }
 
@@ -768,6 +771,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
               ),
             ],
           ),
+          OrderPaymentReviewNotice(payment: OrderPaymentState.fromJson(order)),
           if (order['paidAt'] != null) ...[
             const SizedBox(height: 4),
             Row(
@@ -825,6 +829,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       case 'processing':
         return Colors.orange;
       case 'cancelled':
+      case 'payment_review':
         return Colors.red;
       default:
         return color.primary;
