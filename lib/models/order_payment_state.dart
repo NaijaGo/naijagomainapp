@@ -6,10 +6,34 @@ class OrderPaymentState {
 
   const OrderPaymentState({required this.paid, required this.needsReview});
 
+  /// Compare NGN totals in kobo before opening a gateway or debiting a wallet.
+  /// A refreshed backend receipt is authoritative, but a changed amount still
+  /// needs a new customer review instead of silently charging that amount.
+  static bool matchesApprovedTotal(num approvedTotal, dynamic receiptTotal) {
+    if (receiptTotal is! num ||
+        !approvedTotal.isFinite ||
+        !receiptTotal.isFinite ||
+        approvedTotal < 0 ||
+        receiptTotal < 0) {
+      return false;
+    }
+    final approvedKobo = approvedTotal * 100;
+    final receiptKobo = receiptTotal * 100;
+    const maxSafeKobo = 9007199254740991;
+    if (!approvedKobo.isFinite ||
+        !receiptKobo.isFinite ||
+        approvedKobo > maxSafeKobo ||
+        receiptKobo > maxSafeKobo) {
+      return false;
+    }
+    return approvedKobo.round() == receiptKobo.round();
+  }
+
   factory OrderPaymentState.fromJson(Map<String, dynamic> data) {
     final payment = data['paymentResult'];
     final schedule = data['schedule'];
     final needsReview =
+        data['code'] == 'PAYMENT_RECONCILIATION_PENDING' ||
         data['mainOrderStatus'] == 'payment_review' ||
         data['status'] == 'payment_review' ||
         (payment is Map && payment['fulfillmentStatus'] == 'needs_attention') ||

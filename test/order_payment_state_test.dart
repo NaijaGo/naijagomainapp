@@ -4,6 +4,29 @@ import 'package:naija_go/models/order_payment_state.dart';
 import 'package:naija_go/widgets/order_payment_review_notice.dart';
 
 void main() {
+  test(
+    'payment cannot exceed or silently change the total the customer reviewed',
+    () {
+      expect(OrderPaymentState.matchesApprovedTotal(2500, 2500.0), isTrue);
+      expect(
+        OrderPaymentState.matchesApprovedTotal(10.10, 10.10000000001),
+        isTrue,
+      );
+      expect(OrderPaymentState.matchesApprovedTotal(2500, 2501), isFalse);
+      expect(OrderPaymentState.matchesApprovedTotal(2500, 2499), isFalse);
+      for (final value in [
+        null,
+        '2500',
+        -1,
+        double.nan,
+        double.infinity,
+        1e100,
+      ]) {
+        expect(OrderPaymentState.matchesApprovedTotal(2500, value), isFalse);
+      }
+      expect(OrderPaymentState.matchesApprovedTotal(double.nan, 2500), isFalse);
+    },
+  );
   test('all backend review markers stop another payment', () {
     for (final data in <Map<String, dynamic>>[
       {'status': 'payment_review'},
@@ -29,6 +52,29 @@ void main() {
     expect(state.paid, isFalse);
     expect(state.message, contains('being reviewed'));
   });
+  test(
+    'delayed reconciliation blocks repeat checkout without claiming a paid receipt',
+    () {
+      final state = OrderPaymentState.fromJson({
+        'code': 'PAYMENT_RECONCILIATION_PENDING',
+      });
+      expect(state.paid, isFalse);
+      expect(state.needsReview, isTrue);
+      expect(state.stopsNewPayment, isTrue);
+      expect(state.message, contains('do not pay again'));
+      expect(state.message, isNot(contains('Payment received')));
+      expect(
+        OrderPaymentState.fromJson({'code': 'SERVER_ERROR'}).stopsNewPayment,
+        isFalse,
+      );
+      expect(
+        OrderPaymentState.fromJson({
+          'code': 'PAYMENT_QUOTE_CHANGED',
+        }).stopsNewPayment,
+        isFalse,
+      );
+    },
+  );
   test(
     'server-verified success is distinct from pending and gateway callbacks',
     () {

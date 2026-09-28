@@ -1220,6 +1220,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final orderId = createOrderData['_id'] as String?;
       if (orderId == null) throw Exception('No order ID received');
 
+      if (!OrderPaymentState.matchesApprovedTotal(
+        totalPrice,
+        createOrderData['totalPrice'],
+      )) {
+        await _fetchOrderSummary();
+        if (!mounted) return;
+        _errorMessage =
+            'The order total changed. Review the updated total before paying. You have not been charged.';
+        _showSnackBar(_errorMessage!, isError: true);
+        return;
+      }
+
       // Handle payment based on selected method
       if (_selectedPaymentMethod == 'Wallet') {
         final payUrl = Uri.parse('$baseUrl/api/orders/$orderId/pay/wallet');
@@ -1367,23 +1379,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           }),
         );
 
+        final payData = _safeJson(payResp.body);
+        final paymentState = OrderPaymentState.fromJson(payData);
         if (payResp.statusCode == 200) {
-          _successMessage = OrderPaymentState.fromJson(
-            _safeJson(payResp.body),
-          ).message;
+          _successMessage = paymentState.message;
           cartProvider.clearCart();
           _showSnackBar(_successMessage!);
           widget.onOrderSuccess();
           if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
-        } else if (payResp.statusCode == 202) {
-          _successMessage =
-              'Payment confirmation is pending. Please do not pay again.';
+        } else if (payResp.statusCode == 202 || paymentState.needsReview) {
+          // A server-confirmed reconciliation hold must not leave a fresh
+          // checkout button for the same cart, even during a temporary 503.
+          // This does not claim the paid receipt has already been persisted.
+          _successMessage = paymentState.message;
           cartProvider.clearCart();
           _showSnackBar(_successMessage!);
           widget.onOrderSuccess();
           if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
         } else {
-          final payData = _safeJson(payResp.body);
           _errorMessage = payData['message'] ?? 'Payment confirmation failed';
           _showSnackBar(_errorMessage!, isError: true);
           debugPrint(
