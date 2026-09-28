@@ -1,5 +1,6 @@
 import 'dart:async'; // Added for timeouts
 import '../../models/order_payment_state.dart';
+import '../../models/hosted_checkout.dart';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
@@ -1267,6 +1268,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             'Content-Type': 'application/json; charset=UTF-8',
             'Authorization': 'Bearer $token',
           },
+          body: jsonEncode({
+            'supported_payment_providers': ['korapay', 'squad', 'flutterwave'],
+          }),
         );
         final intentData = _safeJson(intentResp.body);
         if (intentResp.statusCode != 200 && intentResp.statusCode != 201) {
@@ -1284,7 +1288,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }
         final txRef = intentData['tx_ref'] as String?;
         final paymentAmount = (intentData['amount'] as num?)?.toDouble();
-        if (txRef == null || txRef.trim().isEmpty || paymentAmount == null) {
+        if (txRef == null ||
+            txRef.trim().isEmpty ||
+            paymentAmount == null ||
+            !OrderPaymentState.matchesApprovedTotal(
+              totalPrice,
+              paymentAmount,
+            )) {
           _showSnackBar('Invalid payment details received.', isError: true);
           return;
         }
@@ -1295,12 +1305,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         var clientPaymentStatus = 'unknown_from_client';
         dynamic chargeResponse;
         if (!mounted) return;
-        if (provider == 'squad') {
-          final checkoutUrl = intentData['checkout_url'] as String?;
-          final checkoutUri = checkoutUrl == null
-              ? null
-              : Uri.tryParse(checkoutUrl);
-          if (checkoutUri == null || !checkoutUri.hasScheme) {
+        if (HostedCheckout.supports(provider)) {
+          final checkoutUri = HostedCheckout.validatedUrl(
+            provider,
+            intentData['checkout_url'],
+          );
+          final providerName = HostedCheckout.label(provider);
+          final isTestPayment =
+              provider == 'korapay' && intentData['mode'] == 'test';
+          if (checkoutUri == null) {
             _showSnackBar(
               'Unable to open the secure payment page.',
               isError: true,
@@ -1323,9 +1336,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             context: context,
             barrierDismissible: false,
             builder: (dialogContext) => AlertDialog(
-              title: const Text('Complete your payment'),
-              content: const Text(
-                'Finish payment on the secure Squad page, return to NaijaGo, then tap Verify payment. Do not pay twice.',
+              title: Text(
+                isTestPayment
+                    ? 'Complete your test payment'
+                    : 'Complete your payment',
+              ),
+              content: Text(
+                'Finish payment on the secure $providerName page, return to NaijaGo, then tap Verify payment. Do not pay twice.',
               ),
               actions: [
                 TextButton(
@@ -1342,7 +1359,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           clientPaymentStatus = completed == true
               ? 'customer_requested_verification'
               : 'customer_did_not_complete';
-        } else {
+        } else if (provider == 'flutterwave') {
           final paymentService = PaymentService();
           chargeResponse = await paymentService.startFlutterwavePayment(
             context: context,
@@ -1353,12 +1370,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             transactionReference: txRef,
           );
           clientPaymentStatus = chargeResponse?.status ?? 'unknown_from_client';
+        } else {
+          _showSnackBar(
+            'This payment option is unavailable. Please update the app or contact support.',
+            isError: true,
+          );
+          return;
         }
 
-        // Log what we actually got from Flutterwave client-side
-        debugPrint(
-          'Flutterwave client response → txRef: $txRef | status: ${chargeResponse?.status ?? "—"} | success: ${chargeResponse?.success ?? "—"} | full: ${chargeResponse?.toJson()}',
-        );
+        // Do not log full gateway responses or treat browser success as payment proof.
 
         // The SDK callback is advisory. The authenticated backend is the
         // authority even when the browser reports cancelled or returns null.
