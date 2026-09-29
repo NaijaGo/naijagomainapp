@@ -18,6 +18,7 @@ import './screens/Main/main_app_navigator.dart';
 import 'services/location_access_service.dart';
 import 'services/explore_notification_intent.dart';
 import 'services/product_request_service.dart';
+import 'services/planned_order_service.dart';
 import './splash_screen.dart';
 
 const Color _lightPrimaryColor = Color.fromARGB(255, 3, 2, 76);
@@ -386,6 +387,7 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
       final additionalData = notification.additionalData;
       ExploreNotificationIntent.receive(additionalData);
       ProductRequestIntent.receive(additionalData);
+      PlannedOrderIntent.receive(additionalData);
 
       if (additionalData != null) {
         debugPrint('Notification clicked with data: $additionalData');
@@ -469,6 +471,7 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
   void handleLogout() async {
     ExploreNotificationIntent.clear();
     ProductRequestIntent.clear();
+    PlannedOrderIntent.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
     await prefs.remove('order_count');

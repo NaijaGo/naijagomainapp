@@ -12,6 +12,8 @@ import 'my_orders_screen.dart'; // Import MyOrdersScreen
 import 'pickup_orders_screen.dart';
 import 'product_requests_screen.dart';
 import '../../services/product_request_service.dart';
+import 'planned_orders_screen.dart';
+import '../../services/planned_order_service.dart';
 import 'saved_items_screen.dart'; // Import SavedItemsScreen
 import 'delivery_addresses_screen.dart'; // Import DeliveryAddressesScreen
 import 'edit_profile_screen.dart'; // Import EditProfileScreen
@@ -62,6 +64,7 @@ class _AccountScreenState extends State<AccountScreen>
   bool _exploreActivityEnabled = true;
   bool _isSavingNotificationPreferences = false;
   bool _productRequestsEnabled = false;
+  bool _plannedOrdersEnabled = false;
 
   @override
   void initState() {
@@ -69,13 +72,35 @@ class _AccountScreenState extends State<AccountScreen>
     WidgetsBinding.instance.addObserver(this);
     _fetchUserData();
     _loadProductRequestsConfig();
+    _loadPlannedOrdersConfig();
   }
 
   Future<void> _loadProductRequestsConfig() async {
     final service = ProductRequestService();
-    try { final config = await service.config(); if (mounted) setState(() => _productRequestsEnabled = config['enabled'] == true); }
-    catch (_) { /* Optional request history must not block account tools. */ }
-    finally { service.dispose(); }
+    try {
+      final config = await service.config();
+      if (mounted) {
+        setState(() => _productRequestsEnabled = config['enabled'] == true);
+      }
+    } catch (_) {
+      /* Optional request history must not block account tools. */
+    } finally {
+      service.dispose();
+    }
+  }
+
+  Future<void> _loadPlannedOrdersConfig() async {
+    final service = PlannedOrderService();
+    try {
+      final config = await service.config();
+      if (mounted) {
+        setState(() => _plannedOrdersEnabled = config['enabled'] == true);
+      }
+    } catch (_) {
+      // Planned-order tools stay hidden until the backend confirms readiness.
+    } finally {
+      service.dispose();
+    }
   }
 
   @override
@@ -843,8 +868,28 @@ class _AccountScreenState extends State<AccountScreen>
             );
           },
         ),
-        if (_productRequestsEnabled) _buildAccountListItem(context, color, Icons.manage_search, 'My product requests',
-          'Track products NaijaGo is sourcing for you', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProductRequestsScreen()))),
+        if (_productRequestsEnabled)
+          _buildAccountListItem(
+            context,
+            color,
+            Icons.manage_search,
+            'My product requests',
+            'Track products NaijaGo is sourcing for you',
+            () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProductRequestsScreen()),
+            ),
+          ),
+        if (_plannedOrdersEnabled)
+          _buildAccountListItem(
+            context,
+            color,
+            Icons.groups_2_outlined,
+            'Group & recurring orders',
+            'Plan together or review repeat orders before payment',
+            () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PlannedOrdersScreen()),
+            ),
+          ),
         _buildAccountListItem(
           context,
           color,

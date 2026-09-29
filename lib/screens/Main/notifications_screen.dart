@@ -11,7 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants.dart';
 import '../../services/explore_notification_intent.dart';
 import '../../services/product_request_service.dart';
+import '../../services/planned_order_service.dart';
 import 'product_requests_screen.dart';
+import 'planned_orders_screen.dart';
 import 'explore_comments_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/tech_glow_background.dart';
@@ -48,10 +50,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   int get _readCount => _displayNotifications.length - _unreadCount;
 
-  void _openExplore(ExploreDestination destination, String notificationId, bool isRead) {
-    if (!isRead && notificationId.isNotEmpty) unawaited(_markNotificationAsRead(notificationId));
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExploreCommentsScreen(
-      type: destination.type, itemId: destination.id, parentId: destination.parentId)));
+  void _openExplore(
+    ExploreDestination destination,
+    String notificationId,
+    bool isRead,
+  ) {
+    if (!isRead && notificationId.isNotEmpty) {
+      unawaited(_markNotificationAsRead(notificationId));
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ExploreCommentsScreen(
+          type: destination.type,
+          itemId: destination.id,
+          parentId: destination.parentId,
+        ),
+      ),
+    );
   }
 
   Future<void> _markNotificationAsRead(String notificationId) async {
@@ -359,6 +374,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final notificationId = notification['_id']?.toString() ?? '';
     final exploreDestination = ExploreDestination.parse(notification);
     final productRequestId = ProductRequestIntent.parse(notification);
+    final plannedOrder = PlannedOrderIntent.parse(notification);
     final isRead = notification['read'] == true;
     final isMarking =
         notificationId.isNotEmpty && _markingIds.contains(notificationId);
@@ -375,10 +391,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       padding: const EdgeInsets.only(bottom: 14),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
-        onTap: productRequestId != null ? () {
-          if (!isRead && notificationId.isNotEmpty) unawaited(_markNotificationAsRead(notificationId));
-          Navigator.push(context, MaterialPageRoute(builder: (_) => ProductRequestScreen(requestId: productRequestId)));
-        } : exploreDestination != null
+        onTap: plannedOrder != null
+            ? () {
+                if (!isRead && notificationId.isNotEmpty) {
+                  unawaited(_markNotificationAsRead(notificationId));
+                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PlannedOrdersScreen(initialDestination: plannedOrder),
+                  ),
+                );
+              }
+            : productRequestId != null
+            ? () {
+                if (!isRead && notificationId.isNotEmpty) {
+                  unawaited(_markNotificationAsRead(notificationId));
+                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ProductRequestScreen(requestId: productRequestId),
+                  ),
+                );
+              }
+            : exploreDestination != null
             ? () => _openExplore(exploreDestination, notificationId, isRead)
             : !isRead && !isMarking && notificationId.isNotEmpty
             ? () => _markNotificationAsRead(notificationId)

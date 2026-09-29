@@ -24,6 +24,8 @@ import '../../services/address_resolution_service.dart';
 import '../../services/address_autocomplete_service.dart';
 import '../../services/location_access_service.dart';
 import '../../services/payment_service.dart';
+import 'planned_order_composer.dart';
+import 'planned_orders_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 
@@ -1439,6 +1441,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Future<void> _openPlannedOrderComposer(CartProvider cartProvider) async {
+    if (_isLoading || _isPlacingOrder || _isProcessingPayment) return;
+    if (cartProvider.itemCount == 0 ||
+        !_addressSelectedOrFetched ||
+        !_deliveryAddress.hasCoordinates ||
+        !_isSummaryCalculated) {
+      _showSnackBar(
+        'Confirm your cart and delivery address before planning this order.',
+        isError: true,
+      );
+      return;
+    }
+    final cartItems = cartProvider.items.values.toList();
+    final first = cartItems.first.product;
+    final sellerType = first.sellerType;
+    final sellerId = first.sellerId;
+    final singleSeller = cartItems.every(
+      (item) =>
+          item.product.sellerType == sellerType &&
+          item.product.sellerId == sellerId,
+    );
+    final destination = _buildShippingAddressPayload();
+    final result = await PlannedOrderComposer.open(
+      context,
+      items: cartItems.map((item) => item.toJson()).toList(),
+      destination: destination,
+      singleSeller: singleSeller,
+      sellerType: sellerType,
+      sellerId: sellerId,
+    );
+    if (!mounted || result == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PlannedOrdersScreen(initialDestination: result),
+      ),
+    );
+  }
+
   // ... (rest of the file remains 100% unchanged)
 
   @override
@@ -2518,6 +2558,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _addressSelectedOrFetched &&
         _isSummaryCalculated &&
         _selectedPaymentMethod != null;
+    final bool canPlanOrder =
+        !isBusy &&
+        cartProvider.itemCount > 0 &&
+        _addressSelectedOrFetched &&
+        _deliveryAddress.hasCoordinates &&
+        _isSummaryCalculated;
 
     final String helperText;
     if (cartProvider.itemCount == 0) {
@@ -2593,6 +2639,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ],
             ),
             const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: canPlanOrder
+                    ? () => _openPlannedOrderComposer(cartProvider)
+                    : null,
+                icon: const Icon(Icons.event_repeat_outlined),
+                label: const Text(
+                  'Plan for later or order together',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryNavy,
+                  side: const BorderSide(color: AppTheme.primaryNavy),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               height: 52,

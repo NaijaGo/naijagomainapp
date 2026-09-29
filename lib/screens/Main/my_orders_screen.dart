@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import '../../constants.dart';
 import '../../models/user.dart';
 import '../../models/order_payment_state.dart';
+import '../../services/order_payment_coordinator.dart';
 import '../../widgets/order_payment_review_notice.dart';
 import '../../services/socket_service.dart';
 import '../../widgets/order_tracking_widget.dart';
@@ -30,6 +31,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   final SocketService _socketService = SocketService();
   final Map<String, List<Map<String, dynamic>>> _trackingUpdates = {};
   Set<String> _trackedOrderIds = <String>{};
+  final Set<String> _payingOrderIds = <String>{};
 
   Timer? _pollingTimer;
   int _pollCount = 0;
@@ -636,6 +638,105 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     final tax = (order['totalTaxPrice'] as num?)?.toDouble() ?? 0.0;
 
     return subtotal + shipping + tax;
+  }
+
+  bool _canResumePayment(Map<String, dynamic> order) {
+    final id = order['_id']?.toString().trim() ?? '';
+    final status =
+        order['mainOrderStatus']?.toString().trim().toLowerCase() ?? '';
+    return id.isNotEmpty &&
+        status == 'pending_payment' &&
+        !OrderPaymentState.fromJson(order).stopsNewPayment;
+  }
+
+  Future<String?> _paymentMethodForResume(Map<String, dynamic> order) async {
+    final current = order['paymentMethod']?.toString().trim();
+    if (current == 'Card' ||
+        current == 'Bank Transfer' ||
+        current == 'Wallet') {
+      return current;
+    }
+    if (!mounted) return null;
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Choose how to pay',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.credit_card_outlined),
+                title: const Text('Card payment'),
+                onTap: () => Navigator.pop(sheetContext, 'Card'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_outlined),
+                title: const Text('Bank transfer'),
+                onTap: () => Navigator.pop(sheetContext, 'Bank Transfer'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('NaijaGo wallet'),
+                onTap: () => Navigator.pop(sheetContext, 'Wallet'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resumePayment(Map<String, dynamic> order) async {
+    final orderId = order['_id']?.toString().trim() ?? '';
+    if (orderId.isEmpty || _payingOrderIds.contains(orderId)) return;
+    final paymentMethod = await _paymentMethodForResume(order);
+    if (paymentMethod == null || !mounted) return;
+    final total = _getOrderTotal(order);
+    if (!total.isFinite || total <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Refresh this order before continuing payment.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _payingOrderIds.add(orderId));
+    final coordinator = OrderPaymentCoordinator();
+    try {
+      final result = await coordinator.pay(
+        context,
+        orderId: orderId,
+        approvedTotal: total,
+        paymentMethod: paymentMethod,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+      await _fetchOrders();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Payment could not be verified. Please check this order before trying again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      coordinator.dispose();
+      if (mounted) setState(() => _payingOrderIds.remove(orderId));
+    }
   }
 
   double _getShippingPrice(Map<String, dynamic> order) {
@@ -1361,7 +1462,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                       ),
                                       const SizedBox(width: 10),
                                       Text(
-                                        'Paid with ${order['paymentMethod']}',
+                                        (order['isPaid'] as bool?) == true
+                                            ? 'Paid with ${order['paymentMethod']}'
+                                            : 'Payment method: ${order['paymentMethod']}',
                                         style: TextStyle(
                                           fontSize: 14,
                                           color: color.onSurface.withValues(
@@ -1381,6 +1484,38 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                     ],
                                   ),
                                 ),
+                              if (_canResumePayment(order)) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed:
+                                        _payingOrderIds.contains(
+                                          order['_id']?.toString(),
+                                        )
+                                        ? null
+                                        : () => _resumePayment(order),
+                                    icon:
+                                        _payingOrderIds.contains(
+                                          order['_id']?.toString(),
+                                        )
+                                        ? const SizedBox.square(
+                                            dimension: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.lock_outline),
+                                    label: Text(
+                                      _payingOrderIds.contains(
+                                            order['_id']?.toString(),
+                                          )
+                                          ? 'Checking payment...'
+                                          : 'Continue secure payment',
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),

@@ -17,6 +17,8 @@ import '../../services/explore_service.dart';
 import '../../services/explore_notification_intent.dart';
 import '../../services/product_request_service.dart';
 import 'product_requests_screen.dart';
+import '../../services/planned_order_service.dart';
+import 'planned_orders_screen.dart';
 import 'account_screen.dart';
 import 'cart_screen.dart';
 import 'categories_screen.dart'
@@ -215,6 +217,21 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     _loadExploreConfiguration();
     ExploreNotificationIntent.changed.addListener(_openExploreNotification);
     ProductRequestIntent.changed.addListener(_openRequestNotification);
+    PlannedOrderIntent.changed.addListener(_openPlannedOrderNotification);
+  }
+
+  void _openPlannedOrderNotification() {
+    if (!_isLoggedIn) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isLoggedIn) return;
+      final destination = PlannedOrderIntent.take();
+      if (destination == null) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PlannedOrdersScreen(initialDestination: destination),
+        ),
+      );
+    });
   }
 
   void _openRequestNotification() {
@@ -222,7 +239,13 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isLoggedIn) return;
       final id = ProductRequestIntent.take();
-      if (id != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductRequestScreen(requestId: id)));
+      if (id != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ProductRequestScreen(requestId: id),
+          ),
+        );
+      }
     });
   }
 
@@ -233,8 +256,15 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       if (!mounted || !_isLoggedIn) return;
       final destination = ExploreNotificationIntent.take();
       if (destination == null) return;
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExploreCommentsScreen(
-        type: destination.type, itemId: destination.id, parentId: destination.parentId)));
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ExploreCommentsScreen(
+            type: destination.type,
+            itemId: destination.id,
+            parentId: destination.parentId,
+          ),
+        ),
+      );
     });
   }
 
@@ -254,6 +284,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   void dispose() {
     ExploreNotificationIntent.changed.removeListener(_openExploreNotification);
     ProductRequestIntent.changed.removeListener(_openRequestNotification);
+    PlannedOrderIntent.changed.removeListener(_openPlannedOrderNotification);
     _socketService.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
