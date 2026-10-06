@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:http/http.dart' as http;
+
+import 'address_autocomplete_service.dart';
 
 class ResolvedAddress {
   const ResolvedAddress({
@@ -30,46 +28,43 @@ class ResolvedAddress {
 
 class AddressResolutionService {
   static const Duration _reverseGeocodeTimeout = Duration(seconds: 10);
-  static const String _geoapifyBaseHost = 'api.geoapify.com';
-  static const String _geoapifyPath = '/v1/geocode/reverse';
 
   static Future<ResolvedAddress> resolveFromCoordinates(
     double latitude,
     double longitude,
   ) async {
-    ResolvedAddress? nativeResolvedAddress;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        final remote = await AddressAutocompleteService().reverseGeocode(
+          latitude,
+          longitude,
+        );
+        if (remote != null) {
+          return ResolvedAddress(
+            addressLine: remote.address,
+            city: remote.city,
+            postalCode: remote.postalCode,
+            country: remote.country,
+            formattedAddress: remote.label,
+            placemark: const Placemark(),
+          );
+        }
+      } catch (error) {
+        debugPrint('Backend reverse geocoding failed: $error');
+      }
+    }
 
     try {
       final placemarks = await placemarkFromCoordinates(
         latitude,
         longitude,
       ).timeout(_reverseGeocodeTimeout);
-
-      if (placemarks.isNotEmpty) {
-        nativeResolvedAddress = _buildNativeResolvedAddress(placemarks);
-      }
+      if (placemarks.isNotEmpty) return _buildNativeResolvedAddress(placemarks);
     } catch (error) {
       debugPrint('Native reverse geocoding failed: $error');
     }
 
-    final geoapifyAddress = await _fetchGeoapifyAddress(latitude, longitude);
-    final resolvedAddress = _mergeResolvedAddresses(
-      nativeResolvedAddress,
-      geoapifyAddress,
-    );
-
-    if (resolvedAddress == null) {
-      throw Exception('No address found');
-    }
-
-    if (_shouldRequireStrictIosAddress() &&
-        (!resolvedAddress.hasStreetName || !resolvedAddress.hasPostalCode)) {
-      throw Exception(
-        'We could not determine an iPhone address with a street name and postal code. Please try again in a slightly different spot.',
-      );
-    }
-
-    return resolvedAddress;
+    throw Exception('No address found');
   }
 
   static ResolvedAddress _buildNativeResolvedAddress(
@@ -123,77 +118,6 @@ class AddressResolutionService {
           addressLine,
       placemark: primary,
     );
-  }
-
-  static Future<_GeoapifyResolvedAddress?> _fetchGeoapifyAddress(
-    double latitude,
-    double longitude,
-  ) async {
-    if (!_shouldUseGeoapifyEnrichment()) {
-      return null;
-    }
-
-    final apiKey = dotenv.env['GEOAPIFY_API_KEY']?.trim();
-    if (apiKey == null || apiKey.isEmpty) {
-      debugPrint(
-        'GEOAPIFY_API_KEY is missing. iOS address enrichment will use Apple geocoding only.',
-      );
-      return null;
-    }
-
-    final uri = Uri.https(_geoapifyBaseHost, _geoapifyPath, {
-      'lat': latitude.toString(),
-      'lon': longitude.toString(),
-      'format': 'json',
-      'lang': 'en',
-      'apiKey': apiKey,
-    });
-
-    try {
-      final response = await http
-          .get(uri, headers: const {'Accept': 'application/json'})
-          .timeout(_reverseGeocodeTimeout);
-
-      if (response.statusCode != 200) {
-        debugPrint(
-          'Geoapify reverse geocoding failed with status ${response.statusCode}.',
-        );
-        return null;
-      }
-
-      final body = jsonDecode(response.body);
-      final properties = _extractGeoapifyProperties(body);
-      if (properties == null) {
-        return null;
-      }
-
-      return _GeoapifyResolvedAddress.fromJson(properties);
-    } catch (error) {
-      debugPrint('Geoapify reverse geocoding error: $error');
-      return null;
-    }
-  }
-
-  static Map<String, dynamic>? _extractGeoapifyProperties(dynamic body) {
-    if (body is! Map<String, dynamic>) {
-      return null;
-    }
-
-    final results = body['results'];
-    if (results is List && results.isNotEmpty && results.first is Map) {
-      return Map<String, dynamic>.from(results.first as Map);
-    }
-
-    final features = body['features'];
-    if (features is List && features.isNotEmpty && features.first is Map) {
-      final firstFeature = Map<String, dynamic>.from(features.first as Map);
-      final properties = firstFeature['properties'];
-      if (properties is Map) {
-        return Map<String, dynamic>.from(properties);
-      }
-    }
-
-    return null;
   }
 
   static ResolvedAddress? _mergeResolvedAddresses(
@@ -285,14 +209,6 @@ class AddressResolutionService {
     }
 
     return score;
-  }
-
-  static bool _shouldUseGeoapifyEnrichment() {
-    return !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-  }
-
-  static bool _shouldRequireStrictIosAddress() {
-    return !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   static String _resolveAddressLine(

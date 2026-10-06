@@ -50,6 +50,7 @@ class ShipmentSummary {
   final double subscriptionDeliveryDiscount;
   final bool subscriptionFreeDeliveryApplied;
   final bool pickupAvailable;
+  final double? deliveryRouteLegDistanceKm;
   final String fulfillmentMethod;
   final Map<String, dynamic>? pickupOption;
   final Map<String, dynamic>? pickupDetails;
@@ -71,6 +72,7 @@ class ShipmentSummary {
     required this.subscriptionDeliveryDiscount,
     required this.subscriptionFreeDeliveryApplied,
     required this.pickupAvailable,
+    this.deliveryRouteLegDistanceKm,
     required this.fulfillmentMethod,
     this.pickupOption,
     this.pickupDetails,
@@ -115,6 +117,8 @@ class ShipmentSummary {
       subscriptionFreeDeliveryApplied:
           json['subscriptionFreeDeliveryApplied'] == true,
       pickupAvailable: json['pickupAvailable'] == true,
+      deliveryRouteLegDistanceKm:
+          (json['deliveryRouteLegDistanceKm'] as num?)?.toDouble(),
       fulfillmentMethod: json['fulfillmentMethod']?.toString() == 'pickup'
           ? 'pickup'
           : 'delivery',
@@ -167,6 +171,13 @@ class FullOrderSummary {
   final double taxPrice;
   final double totalPrice;
   final List<ShipmentSummary> shipmentSummaries;
+  final String pricingMode;
+  final double? routeDistanceKm;
+  final double? deliveryBaseFee;
+  final double? deliveryDistanceFee;
+  final bool freeDeliveryCampaignApplied;
+  final double freeDeliveryCampaignDiscount;
+  final String freeDeliveryCampaignReason;
 
   FullOrderSummary({
     required this.totalSubtotal,
@@ -181,6 +192,13 @@ class FullOrderSummary {
     required this.taxPrice,
     required this.totalPrice,
     required this.shipmentSummaries,
+    required this.pricingMode,
+    required this.routeDistanceKm,
+    required this.deliveryBaseFee,
+    required this.deliveryDistanceFee,
+    required this.freeDeliveryCampaignApplied,
+    required this.freeDeliveryCampaignDiscount,
+    required this.freeDeliveryCampaignReason,
   });
 
   factory FullOrderSummary.fromJson(Map<String, dynamic> json) {
@@ -189,6 +207,15 @@ class FullOrderSummary {
         : <String, dynamic>{};
     final subscriptionPolicy = deliveryFeePolicy['subscription'] is Map
         ? Map<String, dynamic>.from(deliveryFeePolicy['subscription'] as Map)
+        : <String, dynamic>{};
+    final route = deliveryFeePolicy['route'] is Map
+        ? Map<String, dynamic>.from(deliveryFeePolicy['route'] as Map)
+        : <String, dynamic>{};
+    final consolidatedFee = deliveryFeePolicy['consolidatedFee'] is Map
+        ? Map<String, dynamic>.from(deliveryFeePolicy['consolidatedFee'] as Map)
+        : <String, dynamic>{};
+    final freeDeliveryCampaign = deliveryFeePolicy['freeDeliveryCampaign'] is Map
+        ? Map<String, dynamic>.from(deliveryFeePolicy['freeDeliveryCampaign'] as Map)
         : <String, dynamic>{};
 
     return FullOrderSummary(
@@ -215,6 +242,15 @@ class FullOrderSummary {
               ?.map((e) => ShipmentSummary.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      pricingMode: deliveryFeePolicy['pricingMode']?.toString() ?? 'zone',
+      routeDistanceKm: (route['distanceKm'] as num?)?.toDouble(),
+      deliveryBaseFee: (consolidatedFee['baseFee'] as num?)?.toDouble(),
+      deliveryDistanceFee: (consolidatedFee['distanceFee'] as num?)?.toDouble(),
+      freeDeliveryCampaignApplied: freeDeliveryCampaign['eligible'] == true,
+      freeDeliveryCampaignDiscount:
+          (freeDeliveryCampaign['discount'] as num?)?.toDouble() ?? 0,
+      freeDeliveryCampaignReason:
+          freeDeliveryCampaign['reason']?.toString() ?? '',
     );
   }
 }
@@ -245,6 +281,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _postalCodeController = TextEditingController();
   final TextEditingController _countryController = TextEditingController();
+  final TextEditingController _deliveryPromoCodeController = TextEditingController();
   final GlobalKey _manualAddressFieldKey = GlobalKey();
   final FocusNode _manualAddressFocusNode = FocusNode();
   late final AddressAutocompleteService _autocompleteService;
@@ -324,6 +361,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _cityController.dispose();
     _postalCodeController.dispose();
     _countryController.dispose();
+    _deliveryPromoCodeController.dispose();
     super.dispose();
   }
 
@@ -421,6 +459,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       'fulfillmentSelections': _fulfillmentSelections.map(
         (key, method) => MapEntry(key, {'method': method}),
       ),
+      'promoCode': _deliveryPromoCodeController.text.trim(),
     });
     bool isCurrentRequest() =>
         mounted &&
@@ -636,6 +675,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!locationAccess.granted) {
         if (mounted) {
           await LocationAccessService.presentIssue(context, locationAccess);
+          if (mounted) {
+            setState(() {
+              _deliveryAddress.select(CheckoutAddressMode.manual);
+              _addressSearchMessage =
+                  'Allow location access for automatic location, or enter your delivery address manually.';
+            });
+          }
         }
         return;
       }
@@ -649,12 +695,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         resolvedAddress = await AddressResolutionService.resolveFromCoordinates(
           position.latitude,
           position.longitude,
-        ).timeout(const Duration(seconds: 10));
+        ).timeout(const Duration(seconds: 25));
       } catch (error) {
         debugPrint('Checkout reverse geocoding failed: $error');
       }
 
       if (!mounted) return;
+      setState(() {
+        _deliveryAddress.resolveCoordinates(
+          _deliveryAddress.revision,
+          position.latitude,
+          position.longitude,
+        );
+      });
 
       if (resolvedAddress != null) {
         _addressController.text = resolvedAddress.addressLine;
@@ -662,22 +715,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _postalCodeController.text = resolvedAddress.postalCode;
         _countryController.text = resolvedAddress.country;
       } else {
-        _addressController.text = 'Current GPS location';
-        _cityController.text = _cityController.text.trim();
-        _postalCodeController.text = _postalCodeController.text.trim();
-        _countryController.text = _countryController.text.trim().isNotEmpty
-            ? _countryController.text.trim()
-            : 'Nigeria';
+        _addressController.clear();
+        _cityController.clear();
+        _postalCodeController.clear();
+        _countryController.text = 'Nigeria';
       }
 
       // iOS-specific hint (only show on iPhone — Android usually has good data)
       if (Platform.isIOS) {
         _showSnackBar(
           resolvedAddress == null
-              ? 'Precise iPhone location loaded. Please confirm the address details before placing your order.'
-              : resolvedAddress.hasPostalCode
-              ? 'Precise iPhone location loaded successfully.'
-              : 'Precise iPhone location loaded. Please confirm the postal code before placing your order.',
+              ? 'Your iPhone location was saved, but we could not determine the address. Enter and confirm it below.'
+              : 'Precise iPhone location loaded successfully. Please review the address.',
           isError: false,
         );
       }
@@ -690,10 +739,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             latitude: position.latitude,
             longitude: position.longitude,
           );
+          _addressSearchMessage =
+              'Your GPS coordinates are saved. Add ${missingAddressFields.join(' and ')} below, then confirm the address.';
         });
         _showSnackBar(
-          'Please add ${missingAddressFields.join(' and ')} to complete this address.',
-          isError: true,
+          'Your location was found. Add ${missingAddressFields.join(' and ')} to confirm the address.',
         );
         return;
       }
@@ -712,7 +762,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
       await _fetchOrderSummary();
     } catch (error, stackTrace) {
-      _showSnackBar(_currentLocationFailureMessage(error), isError: true);
+      final locationWasAcquired = _deliveryAddress.hasCoordinates;
+      if (mounted && !locationWasAcquired) {
+        setState(() {
+          _deliveryAddress.select(CheckoutAddressMode.manual);
+          _addressSearchMessage =
+              'We could not get your current location. Enter your delivery address manually.';
+        });
+      }
+      _showSnackBar(
+        locationWasAcquired
+            ? 'Your location was found, but checkout could not update. Please try again.'
+            : _currentLocationFailureMessage(error),
+        isError: true,
+      );
       debugPrint('Current location error: $error');
       debugPrintStack(stackTrace: stackTrace);
     } finally {
@@ -1199,6 +1262,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'shipmentSummaries': summary.shipmentSummaries
             .map((s) => s.toJson())
             .toList(),
+        'promoCode': _deliveryPromoCodeController.text.trim(),
       };
 
       // Create the order first
@@ -1666,6 +1730,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             accentColor: const Color(0xFFD97706),
           ),
         ],
+        if (summary.freeDeliveryCampaignApplied) ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildNoticeCard(
+            icon: Icons.local_offer_outlined,
+            title: 'Free delivery campaign applied',
+            message: 'You saved ${_formatPriceWithCommas(summary.freeDeliveryCampaignDiscount)} on delivery.',
+            accentColor: AppTheme.accentGreen,
+          ),
+        ] else if (summary.freeDeliveryCampaignReason.isNotEmpty &&
+            _deliveryPromoCodeController.text.trim().isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildNoticeCard(
+            icon: Icons.info_outline_rounded,
+            title: 'Free delivery offer not applied',
+            message: summary.freeDeliveryCampaignReason,
+            accentColor: const Color(0xFFD97706),
+          ),
+        ],
         if (summary.shipmentSummaries.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
           const Text(
@@ -1694,6 +1776,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'Delivery fees',
           _formatPriceWithCommas(summary.totalShippingPrice),
         ),
+        if (summary.pricingMode == 'road_km' && summary.routeDistanceKm != null)
+          _buildSummaryRow(
+            'Consolidated road distance',
+            '${summary.routeDistanceKm!.toStringAsFixed(1)} km',
+          ),
+        if (summary.pricingMode == 'road_km' && summary.deliveryBaseFee != null)
+          _buildSummaryRow(
+            'Base delivery fee',
+            _formatPriceWithCommas(summary.deliveryBaseFee!),
+          ),
+        if (summary.pricingMode == 'road_km' && summary.deliveryDistanceFee != null)
+          _buildSummaryRow(
+            'Road distance charge',
+            _formatPriceWithCommas(summary.deliveryDistanceFee!),
+          ),
         if (summary.subscriptionFreeDeliveryApplied &&
             summary.subscriptionDeliveryDiscount > 0)
           _buildSummaryRow(
@@ -2444,6 +2541,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  Future<void> _applyDeliveryPromoCode() async {
+    if (!_addressSelectedOrFetched) {
+      _showSnackBar('Choose a delivery address before applying a delivery code.', isError: true);
+      return;
+    }
+    _invalidateSummary();
+    if (mounted) setState(() {});
+    await _fetchOrderSummary();
+  }
+
   Widget _buildOrderSummarySection(
     FullOrderSummary? currentSummary,
     CartProvider cartProvider,
@@ -2462,6 +2569,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     color: AppTheme.primaryNavy,
                   )
                 : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _deliveryPromoCodeController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Free delivery code (optional)',
+                    hintText: 'Enter campaign code',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _applyDeliveryPromoCode(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton(
+                onPressed: _isSummaryLoading ? null : _applyDeliveryPromoCode,
+                child: const Text('Apply'),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           if (_isSummaryLoading)
@@ -3128,7 +3258,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if ((payload['city']?.toString().trim() ?? '').isEmpty) {
       missing.add('city');
     }
-    if ((payload['postalCode']?.toString().trim() ?? '').isEmpty) {
+    if ((payload['postalCode']?.toString().trim() ?? '').isEmpty &&
+        !_deliveryAddress.hasCoordinates) {
       missing.add('postal code');
     }
     if ((payload['country']?.toString().trim() ?? '').isEmpty) {
@@ -3142,7 +3273,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _addressSearchBiasLatitude ??= _userLatitude;
     _addressSearchBiasLongitude ??= _userLongitude;
     setState(() {
-      _deliveryAddress.select(CheckoutAddressMode.manual);
+      _deliveryAddress.select(
+        CheckoutAddressMode.manual,
+        latitude: _deliveryAddress.latitude,
+        longitude: _deliveryAddress.longitude,
+      );
       _selectedAddress = null;
       _invalidateSummary();
       _addressSearchDebounce?.cancel();
@@ -3159,7 +3294,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     setState(() {
-      _deliveryAddress.invalidate();
+      _deliveryAddress.invalidate(keepCoordinates: _deliveryAddress.hasCoordinates);
       _invalidateSummary();
     });
   }
@@ -3297,9 +3432,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final postalCode = _postalCodeController.text.trim();
     final country = _countryController.text.trim();
 
-    if ([address, city, postalCode, country].any((value) => value.isEmpty)) {
+    if ([address, city, country].any((value) => value.isEmpty) ||
+        (postalCode.isEmpty && !_deliveryAddress.hasCoordinates)) {
       _showSnackBar(
-        'Please complete the street address, city, postal code, and country.',
+        'Please complete the street address, city, and country${_deliveryAddress.hasCoordinates ? '' : ', and postal code'}.',
         isError: true,
       );
       return;

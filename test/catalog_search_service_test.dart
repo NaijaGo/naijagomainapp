@@ -30,6 +30,8 @@ void main() {
             'total': 65,
             'page': 2,
             'hasMore': true,
+            'externalAnswer': '',
+            'externalSources': [],
             'collection': {
               'title': 'Women Fashion',
               'chips': [
@@ -62,10 +64,73 @@ void main() {
   test('a backend failure is not interpreted as an empty catalog', () async {
     final client = MockClient((_) async => http.Response('unavailable', 503));
     addTearDown(client.close);
-    await expectLater(
-      ProductService(searchClient: client).searchProducts('iPhone'),
-      throwsException,
-    );
+    try {
+      await ProductService(searchClient: client).searchProducts('iPhone');
+      fail('Expected server failure');
+    } on CatalogSearchException catch (error) {
+      expect(error.kind, CatalogSearchFailure.server);
+      expect(error.userMessage, isNot(contains('unavailable')));
+    }
+  });
+
+  test('successful empty results remain an empty state, not an error', () async {
+    final client = MockClient((_) async => http.Response(
+          jsonEncode({'products': [], 'total': 0, 'page': 1, 'hasMore': false}),
+          200,
+        ));
+    addTearDown(client.close);
+    final result = await ProductService(searchClient: client).searchProducts('no such product');
+    expect(result.products, isEmpty);
+    expect(result.total, 0);
+    expect(result.page, 1);
+    expect(result.hasMore, isFalse);
+  });
+
+  test('grounded fallback remains separate and visibly labeled as external', () async {
+    final client = MockClient((_) async => http.Response(
+          jsonEncode({
+            'products': [],
+            'total': 0,
+            'page': 1,
+            'hasMore': false,
+            'externalAnswer': 'Check these cited external sources.',
+            'externalLabel': 'External information — not a NaijaGo listing.',
+            'externalSources': [
+              {'title': 'Example source', 'url': 'https://example.com/source'},
+            ],
+          }),
+          200,
+        ));
+    addTearDown(client.close);
+    final result = await ProductService(searchClient: client).searchProducts('plumber Gwarinpa');
+    expect(result.products, isEmpty);
+    expect(result.externalAnswer, 'Check these cited external sources.');
+    expect(result.externalLabel, 'External information — not a NaijaGo listing.');
+    expect(result.externalSources.single['url'], 'https://example.com/source');
+  });
+
+  test('network failure is distinguished from server failure', () async {
+    final client = MockClient((_) async => throw http.ClientException('socket detail'));
+    addTearDown(client.close);
+    try {
+      await ProductService(searchClient: client).searchProducts('rice');
+      fail('Expected network failure');
+    } on CatalogSearchException catch (error) {
+      expect(error.kind, CatalogSearchFailure.network);
+      expect(error.userMessage, isNot(contains('socket detail')));
+    }
+  });
+
+  test('malformed backend input is handled as a safe validation message', () async {
+    final client = MockClient((_) async => http.Response('{"message":"raw internal detail"}', 400));
+    addTearDown(client.close);
+    try {
+      await ProductService(searchClient: client).searchProducts('(');
+      fail('Expected invalid input');
+    } on CatalogSearchException catch (error) {
+      expect(error.kind, CatalogSearchFailure.invalidInput);
+      expect(error.userMessage, isNot(contains('raw internal detail')));
+    }
   });
 
   test(

@@ -48,6 +48,26 @@ class ApiService {
     );
   }
 
+  static Future<http.Response> delete(String path) async {
+    final token = await _getToken();
+    return http.delete(Uri.parse('$baseUrl$path'), headers: {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    });
+  }
+
+  static Future<http.Response> uploadMultipart(
+    String path, {required String filePath, required String fieldName, Map<String, String> fields = const {},
+  }) async {
+    final token = await _getToken();
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'));
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    request.fields.addAll(fields);
+    request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+    final streamed = await request.send();
+    return http.Response.fromStream(streamed);
+  }
+
   // ---- Upload (Cloudinary/S3 via backend) ----
   static Future<String> uploadFileToBackend(
     String filePath, {

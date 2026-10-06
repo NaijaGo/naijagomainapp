@@ -127,6 +127,47 @@ class AddressAutocompleteService {
     }
     return suggestions;
   }
+
+  Future<AddressSuggestion?> reverseGeocode(
+    double latitude,
+    double longitude,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    if (token == null || token.isEmpty) {
+      throw const FormatException('Please log in again.');
+    }
+    final uri = Uri.parse('$baseUrl/api/locations/reverse').replace(
+      queryParameters: {'lat': '$latitude', 'lng': '$longitude'},
+    );
+    final response = await http
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 12));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw const FormatException('Automatic address lookup is unavailable.');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final address = decoded['address'];
+    if (address is! Map) return null;
+    final map = Map<String, dynamic>.from(address);
+    final addressLine = map['addressLine']?.toString().trim() ?? '';
+    final city = map['city']?.toString().trim() ?? '';
+    if (addressLine.isEmpty && city.isEmpty) return null;
+    final latitudeValue = (map['latitude'] as num?)?.toDouble() ?? latitude;
+    final longitudeValue = (map['longitude'] as num?)?.toDouble() ?? longitude;
+    return AddressSuggestion(
+      id: '$latitude,$longitude',
+      label: map['formattedAddress']?.toString() ?? addressLine,
+      address: addressLine.isEmpty ? city : addressLine,
+      city: city,
+      state: '',
+      postalCode: map['postalCode']?.toString() ?? '',
+      country: map['country']?.toString() ?? 'Nigeria',
+      latitude: latitudeValue,
+      longitude: longitudeValue,
+    );
+  }
 }
 
 class _CachedAddressSearch {

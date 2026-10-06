@@ -8,6 +8,9 @@ class CatalogSearchResult {
     required this.hasMore,
     this.collection,
     this.interpretation = 'catalog_attributes',
+    this.externalAnswer = '',
+    this.externalSources = const [],
+    this.externalLabel = 'External information — not a NaijaGo listing.',
   });
   final List<Product> products;
   final int total;
@@ -15,6 +18,9 @@ class CatalogSearchResult {
   final bool hasMore;
   final Map<String, dynamic>? collection;
   final String interpretation;
+  final String externalAnswer;
+  final List<Map<String, dynamic>> externalSources;
+  final String externalLabel;
 
   factory CatalogSearchResult.fromJson(Map<String, dynamic> json) =>
       CatalogSearchResult(
@@ -31,5 +37,12 @@ class CatalogSearchResult {
         collection: json['collection'] is Map
             ? Map<String, dynamic>.from(json['collection'] as Map)
             : null,
+        externalAnswer: json['externalAnswer']?.toString() ?? '',
+        externalSources: (json['externalSources'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false),
+        externalLabel: json['externalLabel']?.toString() ??
+            'External information — not a NaijaGo listing.',
       );
 }

@@ -187,6 +187,9 @@ class _SearchScreenState extends State<SearchScreen> {
   String _submittedQuery = '';
   bool _allowSmartMatching = true;
   bool _usedSmartMatching = false;
+  String _externalAnswer = '';
+  String _externalLabel = 'External information — not a NaijaGo listing.';
+  List<Map<String, dynamic>> _externalSources = const [];
   bool _productRequestsEnabled = false;
   bool _isLoading = true;
   String? _errorMessage;
@@ -252,6 +255,8 @@ class _SearchScreenState extends State<SearchScreen> {
         _isLoading = false;
         _loadingMore = false;
         _searchResults = [];
+        _externalAnswer = '';
+        _externalSources = const [];
         _collection = null;
         _total = 0;
         _hasMore = false;
@@ -263,6 +268,10 @@ class _SearchScreenState extends State<SearchScreen> {
       _isLoading = !loadMore;
       _loadingMore = loadMore;
       _errorMessage = null;
+      if (!loadMore) {
+        _externalAnswer = '';
+        _externalSources = const [];
+      }
     });
 
     try {
@@ -286,24 +295,34 @@ class _SearchScreenState extends State<SearchScreen> {
               : results.products;
           _collection = results.collection;
           _usedSmartMatching = results.interpretation == 'gemini_intent';
+          if (!loadMore) {
+            _externalAnswer = results.externalAnswer;
+            _externalSources = results.externalSources;
+            _externalLabel = results.externalLabel;
+          }
           _total = results.total;
           _page = results.page;
           _hasMore = results.hasMore;
         });
       }
-    } catch (e) {
-      debugPrint('Search error: $e');
+    } on CatalogSearchException catch (error) {
       if (mounted && requestVersion == _requestVersion) {
         setState(() {
-          if (!loadMore) _errorMessage = serverConnectionHelpMessage;
+          if (!loadMore) _errorMessage = error.userMessage;
         });
         if (loadMore) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not load more products. Please retry.'),
+            SnackBar(
+              content: Text(error.userMessage),
             ),
           );
         }
+      }
+    } catch (_) {
+      if (mounted && requestVersion == _requestVersion) {
+        setState(() {
+          if (!loadMore) _errorMessage = 'Something went wrong. Please try again.';
+        });
       }
     } finally {
       if (mounted && requestVersion == _requestVersion) {
@@ -564,6 +583,44 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Widget _buildExternalSearchCard() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppTheme.borderGrey),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_externalLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text(_externalAnswer),
+          const SizedBox(height: 10),
+          for (final source in _externalSources)
+            TextButton.icon(
+              onPressed: () async {
+                final uri = Uri.tryParse(source['url']?.toString() ?? '');
+                if (uri == null || uri.scheme != 'https') return;
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: Text(
+                source['title']?.toString().trim().isNotEmpty == true
+                    ? source['title'].toString()
+                    : 'View source',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -676,15 +733,25 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             )
           : _searchResults.isEmpty
-          ? SingleChildScrollView(child: _buildStateCard(
-              icon: Icons.inventory_2_outlined,
-              iconColor: primaryNavy,
-              title: 'No products found',
-              message:
-                  'Try another keyword, category, or product name to explore more results.',
-              action: _productRequestsEnabled && _submittedQuery.length >= 3 && _total == 0
-                  ? FilledButton.icon(onPressed: _requestMissingProduct, icon: const Icon(Icons.manage_search), label: const Text('Request This Product')) : null,
-            ))
+          ? SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  children: [
+                    _buildStateCard(
+                      icon: Icons.inventory_2_outlined,
+                      iconColor: primaryNavy,
+                      title: 'No products found',
+                      message: 'Try another keyword, category, or product name to explore more results.',
+                      action: _productRequestsEnabled && _submittedQuery.length >= 3 && _total == 0
+                          ? FilledButton.icon(onPressed: _requestMissingProduct, icon: const Icon(Icons.manage_search), label: const Text('Request This Product')) : null,
+                    ),
+                    if (_externalAnswer.isNotEmpty && _externalSources.isNotEmpty)
+                      _buildExternalSearchCard(),
+                  ],
+                ),
+              ),
+            )
           : CustomScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
@@ -827,6 +894,15 @@ class _SearchScreenState extends State<SearchScreen> {
 // ────────────────────────────────────────────────
 // SERVICE: Product API calls
 // ────────────────────────────────────────────────
+enum CatalogSearchFailure { network, server, invalidInput }
+
+class CatalogSearchException implements Exception {
+  const CatalogSearchException(this.kind, this.userMessage);
+
+  final CatalogSearchFailure kind;
+  final String userMessage;
+}
+
 class ProductService {
   ProductService({this.searchClient});
   final http.Client? searchClient;
@@ -903,13 +979,47 @@ class ProductService {
     final uri = Uri.parse(
       '$baseUrl/api/products/search',
     ).replace(queryParameters: parameters);
-    final response = await (searchClient?.get(uri) ?? http.get(uri)).timeout(
-      const Duration(seconds: 20),
-    );
-    if (response.statusCode != 200) throw Exception('Search unavailable');
-    return CatalogSearchResult.fromJson(
-      await decodeJsonMapInBackground(response.body),
-    );
+    try {
+      final response = await (searchClient?.get(uri) ?? http.get(uri)).timeout(
+        const Duration(seconds: 20),
+      );
+      if (response.statusCode == 400) {
+        throw CatalogSearchException(
+          CatalogSearchFailure.invalidInput,
+          'Check your search and try again.',
+        );
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw CatalogSearchException(
+          CatalogSearchFailure.server,
+          'Search is temporarily unavailable. Please try again.',
+        );
+      }
+      final json = await decodeJsonMapInBackground(response.body);
+      return CatalogSearchResult.fromJson(json);
+    } on CatalogSearchException {
+      rethrow;
+    } on TimeoutException {
+      throw CatalogSearchException(
+        CatalogSearchFailure.network,
+        'Check your internet connection and try again.',
+      );
+    } on http.ClientException {
+      throw CatalogSearchException(
+        CatalogSearchFailure.network,
+        'Check your internet connection and try again.',
+      );
+    } on FormatException {
+      throw CatalogSearchException(
+        CatalogSearchFailure.server,
+        'Search is temporarily unavailable. Please try again.',
+      );
+    } on Exception {
+      throw CatalogSearchException(
+        CatalogSearchFailure.network,
+        'Check your internet connection and try again.',
+      );
+    }
   }
 
   Future<List<Product>> _fetchProducts(String endpoint) async {

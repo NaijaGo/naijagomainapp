@@ -1,74 +1,104 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../constants.dart';
-
-class ExploreException implements Exception {
-  const ExploreException(this.message);
-  final String message;
-  @override
-  String toString() => message;
-}
+import 'package:naija_go/models/explore_video.dart';
+import 'package:naija_go/services/api_service.dart';
 
 class ExploreService {
-  ExploreService({http.Client? client, Future<String?> Function()? tokenReader})
-    : _client = client ?? http.Client(),
-      _tokenReader = tokenReader ?? _readToken;
-  final http.Client _client;
-  final Future<String?> Function() _tokenReader;
-  static Future<String?> _readToken() async =>
-      (await SharedPreferences.getInstance()).getString('jwt_token');
-
-  Future<Map<String, dynamic>> request(
-    String path, {
-    String method = 'GET',
-    Map<String, dynamic>? body,
-    Map<String, String>? query,
-    bool authenticated = true,
-  }) async {
-    final token = authenticated ? await _tokenReader() : null;
-    if (authenticated && (token == null || token.isEmpty)) {
-      throw const ExploreException('Please sign in to use Explore.');
-    }
-    final uri = Uri.parse(
-      '$baseUrl/api/explore/$path',
-    ).replace(queryParameters: query);
-    final request = http.Request(method, uri)
-      ..headers.addAll({
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      });
-    if (body != null) request.body = jsonEncode(body);
-    try {
-      final response = await _client
-          .send(request)
-          .then(http.Response.fromStream)
-          .timeout(const Duration(seconds: 20));
-      final decoded = jsonDecode(response.body);
-      final data = decoded is Map
-          ? Map<String, dynamic>.from(decoded)
-          : <String, dynamic>{};
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        final message = data['message'];
-        throw ExploreException(
-          response.statusCode < 500 &&
-                  message is String &&
-                  message.length <= 200
-              ? message
-              : 'Unable to connect to Explore. Check your internet and try again.',
-        );
-      }
-      return data;
-    } on ExploreException {
-      rethrow;
-    } catch (_) {
-      throw const ExploreException(
-        'Unable to connect to Explore. Check your internet and try again.',
-      );
-    }
+  Future<ExploreFeedPage> fetchFeedPage({int page = 1, int limit = 10}) async {
+    final response = await ApiService.get('/api/explore?page=$page&limit=$limit');
+    final body = _decode(response);
+    final items = body['items'];
+    if (items is! List) throw Exception('Explore feed response is invalid.');
+    return ExploreFeedPage(
+      items: items.whereType<Map>().map((item) => ExploreVideo.fromJson(Map<String, dynamic>.from(item))).toList(),
+      page: (body['page'] as num?)?.toInt() ?? page,
+      hasMore: body['hasMore'] == true,
+    );
   }
 
-  Future<Map<String, dynamic>> config() =>
-      request('config', authenticated: false);
-  void dispose() => _client.close();
+  Future<List<ExploreVideo>> fetchFeed({int page = 1, int limit = 10}) async {
+    return (await fetchFeedPage(page: page, limit: limit)).items;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchComments(String videoId, {int page = 1, int limit = 20}) async {
+    return (await fetchCommentsPage(videoId, page: page, limit: limit)).items;
+  }
+
+  Future<ExploreCommentsPage> fetchCommentsPage(String videoId, {int page = 1, int limit = 20}) async {
+    final response = await ApiService.get('/api/explore/$videoId/comments?page=$page&limit=$limit');
+    final body = _decode(response);
+    final items = body['items'];
+    if (items is! List) throw Exception('Comments response is invalid.');
+    return ExploreCommentsPage(
+      items: items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList(),
+      page: (body['page'] as num?)?.toInt() ?? page,
+      total: (body['total'] as num?)?.toInt() ?? items.length,
+      hasMore: body['hasMore'] == true,
+    );
+  }
+
+  Future<Map<String, dynamic>> addComment(String videoId, String text) async {
+    final response = await ApiService.post('/api/explore/$videoId/comments', {'text': text});
+    return _decode(response);
+  }
+
+  Future<int> like(String videoId) async {
+    final response = await ApiService.put('/api/explore/$videoId/like', const {});
+    return (_decode(response)['likesCount'] as num).toInt();
+  }
+
+  Future<int> unlike(String videoId) async {
+    final response = await ApiService.delete('/api/explore/$videoId/like');
+    return (_decode(response)['likesCount'] as num).toInt();
+  }
+
+  Future<ExploreVideo> publishVideo({required String filePath, required String caption, String? productId}) async {
+    final response = await ApiService.uploadMultipart(
+      '/api/explore/videos',
+      filePath: filePath,
+      fieldName: 'video',
+      fields: {'caption': caption, if (productId != null) 'productId': productId},
+    );
+    final video = _decode(response)['video'];
+    if (video is! Map) throw Exception('Published video response is invalid.');
+    return ExploreVideo.fromJson(Map<String, dynamic>.from(video));
+  }
+
+  Future<Map<String, dynamic>> deleteComment(String videoId, String commentId) async {
+    return _decode(await ApiService.delete('/api/explore/$videoId/comments/$commentId'));
+  }
+
+  Future<void> deleteVideo(String videoId) async {
+    _decode(await ApiService.delete('/api/explore/$videoId'));
+  }
+
+  Map<String, dynamic> _decode(dynamic response) {
+    final statusCode = response.statusCode as int;
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body as String);
+    } catch (_) {
+      throw Exception('Explore request failed ($statusCode).');
+    }
+    if (statusCode < 200 || statusCode >= 300) {
+      final message = decoded is Map ? decoded['message'] : null;
+      throw Exception(message?.toString() ?? 'Explore request failed ($statusCode).');
+    }
+    if (decoded is! Map) throw Exception('Explore response is invalid.');
+    return Map<String, dynamic>.from(decoded);
+  }
+}
+
+class ExploreFeedPage {
+  const ExploreFeedPage({required this.items, required this.page, required this.hasMore});
+  final List<ExploreVideo> items;
+  final int page;
+  final bool hasMore;
+}
+
+class ExploreCommentsPage {
+  const ExploreCommentsPage({required this.items, required this.page, required this.total, required this.hasMore});
+  final List<Map<String, dynamic>> items;
+  final int page;
+  final int total;
+  final bool hasMore;
 }

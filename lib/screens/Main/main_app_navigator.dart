@@ -13,7 +13,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
 import '../../services/socket_service.dart';
-import '../../services/explore_service.dart';
 import '../../services/explore_notification_intent.dart';
 import '../../services/product_request_service.dart';
 import 'product_requests_screen.dart';
@@ -204,7 +203,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
   int _selectedIndex = 0;
   bool _isLoading = false;
   bool _isLoggedIn = false;
-  bool _exploreEnabled = false;
+  bool _canPublishExplore = false;
+  String _explorePublisherLabel = '';
   String? _errorMessage;
   List<dynamic> _notifications = [];
   final SocketService _socketService = SocketService();
@@ -214,7 +214,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _fetchUserStatus();
-    _loadExploreConfiguration();
     ExploreNotificationIntent.changed.addListener(_openExploreNotification);
     ProductRequestIntent.changed.addListener(_openRequestNotification);
     PlannedOrderIntent.changed.addListener(_openPlannedOrderNotification);
@@ -266,18 +265,6 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         ),
       );
     });
-  }
-
-  Future<void> _loadExploreConfiguration() async {
-    final service = ExploreService();
-    try {
-      final config = await service.config();
-      if (mounted) setState(() => _exploreEnabled = config['enabled'] == true);
-    } catch (_) {
-      /* Existing navigation stays available while the feed is offline. */
-    } finally {
-      service.dispose();
-    }
   }
 
   @override
@@ -343,15 +330,13 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       _isLoggedIn
           ? AccountScreen(onLogout: widget.onLogout)
           : protectedAccountScreen,
-      if (_exploreEnabled)
-        _isLoggedIn
-            ? const ExploreScreen()
-            : GuestPlaceholderScreen(
-                title: 'Explore NaijaGo',
-                message:
-                    'Sign in to discover products, watch videos and join conversations.',
-                onLoginTapped: _navigateToLogin,
-              ),
+      _isLoggedIn
+          ? ExploreScreen(canPublish: _canPublishExplore, publisherLabel: _explorePublisherLabel)
+          : GuestPlaceholderScreen(
+              title: 'Explore NaijaGo',
+              message: 'Sign in to discover local business videos.',
+              onLoginTapped: _navigateToLogin,
+            ),
     ];
   }
 
@@ -369,6 +354,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     if (token == null) {
       setState(() {
         _isLoggedIn = false;
+        _canPublishExplore = false;
+        _explorePublisherLabel = '';
         _isLoading = false;
         _errorMessage = null;
       });
@@ -391,6 +378,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         final userId = responseData['_id']?.toString();
         setState(() {
           _isLoggedIn = true;
+          final isAdmin = responseData['isAdmin'] == true;
+          final isApprovedVendor = responseData['isVendor'] == true && responseData['vendorStatus'] == 'approved';
+          _canPublishExplore = isAdmin || isApprovedVendor;
+          _explorePublisherLabel = isAdmin ? 'Administrator' : 'Approved vendor';
           _notifications = _dedupeNotifications([
             ...notifications,
             ..._notifications,
@@ -404,6 +395,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           _errorMessage =
               responseData['message'] ?? 'Failed to fetch user status.';
           _isLoggedIn = false;
+          _canPublishExplore = false;
+          _explorePublisherLabel = '';
           _notifications = [];
         });
 
@@ -415,6 +408,8 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       setState(() {
         _errorMessage = serverConnectionHelpMessage;
         _isLoggedIn = false;
+        _canPublishExplore = false;
+        _explorePublisherLabel = '';
         _notifications = [];
       });
       debugPrint('MainAppNavigator fetch error: $e');
@@ -914,8 +909,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               activeIcon: Icon(Icons.person),
               label: 'Account',
             ),
-            if (_exploreEnabled)
-              const BottomNavigationBarItem(
+            const BottomNavigationBarItem(
                 icon: Icon(Icons.explore_outlined),
                 activeIcon: Icon(Icons.explore),
                 label: 'Explore',
