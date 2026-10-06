@@ -152,7 +152,7 @@ class _ExploreCommentsPanelState extends State<_ExploreCommentsPanel> {
     Expanded(child: _loading
       ? const Center(child: CircularProgressIndicator())
       : _error != null && _comments.isEmpty
-          ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!, textAlign: TextAlign.center), TextButton(onPressed: _load, child: const Text('Try again'))]))
+          ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!, textAlign: TextAlign.center), TextButton(onPressed: _load, child: const Text('Try again'))])))
           : _comments.isEmpty
               ? const Center(child: Text('No comments yet. Start the conversation.'))
               : ListView.builder(controller: _scrollController, itemCount: _comments.length + (_loadingMore ? 1 : 0), itemBuilder: (context, index) {
