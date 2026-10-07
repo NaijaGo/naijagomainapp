@@ -69,7 +69,7 @@ void main() {
       fail('Expected server failure');
     } on CatalogSearchException catch (error) {
       expect(error.kind, CatalogSearchFailure.server);
-      expect(error.userMessage, isNot(contains('unavailable')));
+      expect(error.userMessage, 'Search is temporarily unavailable. Please try again.');
     }
   });
 
@@ -94,7 +94,7 @@ void main() {
             'page': 1,
             'hasMore': false,
             'externalAnswer': 'Check these cited external sources.',
-            'externalLabel': 'External information — not a NaijaGo listing.',
+            'externalLabel': 'External information - not a NaijaGo listing.',
             'externalSources': [
               {'title': 'Example source', 'url': 'https://example.com/source'},
             ],
@@ -105,7 +105,7 @@ void main() {
     final result = await ProductService(searchClient: client).searchProducts('plumber Gwarinpa');
     expect(result.products, isEmpty);
     expect(result.externalAnswer, 'Check these cited external sources.');
-    expect(result.externalLabel, 'External information — not a NaijaGo listing.');
+    expect(result.externalLabel, 'External information - not a NaijaGo listing.');
     expect(result.externalSources.single['url'], 'https://example.com/source');
   });
 

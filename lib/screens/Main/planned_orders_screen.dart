@@ -20,9 +20,14 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
   late final TabController _tabs;
   final PlannedOrderService _service = PlannedOrderService();
   bool _loading = true;
+  bool _available = false;
   String? _error;
   List<Map<String, dynamic>> _groups = [];
   List<Map<String, dynamic>> _plans = [];
+  String? _groupCursor;
+  String? _planCursor;
+  bool _loadingMore = false;
+  int _loadVersion = 0;
 
   @override
   void initState() {
@@ -50,21 +55,35 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
       : <Map<String, dynamic>>[];
 
   Future<void> _load({bool openInitial = false}) async {
+    final version = ++_loadVersion;
     if (mounted) {
       setState(() {
         _loading = true;
+        _available = false;
+        _loadingMore = false;
         _error = null;
       });
     }
     try {
+      final config = await _service.config();
+      if (config['groupOrderingEnabled'] != true ||
+          config['recurringOrdersEnabled'] != true) {
+        throw const PlannedOrderException(
+          'Group and recurring orders are not enabled yet. Normal checkout is available.',
+          code: 'PLANNED_ORDERS_DISABLED',
+        );
+      }
       final results = await Future.wait([
         _service.groups(),
         _service.recurring(),
       ]);
-      if (!mounted) return;
+      if (!mounted || version != _loadVersion) return;
       setState(() {
         _groups = _rows(results[0]['groups']);
         _plans = _rows(results[1]['plans']);
+        _groupCursor = results[0]['nextCursor'] as String?;
+        _planCursor = results[1]['nextCursor'] as String?;
+        _available = true;
       });
       if (openInitial && widget.initialDestination != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -73,9 +92,40 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
         });
       }
     } on PlannedOrderException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted && version == _loadVersion) setState(() => _error = error.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && version == _loadVersion) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore({required bool group}) async {
+    final cursor = group ? _groupCursor : _planCursor;
+    if (_loading || _loadingMore || cursor == null) return;
+    final version = _loadVersion;
+    setState(() => _loadingMore = true);
+    try {
+      final result = group
+          ? await _service.groups(before: cursor)
+          : await _service.recurring(before: cursor);
+      if (!mounted || version != _loadVersion) return;
+      setState(() {
+        final rows = group ? _groups : _plans;
+        final ids = rows.map((row) => (row['id'] ?? row['_id']).toString()).toSet();
+        rows.addAll(_rows(result[group ? 'groups' : 'plans']).where(
+          (row) => ids.add((row['id'] ?? row['_id']).toString()),
+        ));
+        if (group) {
+          _groupCursor = result['nextCursor'] as String?;
+        } else {
+          _planCursor = result['nextCursor'] as String?;
+        }
+      });
+    } on PlannedOrderException catch (error) {
+      if (mounted && version == _loadVersion) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted && version == _loadVersion) setState(() => _loadingMore = false);
     }
   }
 
@@ -153,7 +203,7 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _join,
+        onPressed: _available && !_loading ? _join : null,
         backgroundColor: const Color(0xFFADFF2F),
         foregroundColor: navy,
         icon: const Icon(Icons.group_add_outlined),
@@ -173,6 +223,8 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
               children: [
                 _OrderList(
                   rows: _groups,
+                  onLoadMore: _groupCursor == null ? null : () => _loadMore(group: true),
+                  loadingMore: _loadingMore,
                   icon: Icons.groups_outlined,
                   emptyTitle: 'No group orders yet',
                   emptyMessage:
@@ -188,6 +240,8 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
                 ),
                 _OrderList(
                   rows: _plans,
+                  onLoadMore: _planCursor == null ? null : () => _loadMore(group: false),
+                  loadingMore: _loadingMore,
                   icon: Icons.event_repeat_outlined,
                   emptyTitle: 'No recurring plans yet',
                   emptyMessage:
@@ -242,6 +296,7 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
   bool _loading = true;
   bool _actionBusy = false;
   String? _error;
+  int _loadVersion = 0;
 
   @override
   void initState() {
@@ -256,6 +311,8 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    final version = ++_loadVersion;
     setState(() {
       _loading = true;
       _error = null;
@@ -264,11 +321,11 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
       final result = widget.kind == 'group'
           ? await _service.group(widget.id)
           : await _service.recurringPlan(widget.id);
-      if (mounted) setState(() => _data = result);
+      if (mounted && version == _loadVersion) setState(() => _data = result);
     } on PlannedOrderException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted && version == _loadVersion) setState(() => _error = error.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && version == _loadVersion) setState(() => _loading = false);
     }
   }
 
@@ -456,6 +513,9 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
               const Text(
                 'Prices, stock, fees and delivery were checked again. The quote expires shortly.',
               ),
+              const SizedBox(height: 8),
+              Text('Products: ₦${NumberFormat('#,##0.00').format(quote['totalSubtotal'] ?? 0)}'),
+              Text('Delivery: ₦${NumberFormat('#,##0.00').format(quote['totalShippingPrice'] ?? 0)}'),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: method,
@@ -666,6 +726,19 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _Summary(root: root, kind: widget.kind),
+            if (widget.kind == 'recurring')
+              const Padding(padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('Review and pay on each due date. Delivery follows normal checkout; no stock is held and no payment is automatic.')),
+            if (widget.kind == 'group' && root['members'] is List)
+              for (final member in (root['members'] as List).whereType<Map>())
+                Card(child: Padding(padding: const EdgeInsets.all(12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(member['isYou'] == true ? 'Your basket' : 'Participant basket',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                    for (final item in (member['items'] as List? ?? const []).whereType<Map>())
+                      Text('${item['quantity']} × ${item['productName'] ?? 'Product'}'),
+                    if ((member['items'] as List? ?? const []).isEmpty) const Text('No items yet.'),
+                  ]))),
             const SizedBox(height: 12),
             if (_actionBusy) const LinearProgressIndicator(),
             if (_actionBusy) const SizedBox(height: 12),
@@ -768,11 +841,14 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.event_available_outlined),
+                    onTap: row['orderId'] == null ? null : () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const MyOrdersScreen())),
                     title: Text(_PlannedOrdersScreenState.date(row['startAt'])),
                     subtitle: Text(
-                      _PlannedOrdersScreenState.label(row['state']),
+                      row['orderId'] != null ? 'Order created — open receipt to pay or track'
+                          : _PlannedOrdersScreenState.label(row['state']),
                     ),
-                    trailing: actionable
+                    trailing: actionable || occurrenceState == 'upcoming'
                         ? PopupMenuButton<String>(
                             enabled: !_actionBusy,
                             onSelected: (value) {
@@ -783,14 +859,14 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
                                 _skipOccurrence(row);
                               }
                             },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
+                            itemBuilder: (_) => [
+                              if (actionable) const PopupMenuItem(
                                 value: 'pay',
                                 child: Text('Review & pay'),
                               ),
-                              PopupMenuItem(
+                              const PopupMenuItem(
                                 value: 'skip',
-                                child: Text('Skip this delivery'),
+                                child: Text('Skip this purchase'),
                               ),
                             ],
                           )
@@ -816,6 +892,8 @@ class _OrderList extends StatelessWidget {
     required this.onTap,
     required this.title,
     required this.subtitle,
+    this.onLoadMore,
+    this.loadingMore = false,
   });
 
   final List<Map<String, dynamic>> rows;
@@ -826,6 +904,8 @@ class _OrderList extends StatelessWidget {
   final void Function(Map<String, dynamic>) onTap;
   final String Function(Map<String, dynamic>) title;
   final String Function(Map<String, dynamic>) subtitle;
+  final Future<void> Function()? onLoadMore;
+  final bool loadingMore;
 
   @override
   Widget build(BuildContext context) {
@@ -858,9 +938,15 @@ class _OrderList extends StatelessWidget {
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(14, 16, 14, 110),
-        itemCount: rows.length,
+        itemCount: rows.length + (onLoadMore == null ? 0 : 1),
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
+          if (index == rows.length) {
+            return OutlinedButton(
+              onPressed: loadingMore ? null : onLoadMore,
+              child: Text(loadingMore ? 'Loading...' : 'Load more'),
+            );
+          }
           final row = rows[index];
           return Card(
             elevation: 0,

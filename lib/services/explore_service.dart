@@ -51,10 +51,11 @@ class ExploreService {
     return (_decode(response)['likesCount'] as num).toInt();
   }
 
-  Future<ExploreVideo> publishVideo({required String filePath, required String caption, String? productId}) async {
+  Future<ExploreVideo> publishVideo({required String filePath, required String caption, String? productId, String? filename}) async {
     final response = await ApiService.uploadMultipart(
       '/api/explore/videos',
       filePath: filePath,
+      filename: filename,
       fieldName: 'video',
       fields: {'caption': caption, if (productId != null) 'productId': productId},
     );

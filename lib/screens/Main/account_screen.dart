@@ -23,10 +23,11 @@ import 'dispute_list_screen.dart';
 import 'faq_screen.dart';
 import 'referral_screen.dart';
 import 'subscription_screen.dart';
-import '../../widgets/tech_glow_background.dart';
+import '../../widgets/account_page_background.dart';
+import '../../theme/app_theme.dart';
 
 // Define your color constants (consistent with vendor registration)
-const Color deepNavyBlue = Color(0xFF03024C);
+const Color deepNavyBlue = AppTheme.primaryNavy;
 const Color greenYellow = Color(0xFFADFF2F);
 const Color white = Colors.white;
 const Color lightGray = Color(
@@ -94,7 +95,11 @@ class _AccountScreenState extends State<AccountScreen>
     try {
       final config = await service.config();
       if (mounted) {
-        setState(() => _plannedOrdersEnabled = config['enabled'] == true);
+        setState(
+          () => _plannedOrdersEnabled =
+              config['groupOrderingEnabled'] == true ||
+              config['recurringOrdersEnabled'] == true,
+        );
       }
     } catch (_) {
       // Planned-order tools stay hidden until the backend confirms readiness.
@@ -578,21 +583,10 @@ class _AccountScreenState extends State<AccountScreen>
     );
 
     final color = customColorScheme; // Use your custom color scheme
-    final panelDecoration = BoxDecoration(
-      color: white.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: white.withValues(alpha: 0.16)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.18),
-          blurRadius: 28,
-          offset: const Offset(0, 18),
-        ),
-      ],
-    );
+    const panelDecoration = BoxDecoration(color: Colors.transparent);
 
     Widget buildShell(Widget body) {
-      return TechGlowBackground(
+      return AccountPageBackground(
         child: Scaffold(backgroundColor: Colors.transparent, body: body),
       );
     }
@@ -646,7 +640,7 @@ class _AccountScreenState extends State<AccountScreen>
     return buildShell(
       SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
           child: Container(
             decoration: panelDecoration,
             child: Padding(
@@ -688,14 +682,12 @@ class _AccountScreenState extends State<AccountScreen>
                         style: TextStyle(color: white, fontSize: 18),
                       ), // White text for contrast
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors
-                            .red
-                            .shade700, // Explicit red for logout action
+                        backgroundColor: color.primary,
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        elevation: 5,
+                        elevation: 0,
                       ),
                     ),
                   ),
@@ -729,28 +721,6 @@ class _AccountScreenState extends State<AccountScreen>
                       ),
                     ),
                   ),
-
-                  // --- Unique Ideas (Placeholders for now) ---
-                  const SizedBox(height: 40),
-                  Text(
-                    'Unique Ideas (Coming Soon):',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: color.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildComingSoonItem(color, '✅ Buyer–Seller Switch Toggle'),
-                  _buildComingSoonItem(color, '📦 Live Order Map Tracker'),
-                  _buildComingSoonItem(color, '🎉 Achievements/Badges'),
-                  _buildComingSoonItem(color, '💬 Community Forum Link'),
-                  _buildComingSoonItem(
-                    color,
-                    '📈 Quick Stats Card (for Vendors)',
-                  ),
-                  _buildComingSoonItem(color, '🔔 Smart Alerts'),
-                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -767,7 +737,7 @@ class _AccountScreenState extends State<AccountScreen>
       children: [
         Center(
           child: CircleAvatar(
-            radius: 50,
+            radius: 42,
             backgroundColor: color.surface, // Fallback background for avatar
             child: ClipOval(
               child: SizedBox.expand(
@@ -793,7 +763,7 @@ class _AccountScreenState extends State<AccountScreen>
         Text(
           '$_firstName $_lastName',
           style: TextStyle(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.bold,
             color: color.onSurface, // Use onBackground for main text
           ),
@@ -848,7 +818,7 @@ class _AccountScreenState extends State<AccountScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Buyer Tools',
+          'Orders & shopping',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -1003,7 +973,7 @@ class _AccountScreenState extends State<AccountScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Common Tools',
+          'Support & preferences',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -1072,7 +1042,7 @@ class _AccountScreenState extends State<AccountScreen>
 
   Widget _buildCustomerSupportCard(ColorScheme color) {
     return Card(
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: EdgeInsets.zero,
       color: color.surface,
@@ -1196,12 +1166,24 @@ class _AccountScreenState extends State<AccountScreen>
     VoidCallback onTap,
   ) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      margin: const EdgeInsets.symmetric(vertical: 6.0),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: color.outline.withValues(alpha: 0.12)),
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 5.0),
       color: color.surface, // Card background color
       child: ListTile(
-        leading: Icon(icon, color: color.primary, size: 28), // Icon color
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: color.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color.primary, size: 23),
+        ), // Icon color
         title: Text(
           title,
           style: TextStyle(color: color.onSurface, fontWeight: FontWeight.w600),
@@ -1211,8 +1193,8 @@ class _AccountScreenState extends State<AccountScreen>
           style: TextStyle(color: color.onSurface.withValues(alpha: 0.7)),
         ), // Subtitle text color
         trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
+          Icons.chevron_right_rounded,
+          size: 20,
           color: color.onSurface.withValues(alpha: 0.5),
         ), // Arrow icon color
         onTap: onTap,
@@ -1251,31 +1233,6 @@ class _AccountScreenState extends State<AccountScreen>
           ),
         ),
         onChanged: onChanged,
-      ),
-    );
-  }
-
-  Widget _buildComingSoonItem(ColorScheme color, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
-      child: Row(
-        children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 20,
-            color: greenYellow,
-          ), // Checkmark icon color
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 16,
-                color: color.onSurface.withValues(alpha: 0.8),
-              ), // Text color
-            ),
-          ),
-        ],
       ),
     );
   }

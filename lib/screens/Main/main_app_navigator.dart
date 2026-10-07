@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
+import '../../widgets/visitor_analytics_consent.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:naija_go/auth/screens/login_screen.dart';
@@ -291,7 +292,7 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           onLoginSuccess: () {
             Navigator.of(context).pop();
             _fetchUserStatus();
-            _onItemTapped(3);
+            _onItemTapped(4);
           },
         ),
       ),
@@ -328,15 +329,15 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           : protectedCartScreen,
       categoriesScreen,
       _isLoggedIn
-          ? AccountScreen(onLogout: widget.onLogout)
-          : protectedAccountScreen,
-      _isLoggedIn
           ? ExploreScreen(canPublish: _canPublishExplore, publisherLabel: _explorePublisherLabel)
           : GuestPlaceholderScreen(
               title: 'Explore NaijaGo',
               message: 'Sign in to discover local business videos.',
               onLoginTapped: _navigateToLogin,
             ),
+      _isLoggedIn
+          ? AccountScreen(onLogout: widget.onLogout)
+          : protectedAccountScreen,
     ];
   }
 
@@ -431,9 +432,9 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
       case 2:
         return 'Categories';
       case 3:
-        return 'Account';
-      case 4:
         return 'Explore';
+      case 4:
+        return 'Account';
       default:
         return 'NaijaGo';
     }
@@ -904,16 +905,16 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               activeIcon: Icon(Icons.grid_view),
               label: 'Categories',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Account',
-            ),
             const BottomNavigationBarItem(
                 icon: Icon(Icons.explore_outlined),
                 activeIcon: Icon(Icons.explore),
                 label: 'Explore',
               ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Account',
+            ),
           ],
         ),
       ),
@@ -941,7 +942,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           ? _buildLoadingState()
           : _errorMessage != null
           ? _buildErrorState()
-          : _widgetOptions.elementAt(_selectedIndex),
+          : VisitorAnalyticsConsent(
+              page: const ['home', 'cart', 'categories', 'explore', 'account'][_selectedIndex],
+              child: _widgetOptions.elementAt(_selectedIndex),
+            ),
       bottomNavigationBar: _buildBottomNav(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

@@ -57,6 +57,12 @@ class PlannedOrderService {
           .then(http.Response.fromStream)
           .timeout(const Duration(seconds: 25));
       stage = 'decode';
+      if (path == 'config' && response.statusCode == 404) {
+        throw const PlannedOrderException(
+          'Group and recurring orders are not available on this server yet. Normal checkout is available.',
+          code: 'PLANNED_ORDERS_NOT_DEPLOYED',
+        );
+      }
       final decoded = response.body.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(response.body);
@@ -66,7 +72,9 @@ class PlannedOrderService {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final message = data['message'];
         throw PlannedOrderException(
-          response.statusCode < 500 &&
+          (response.statusCode < 500 ||
+                  (response.statusCode == 503 &&
+                      data['code'] == 'PLANNED_ORDERS_DISABLED')) &&
                   message is String &&
                   message.length <= 220
               ? message
@@ -231,6 +239,7 @@ class PlannedOrderIntent {
     }
     if (nestedKind == 'recurring' ||
         type == 'recurring_order_update' ||
+        related == 'RecurringPlan' ||
         related == 'RecurringOccurrence') {
       return PlannedOrderDestination('recurring', id);
     }

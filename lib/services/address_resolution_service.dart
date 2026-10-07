@@ -33,25 +33,10 @@ class AddressResolutionService {
     double latitude,
     double longitude,
   ) async {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      try {
-        final remote = await AddressAutocompleteService().reverseGeocode(
-          latitude,
-          longitude,
-        );
-        if (remote != null) {
-          return ResolvedAddress(
-            addressLine: remote.address,
-            city: remote.city,
-            postalCode: remote.postalCode,
-            country: remote.country,
-            formattedAddress: remote.label,
-            placemark: const Placemark(),
-          );
-        }
-      } catch (error) {
-        debugPrint('Backend reverse geocoding failed: $error');
-      }
+    final remoteFirst = kIsWeb || defaultTargetPlatform == TargetPlatform.iOS;
+    if (remoteFirst) {
+      final remote = await _resolveRemoteAddress(latitude, longitude);
+      if (remote != null) return remote;
     }
 
     try {
@@ -64,7 +49,33 @@ class AddressResolutionService {
       debugPrint('Native reverse geocoding failed: $error');
     }
 
+    if (!remoteFirst) {
+      final remote = await _resolveRemoteAddress(latitude, longitude);
+      if (remote != null) return remote;
+    }
+
     throw Exception('No address found');
+  }
+
+  static Future<ResolvedAddress?> _resolveRemoteAddress(
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      final remote = await AddressAutocompleteService().reverseGeocode(latitude, longitude);
+      if (remote == null) return null;
+      return ResolvedAddress(
+        addressLine: remote.address,
+        city: remote.city,
+        postalCode: remote.postalCode,
+        country: remote.country,
+        formattedAddress: remote.label,
+        placemark: const Placemark(),
+      );
+    } catch (error) {
+      debugPrint('Backend reverse geocoding failed: ${error.runtimeType}');
+      return null;
+    }
   }
 
   static ResolvedAddress _buildNativeResolvedAddress(

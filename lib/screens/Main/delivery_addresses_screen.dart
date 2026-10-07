@@ -10,12 +10,12 @@ import '../../constants.dart';
 import '../../models/address.dart'; // Import the Address model
 import '../../services/location_access_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/tech_glow_background.dart';
+import '../../widgets/account_page_background.dart';
 import 'add_edit_address_screen.dart'; // Import the AddEditAddressScreen
 
 // Defined custom colors for consistency and enchantment
 const Color deepNavyBlue = AppTheme.primaryNavy;
-const Color greenYellow = Color(0xFFF4F8FF);
+const Color greenYellow = AppTheme.primaryNavy;
 const Color whiteBackground = Colors.white;
 const Color secondaryBlack = AppTheme.secondaryBlack;
 const Color borderGrey = AppTheme.borderGrey;
@@ -106,7 +106,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
         return AlertDialog(
           backgroundColor: whiteBackground, // Dialog background white
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(20),
           ),
           title: const Text(
             'Confirm Deletion',
@@ -254,16 +254,17 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return TechGlowBackground(
+    return AccountPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           leading: const VisibleBackButton(),
           title: const Text(
-            'Delivery Addresses',
+            'Delivery addresses',
             style: TextStyle(color: greenYellow),
           ),
-          backgroundColor: Colors.transparent,
+          backgroundColor: const Color(0xFFF5F7FB),
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(color: greenYellow),
         ),
@@ -286,8 +287,8 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                         _errorMessage!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: whiteBackground,
-                          fontSize: 16,
+                          color: secondaryBlack,
+                          fontSize: 15,
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -322,7 +323,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                       Text(
                         'No delivery addresses added yet.',
                         style: const TextStyle(
-                          color: whiteBackground,
+                          color: secondaryBlack,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -331,10 +332,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                       const SizedBox(height: 10),
                       Text(
                         'Add your first address to get started!',
-                        style: TextStyle(
-                          color: whiteBackground.withValues(alpha: 0.75),
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(color: mutedText, fontSize: 15),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
@@ -397,7 +395,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                 ),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
                 itemCount: _addresses.length,
                 itemBuilder: (context, index) {
                   final address = _addresses[index];
@@ -405,61 +403,90 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                     elevation: 0,
                     margin: const EdgeInsets.only(bottom: 16.0),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(20),
                       side: const BorderSide(color: borderGrey),
                     ),
                     color: whiteBackground,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16.0),
-                      leading: Icon(
-                        address.isDefault
-                            ? Icons.location_on
-                            : Icons.location_on_outlined,
-                        color: deepNavyBlue,
-                        size: 30,
-                      ),
-                      title: Text(
-                        address.fullAddress,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: secondaryBlack,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${address.city}, ${address.postalCode}, ${address.country}',
-                        style: TextStyle(fontSize: 14, color: mutedText),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: deepNavyBlue),
-                            onPressed: () async {
-                              final bool? result = await Navigator.of(context)
-                                  .push(
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          AddEditAddressScreen(
-                                            address: address,
-                                            addressIndex: index,
-                                          ),
-                                    ),
-                                  );
-                              if (result == true) {
-                                _fetchAddresses();
-                              }
-                            },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
+                          leading: Icon(
+                            address.isDefault
+                                ? Icons.location_on
+                                : Icons.location_on_outlined,
+                            color: deepNavyBlue,
+                            size: 24,
+                          ),
+                          title: Text(
+                            address.fullAddress
+                                .split(',')
+                                .map((part) => part.trim())
+                                .where((part) => part.isNotEmpty)
+                                .join(', '),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: secondaryBlack,
                             ),
-                            onPressed: () => _deleteAddress(index),
                           ),
-                        ],
-                      ),
+                          subtitle: address.isDefault
+                              ? const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'Default delivery address',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF008348),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 12, 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit address',
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: deepNavyBlue,
+                                ),
+                                onPressed: () async {
+                                  final bool? result =
+                                      await Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              AddEditAddressScreen(
+                                                address: address,
+                                                addressIndex: index,
+                                              ),
+                                        ),
+                                      );
+                                  if (result == true) {
+                                    _fetchAddresses();
+                                  }
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent,
+                                ),
+                                tooltip: 'Delete address',
+                                onPressed: () => _deleteAddress(index),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -477,7 +504,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                   }
                 },
                 label: const Text(
-                  'Add New',
+                  'Add address',
                   style: TextStyle(color: whiteBackground),
                 ),
                 icon: const Icon(Icons.add, color: whiteBackground),
@@ -488,7 +515,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                 elevation: 4,
               )
             : null,
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
     );
   }

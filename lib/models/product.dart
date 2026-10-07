@@ -5,6 +5,7 @@ const double temporaryTestDeliveryRadiusKm = 1000;
 
 class Product {
   final String id;
+  final String? offerId;
   final String name;
   final String description;
   final double price;
@@ -47,6 +48,7 @@ class Product {
 
   Product({
     required this.id,
+    this.offerId,
     this.videoAssetId,
     required this.name,
     required this.description,
@@ -219,6 +221,9 @@ class Product {
 
     return Product(
       id: json['_id'] ?? '',
+      offerId: json['selectedOffer'] is Map
+          ? (json['selectedOffer'] as Map)['_id']?.toString()
+          : json['offer']?.toString(),
       name: json['name'] ?? '',
       description: json['description'] ?? '',
       price:
@@ -298,6 +303,7 @@ class Product {
 
   Map<String, dynamic> toJson() => {
     '_id': id,
+    if (offerId != null) 'offer': offerId,
     'name': name,
     'description': description,
     'price': price,

@@ -179,25 +179,20 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return Column(
       children: [
         Container(
-          width: 84,
-          height: 84,
-          padding: const EdgeInsets.all(14),
+          width: 240,
+          height: 92,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [deepNavy, primaryNavy],
-            ),
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: Image.asset('assets/bg-erased_logo.png', fit: BoxFit.contain),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.asset(
+              'assets/naijago-brand.jpg',
+              fit: BoxFit.cover,
+              semanticLabel: 'NaijaGo',
+            ),
+          ),
         ),
         const SizedBox(height: 18),
         const Text(

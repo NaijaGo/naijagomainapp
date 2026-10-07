@@ -34,12 +34,21 @@ void main() {
       },
       client: _TestClient((request) async {
         captured = request;
-        return http.Response(jsonEncode({'enabled': true}), 200);
+        return http.Response(jsonEncode({
+          'groupOrderingEnabled': true,
+          'recurringOrdersEnabled': true,
+          'scheduledDeliveryEnabled': false,
+          'automaticPaymentsEnabled': false,
+        }), 200);
       }),
     );
     addTearDown(service.dispose);
 
-    expect((await service.config())['enabled'], isTrue);
+    final config = await service.config();
+    expect(config['groupOrderingEnabled'], isTrue);
+    expect(config['recurringOrdersEnabled'], isTrue);
+    expect(config['scheduledDeliveryEnabled'], isFalse);
+    expect(config['automaticPaymentsEnabled'], isFalse);
     expect(tokenReads, 0);
     expect(captured.method, 'GET');
     expect(captured.url.path, '/api/planned-orders/config');
@@ -144,6 +153,30 @@ void main() {
       );
     },
   );
+
+  test('HTML config 404 is reported as not deployed without parsing the body', () async {
+    final service = PlannedOrderService(
+      client: _TestClient((_) async => http.Response('<html>Not found</html>', 404)),
+    );
+    addTearDown(service.dispose);
+    await expectLater(service.config(), throwsA(isA<PlannedOrderException>().having(
+      (error) => error.code, 'code', 'PLANNED_ORDERS_NOT_DEPLOYED',
+    )));
+  });
+
+  test('known disabled response is distinct from a generic server failure', () async {
+    final service = PlannedOrderService(
+      tokenReader: () async => 'customer-token',
+      client: _TestClient((_) async => http.Response(jsonEncode({
+        'code': 'PLANNED_ORDERS_DISABLED',
+        'message': 'Normal checkout is available.',
+      }), 503)),
+    );
+    addTearDown(service.dispose);
+    await expectLater(service.groups(), throwsA(isA<PlannedOrderException>().having(
+      (error) => error.message, 'message', 'Normal checkout is available.',
+    )));
+  });
 
   test('notification intents route group and recurring records safely', () {
     final group = PlannedOrderIntent.parse({

@@ -10,9 +10,11 @@ class CatalogSearchResult {
     this.interpretation = 'catalog_attributes',
     this.externalAnswer = '',
     this.externalSources = const [],
+    this.vendors = const [],
     this.externalLabel = 'External information — not a NaijaGo listing.',
   });
   final List<Product> products;
+  final List<Map<String, dynamic>> vendors;
   final int total;
   final int page;
   final bool hasMore;
@@ -28,6 +30,8 @@ class CatalogSearchResult {
             .whereType<Map>()
             .map((item) => Product.fromJson(Map<String, dynamic>.from(item)))
             .toList(),
+        vendors: (json['vendors'] as List? ?? const []).whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row)).toList(),
         total: (json['total'] as num?)?.toInt() ?? 0,
         page: (json['page'] as num?)?.toInt() ?? 1,
         hasMore: json['hasMore'] == true,

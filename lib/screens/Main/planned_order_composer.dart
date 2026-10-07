@@ -110,6 +110,15 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
       _error = null;
     });
     try {
+      final config = await _service.config();
+      final enabled = _kind == 'group'
+          ? config['groupOrderingEnabled'] == true
+          : config['recurringOrdersEnabled'] == true;
+      if (!enabled) {
+        throw const PlannedOrderException(
+          'Group and recurring orders are awaiting inventory verification. Normal checkout is available.',
+        );
+      }
       if (_kind == 'group') {
         if (!widget.singleSeller) {
           throw const PlannedOrderException(
@@ -192,8 +201,6 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
             'timeZone': 'Africa/Lagos',
             'startDate': DateFormat('yyyy-MM-dd').format(_firstDate),
             'frequency': _frequency,
-            'windowStart': '09:00',
-            'windowEnd': '12:00',
           },
           'substitutionPreference': 'do_not_replace',
           'reminderLeadDays': 1,
@@ -249,7 +256,7 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
                 ],
               ),
               const Text(
-                'Stock and prices are checked again before payment. Recurring plans never charge automatically.',
+                'Stock and prices are checked again before payment. Recurring plans are purchase reminders: no automatic charges, stock holds or guaranteed delivery windows.',
                 style: TextStyle(color: Color(0xFF667085), height: 1.4),
               ),
               const SizedBox(height: 18),
@@ -319,7 +326,7 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
                     labelText: 'Maximum participants',
                     border: OutlineInputBorder(),
                   ),
-                  items: const [5, 10, 20, 50]
+                  items: const [5, 10, 20, 30]
                       .map(
                         (value) => DropdownMenuItem(
                           value: value,
@@ -345,7 +352,7 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
                       child: Text('Every week'),
                     ),
                     DropdownMenuItem(
-                      value: 'biweekly',
+                      value: 'fortnightly',
                       child: Text('Every two weeks'),
                     ),
                     DropdownMenuItem(
@@ -366,7 +373,7 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
                     side: const BorderSide(color: Color(0xFF98A2B3)),
                   ),
                   leading: const Icon(Icons.calendar_month_outlined),
-                  title: const Text('First delivery review'),
+                  title: const Text('First purchase review'),
                   subtitle: Text(
                     DateFormat('EEE, d MMM yyyy').format(_firstDate),
                   ),

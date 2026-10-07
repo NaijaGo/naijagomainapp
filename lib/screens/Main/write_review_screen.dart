@@ -6,6 +6,8 @@ import '../../widgets/visible_back_button.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants.dart';
 import '../../models/product.dart'; // Import Product model to get product details
@@ -26,6 +28,31 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   double _rating = 0.0; // User's selected rating (0 to 5)
   bool _isLoading = false;
   String? _errorMessage;
+  final List<Uint8List> _photos = [];
+  bool _selectingPhotos = false;
+
+  Future<void> _pickPhotos() async {
+    if (_selectingPhotos || _photos.length >= 5) return;
+    setState(() => _selectingPhotos = true);
+    try {
+      final selected = await ImagePicker().pickMultiImage(
+        maxWidth: 1600, maxHeight: 1600, imageQuality: 85,
+      );
+      final additions = <Uint8List>[];
+      for (final photo in selected.take(5 - _photos.length)) {
+        final bytes = await photo.readAsBytes();
+        if (bytes.length > 5 * 1024 * 1024) {
+          throw Exception('Photo too large');
+        }
+        additions.add(bytes);
+      }
+      if (!mounted) return;
+      setState(() { _photos.addAll(additions); _errorMessage = null; });
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage =
+          'Could not select photos. Allow photo access and use images under 5 MB.');
+    } finally { if (mounted) setState(() => _selectingPhotos = false); }
+  }
 
   @override
   void dispose() {
@@ -67,7 +94,24 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       final Uri url = Uri.parse(
         '$baseUrl/api/reviews',
       ); // Backend endpoint for submitting reviews
-      final response = await http.post(
+      final http.Response response;
+      if (_photos.isNotEmpty) {
+        final request = http.MultipartRequest('POST', url)
+          ..headers['Authorization'] = 'Bearer $token'
+          ..fields.addAll({
+            'productId': widget.product.id,
+            'rating': _rating.toString(),
+            'comment': _commentController.text.trim(),
+          });
+        for (var i = 0; i < _photos.length; i++) {
+          request.files.add(http.MultipartFile.fromBytes(
+            'photos', _photos[i], filename: 'review-$i.jpg',
+          ));
+        }
+        response = await request.send().then(http.Response.fromStream)
+            .timeout(const Duration(seconds: 90));
+      } else {
+        response = await http.post(
         url,
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
@@ -78,7 +122,8 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           'rating': _rating,
           'comment': _commentController.text.trim(),
         }),
-      );
+        ).timeout(const Duration(seconds: 30));
+      }
 
       final Map<String, dynamic> responseData = jsonDecode(response.body);
       if (!mounted) return;
@@ -101,14 +146,13 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = serverConnectionHelpMessage;
       });
       debugPrint('Error submitting review: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -237,6 +281,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                         const SizedBox(height: 10),
                         TextFormField(
                           controller: _commentController,
+                          maxLength: 3000,
                           maxLines: 5,
                           decoration: InputDecoration(
                             hintText:
@@ -285,6 +330,29 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                             ),
                           ),
 
+                        const SizedBox(height: 12),
+                        Text('Photos (${_photos.length}/5)',
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const Text('Only show the product. Avoid faces, addresses and private information. Photos appear after moderation.'),
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          for (var i = 0; i < _photos.length; i++)
+                            Stack(children: [
+                              ClipRRect(borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(_photos[i], width: 88, height: 88,
+                                    fit: BoxFit.cover, errorBuilder: (_, _, _) =>
+                                        const SizedBox(width: 88, height: 88, child: Icon(Icons.broken_image)))),
+                              Positioned(right: 0, top: 0,
+                                child: IconButton(tooltip: 'Remove photo',
+                                  onPressed: () => setState(() => _photos.removeAt(i)),
+                                  icon: const Icon(Icons.cancel, color: Colors.red))),
+                            ]),
+                        ]),
+                        if (_photos.length < 5)
+                          TextButton.icon(onPressed: _isLoading || _selectingPhotos ? null : _pickPhotos,
+                            icon: const Icon(Icons.add_photo_alternate_outlined),
+                            label: const Text('Add photos')),
+                        const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
                           child: _isLoading

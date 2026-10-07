@@ -188,6 +188,7 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _allowSmartMatching = true;
   bool _usedSmartMatching = false;
   String _externalAnswer = '';
+  List<Map<String, dynamic>> _matchingVendors = [];
   String _externalLabel = 'External information — not a NaijaGo listing.';
   List<Map<String, dynamic>> _externalSources = const [];
   bool _productRequestsEnabled = false;
@@ -255,6 +256,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _isLoading = false;
         _loadingMore = false;
         _searchResults = [];
+        _matchingVendors = [];
         _externalAnswer = '';
         _externalSources = const [];
         _collection = null;
@@ -293,6 +295,8 @@ class _SearchScreenState extends State<SearchScreen> {
           _searchResults = loadMore
               ? [..._searchResults, ...results.products]
               : results.products;
+          _matchingVendors = loadMore
+              ? [..._matchingVendors, ...results.vendors] : results.vendors;
           _collection = results.collection;
           _usedSmartMatching = results.interpretation == 'gemini_intent';
           if (!loadMore) {
@@ -732,7 +736,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
             )
-          : _searchResults.isEmpty
+          : _searchResults.isEmpty && _matchingVendors.isEmpty
           ? SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -755,6 +759,8 @@ class _SearchScreenState extends State<SearchScreen> {
           : CustomScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
+                if (_matchingVendors.isNotEmpty)
+                  SliverToBoxAdapter(child: _buildVendorResults()),
                 if (_usedSmartMatching)
                   SliverToBoxAdapter(
                     child: ListTile(
@@ -815,7 +821,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         label: Text(
                           _loadingMore
                               ? 'Loading more...'
-                              : 'Load more products',
+                              : 'Load more results',
                         ),
                       ),
                     ),
@@ -824,6 +830,27 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
     );
   }
+
+  Widget _buildVendorResults() => Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Registered vendors', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+      const SizedBox(height: 8),
+      for (final vendor in _matchingVendors)
+        Card(child: ListTile(
+          leading: const Icon(Icons.storefront_outlined),
+          title: Text(vendor['name']?.toString() ?? 'Vendor'),
+          subtitle: Text(vendor['address']?.toString() ?? ''),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            final id = vendor['id']?.toString();
+            if (id == null || !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(id)) return;
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => SearchScreen(
+              initialQuery: '', vendorId: id, vendorName: vendor['name']?.toString())));
+          },
+        )),
+    ]),
+  );
 
   Widget _buildCollection() {
     final chips = (_collection?['chips'] as List? ?? [])
@@ -981,7 +1008,7 @@ class ProductService {
     ).replace(queryParameters: parameters);
     try {
       final response = await (searchClient?.get(uri) ?? http.get(uri)).timeout(
-        const Duration(seconds: 20),
+        const Duration(seconds: 30),
       );
       if (response.statusCode == 400) {
         throw CatalogSearchException(

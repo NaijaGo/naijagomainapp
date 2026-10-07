@@ -16,6 +16,7 @@ class CartItem {
 
     return {
       'product': product.id,
+      if (product.offerId != null) 'offer': product.offerId,
       'name': product.name,
       'image': product.imageUrls.isNotEmpty
           ? product.imageUrls[0]
@@ -114,6 +115,10 @@ class CartProvider with ChangeNotifier {
     }
 
     if (_items.containsKey(itemKey)) {
+      // Preserve the existing one-line-per-product cart while preventing a
+      // different seller's offer from being merged into an existing purchase.
+      if (_items[itemKey]!.product.offerId != product.offerId ||
+          _items[itemKey]!.product.sellerId != product.sellerId) return false;
       _items.update(itemKey, (existingItem) {
         if (existingItem.quantity < product.stockQuantity) {
           existingItem.quantity++;

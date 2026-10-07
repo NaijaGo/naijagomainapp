@@ -16,6 +16,7 @@ import '../../widgets/product_video_section.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/customer_location_service.dart';
 import 'chat_screen.dart';
+import 'product_reviews_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -1908,6 +1909,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ],
                   _buildSectionTitle('Customer Reviews'),
                   _buildReviewForm(),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ProductReviewsScreen(product: widget.product))),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Read reviews & customer photos'),
+                  ),
                   const SizedBox(height: 80),
                 ],
               ),

@@ -7,6 +7,9 @@ class Review {
   final double rating;
   final String comment;
   final DateTime createdAt;
+  final List<String> photos;
+  final bool verifiedPurchase;
+  final String moderationStatus;
 
   Review({
     required this.id,
@@ -17,6 +20,9 @@ class Review {
     required this.rating,
     required this.comment,
     required this.createdAt,
+    this.photos = const [],
+    this.verifiedPurchase = false,
+    this.moderationStatus = 'approved',
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
@@ -50,6 +56,11 @@ class Review {
       rating: _readDouble(json['rating']) ?? 0,
       comment: _readString(json['comment']) ?? '',
       createdAt: _readDateTime(json['createdAt']) ?? DateTime.now(),
+      photos: (json['photos'] is List ? json['photos'] as List : const [])
+          .map((photo) => photo is Map ? photo['url']?.toString() ?? '' : photo.toString())
+          .where((url) => Uri.tryParse(url)?.scheme == 'https').toList(),
+      verifiedPurchase: json['verifiedPurchase'] == true,
+      moderationStatus: json['moderationStatus']?.toString() ?? 'approved',
     );
   }
 
@@ -61,6 +72,9 @@ class Review {
       'rating': rating,
       'comment': comment,
       'createdAt': createdAt.toIso8601String(),
+      'photos': photos.map((url) => {'url': url}).toList(),
+      'verifiedPurchase': verifiedPurchase,
+      'moderationStatus': moderationStatus,
     };
   }
 

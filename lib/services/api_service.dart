@@ -58,12 +58,13 @@ class ApiService {
 
   static Future<http.Response> uploadMultipart(
     String path, {required String filePath, required String fieldName, Map<String, String> fields = const {},
+    String? filename,
   }) async {
     final token = await _getToken();
     final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'));
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields.addAll(fields);
-    request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+    request.files.add(await http.MultipartFile.fromPath(fieldName, filePath, filename: filename));
     final streamed = await request.send();
     return http.Response.fromStream(streamed);
   }

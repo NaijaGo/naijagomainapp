@@ -9,12 +9,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants.dart';
 import '../../models/review.dart'; // Import the Review model
 import '../../theme/app_theme.dart';
-import '../../widgets/tech_glow_background.dart';
+import '../../widgets/account_page_background.dart';
+import '../../widgets/review_photos.dart';
+import '../../services/review_service.dart';
+
 // To navigate to product details if needed
 
 // Defined custom colors for consistency and enchantment
 const Color deepNavyBlue = AppTheme.primaryNavy;
-const Color greenYellow = Color(0xFFF4F8FF);
+const Color greenYellow = AppTheme.primaryNavy;
 const Color whiteBackground = Colors.white;
 const Color secondaryBlack = AppTheme.secondaryBlack;
 const Color borderGrey = AppTheme.borderGrey;
@@ -32,6 +35,99 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
   List<Review> _reviews = [];
   bool _isLoading = true;
   String? _errorMessage;
+
+  Future<void> _manageReview(Review review, String action) async {
+    if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete review?'),
+          content: const Text('This removes your review and its photos.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      try {
+        await ReviewService().delete(review.id);
+        if (mounted) await _fetchMyReviews();
+      } catch (_) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not delete this review. Please try again.'),
+            ),
+          );
+      }
+      return;
+    }
+    final controller = TextEditingController(text: review.comment);
+    var rating = review.rating;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Edit review'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(
+                    5,
+                    (index) => IconButton(
+                      onPressed: () => update(() => rating = index + 1.0),
+                      icon: Icon(
+                        index < rating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                      ),
+                    ),
+                  ),
+                ),
+                TextField(controller: controller, maxLength: 3000, maxLines: 4),
+                const Text(
+                  'Existing photos are retained. Changes are checked before publication.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final comment = controller.text.trim();
+    controller.dispose();
+    if (confirmed != true || comment.isEmpty) return;
+    try {
+      await ReviewService().edit(review.id, rating, comment);
+      if (mounted) await _fetchMyReviews();
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update this review. Please try again.'),
+          ),
+        );
+    }
+  }
 
   @override
   void initState() {
@@ -118,16 +214,17 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
     // Removed theme color scheme reference as we're using custom constants
     // final color = Theme.of(context).colorScheme;
 
-    return TechGlowBackground(
+    return AccountPageBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           leading: const VisibleBackButton(),
           title: const Text(
-            'My Reviews & Ratings',
+            'My reviews',
             style: TextStyle(color: greenYellow), // AppBar title green yellow
           ),
-          backgroundColor: Colors.transparent,
+          backgroundColor: const Color(0xFFF5F7FB),
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(
             color: greenYellow,
@@ -152,7 +249,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                         _errorMessage!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: whiteBackground,
+                          color: secondaryBlack,
                           fontSize: 16,
                         ),
                       ),
@@ -179,8 +276,8 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                   child: Text(
                     'You haven\'t submitted any reviews yet. Go find something you love!',
                     style: TextStyle(
-                      color: whiteBackground.withValues(alpha: 0.8),
-                      fontSize: 18,
+                      color: mutedText,
+                      fontSize: 17,
                       fontStyle: FontStyle.italic,
                     ),
                     textAlign: TextAlign.center,
@@ -188,7 +285,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                 ),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
                 itemCount: _reviews.length,
                 itemBuilder: (context, index) {
                   final review = _reviews[index];
@@ -196,7 +293,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                     elevation: 0,
                     margin: const EdgeInsets.only(bottom: 16.0),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(20),
                       side: const BorderSide(color: borderGrey),
                     ),
                     color: whiteBackground,
@@ -210,7 +307,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                             Text(
                               review.productName!,
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 17,
                                 fontWeight: FontWeight.bold,
                                 color: secondaryBlack,
                               ),
@@ -233,12 +330,37 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                           Text(
                             review.comment,
                             style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: 15,
                               color: secondaryBlack,
                             ),
                           ),
                           const SizedBox(height: 12),
                           // Date of Review
+                          if (review.verifiedPurchase)
+                            const Text(
+                              'Verified purchase',
+                              style: TextStyle(color: Colors.green),
+                            ),
+                          if (review.moderationStatus != 'approved')
+                            Text(
+                              review.moderationStatus == 'pending'
+                                  ? 'Awaiting moderation'
+                                  : 'Not published',
+                            ),
+                          ReviewPhotos(urls: review.photos),
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: () => _manageReview(review, 'edit'),
+                                child: const Text('Edit'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    _manageReview(review, 'delete'),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
                           Text(
                             'Reviewed on: ${review.createdAt.toLocal().toIso8601String().split('T')[0]}',
                             style: const TextStyle(

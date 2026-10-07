@@ -49,7 +49,7 @@ class LocationAccessService {
       return const LocationAccessResult.blocked(
         issue: LocationAccessIssue.servicesDisabled,
         message:
-            'Location services are turned off. Enable them to use current location on your iPhone.',
+            'Location services are turned off. Enable them to use current location, or enter your delivery address manually.',
       );
     }
 
@@ -67,14 +67,14 @@ class LocationAccessService {
         return const LocationAccessResult.blocked(
           issue: LocationAccessIssue.denied,
           message:
-              'Location access was denied. On iPhone, you may need to allow location from Settings before this can work again.',
+              'Location access was denied. Allow location in Settings for automatic location, or enter your delivery address manually.',
           permission: LocationPermission.denied,
         );
       case LocationPermission.deniedForever:
         return const LocationAccessResult.blocked(
           issue: LocationAccessIssue.deniedForever,
           message:
-              'Location access is blocked for this app. Open iPhone Settings and allow location access to continue.',
+              'Location access is blocked for this app. Open Settings and allow location access, or enter your delivery address manually.',
           permission: LocationPermission.deniedForever,
         );
       case LocationPermission.unableToDetermine:

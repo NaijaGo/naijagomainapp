@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:video_player/video_player.dart';
 import '../../models/explore_video.dart';
 import '../../models/product.dart';
@@ -259,15 +260,32 @@ class _ExploreUploadScreenState extends State<ExploreUploadScreen> {
   @override
   void dispose() { _captionController.dispose(); super.dispose(); }
   Future<void> _chooseVideo() async {
-    final video = await _picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(seconds: 90));
-    if (video != null && mounted) setState(() => _video = video);
+    try {
+      final video = await _picker.pickVideo(source: ImageSource.gallery);
+      if (video != null && mounted) setState(() { _video = video; _error = null; });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open your gallery. Allow photo/video access or choose a video file below.');
+    }
+  }
+  Future<void> _chooseVideoFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.custom,
+        allowedExtensions: ['mp4', 'mov', 'webm', 'm4v', '3gp', '3g2', 'avi', 'mkv', 'mpg', 'mpeg', 'wmv', 'flv']);
+      if (result == null || !mounted) return;
+      final file = result.files.single;
+      if (file.path == null) { setState(() => _error = 'Download the video to your device before selecting it.'); return; }
+      setState(() { _video = XFile(file.path!, name: file.name); _error = null; });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not select this video. Try a locally saved file.');
+    }
   }
   Future<void> _publish() async {
     final caption = _captionController.text.trim();
     if (_video == null || caption.isEmpty) { setState(() => _error = 'Choose a video and enter a caption.'); return; }
     setState(() { _publishing = true; _error = null; });
     try {
-      await _service.publishVideo(filePath: _video!.path, caption: caption, productId: _productId);
+      if (await _video!.length() > 90 * 1024 * 1024) throw Exception('This video exceeds 90 MB. Compress it before uploading.');
+      await _service.publishVideo(filePath: _video!.path, filename: _video!.name, caption: caption, productId: _productId);
       await widget.onPublished?.call();
       if (mounted) Navigator.pop(context);
     } catch (error) {
@@ -289,7 +307,7 @@ class _ExploreUploadScreenState extends State<ExploreUploadScreen> {
             const Text('Posting guidelines', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
             for (final guideline in const [
-              'Post legitimate content related to NaijaGo.',
+              'Share original videos you have permission to publish.',
               'Do not make misleading product claims. Product details must match the linked NaijaGo product.',
               'Do not post prohibited or harmful content.',
               'Do not upload content that violates another person’s rights.',
@@ -308,6 +326,9 @@ class _ExploreUploadScreenState extends State<ExploreUploadScreen> {
       ),
       const SizedBox(height: 18),
       InkWell(onTap: _publishing ? null : _chooseVideo, borderRadius: BorderRadius.circular(20), child: Container(height: 220, decoration: BoxDecoration(color: const Color(0xFFF2F5FA), borderRadius: BorderRadius.circular(20)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.video_library_outlined, size: 46), const SizedBox(height: 10), Text(_video?.name ?? 'Choose a video')]))),
+      TextButton.icon(onPressed: _publishing ? null : _chooseVideoFile,
+        icon: const Icon(Icons.folder_open), label: const Text('Choose a video file')),
+      const Text('No 90-second limit. Videos can be up to 90 MB; common gallery formats are supported.'),
       const SizedBox(height: 18), TextField(controller: _captionController, maxLength: 500, maxLines: 3, decoration: const InputDecoration(labelText: 'Caption', border: OutlineInputBorder())),
       const SizedBox(height: 16),
       DropdownButtonFormField<String>(value: _productId, decoration: const InputDecoration(labelText: 'Link a product (optional)', border: OutlineInputBorder()), items: [const DropdownMenuItem<String>(value: null, child: Text('No product')), ..._products.map((p) => DropdownMenuItem<String>(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis)))], onChanged: _loadingProducts || _publishing ? null : (id) => setState(() => _productId = id)),
