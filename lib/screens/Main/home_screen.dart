@@ -30,6 +30,8 @@ import '../../services/home_carousel_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/product_social_proof.dart';
+import '../../widgets/deals_home_section.dart';
+import 'shopping_assistant_screen.dart';
 import 'categories_screen.dart'
     hide
         accentGreen,
@@ -1113,6 +1115,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   static const int _bannerInitialPage = 10000;
   List<Product> _flashSales = [];
+  int _dealsRefreshToken = 0;
   List<Product> _newArrivals = [];
   List<Product> _recommended = [];
   List<Product> _restaurants = [];
@@ -1959,6 +1962,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _loadHomeContent({bool forceRefresh = false}) async {
+    if (forceRefresh && mounted) setState(() => _dealsRefreshToken++);
     await Future.wait([
       _fetchProducts(forceRefresh: forceRefresh),
       _fetchCarouselSlides(),
@@ -2373,9 +2377,20 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
             SliverToBoxAdapter(child: _buildServiceShortcuts()),
+            SliverToBoxAdapter(child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Card(child: ListTile(
+                leading: const Icon(Icons.auto_awesome, color: AppTheme.primaryNavy),
+                title: const Text('Tell us what you need'),
+                subtitle: const Text('Find real NaijaGo listings with Shopping Assistant'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShoppingAssistantScreen())),
+              )),
+            )),
             SliverToBoxAdapter(child: _buildBannerCarousel()),
 
             SliverToBoxAdapter(child: _buildFoodDiscoveryBars()),
+            SliverToBoxAdapter(child: DealsHomeSection(refreshToken: _dealsRefreshToken)),
 
             if (_flashSales.isNotEmpty) ...[
               _buildSectionHeader(

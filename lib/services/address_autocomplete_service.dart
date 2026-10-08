@@ -1,3 +1,4 @@
+import '../models/delivery_address_details.dart';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -6,6 +7,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 
 class AddressSuggestion {
+  final String street, area, landmark;
+  bool get hasValidCoordinates => validDeliveryCoordinates(latitude, longitude);
+  DeliveryAddressDetails get details => DeliveryAddressDetails(
+    address: address,
+    street: street,
+    area: area,
+    landmark: landmark,
+    city: city,
+    state: state,
+    country: country,
+    postalCode: postalCode,
+  );
   final String id;
   final String label;
   final String address;
@@ -17,6 +30,9 @@ class AddressSuggestion {
   final double longitude;
 
   const AddressSuggestion({
+    this.street = '',
+    this.area = '',
+    this.landmark = '',
     required this.id,
     required this.label,
     required this.address,
@@ -34,11 +50,14 @@ class AddressSuggestion {
       label: json['label'] as String? ?? '',
       address: json['address'] as String? ?? '',
       city: json['city'] as String? ?? '',
+      street: json['street'] as String? ?? '',
+      area: json['area'] as String? ?? '',
+      landmark: json['landmark'] as String? ?? '',
       state: json['state'] as String? ?? '',
       postalCode: json['postalCode'] as String? ?? '',
-      country: json['country'] as String? ?? 'Nigeria',
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      country: json['country'] as String? ?? '',
+      latitude: parseDeliveryCoordinate(json['latitude']) ?? double.nan,
+      longitude: parseDeliveryCoordinate(json['longitude']) ?? double.nan,
     );
   }
 }
@@ -106,7 +125,7 @@ class AddressAutocompleteService {
     ).replace(queryParameters: parameters);
     final response = await http
         .get(uri, headers: {'Authorization': 'Bearer $token'})
-        .timeout(const Duration(seconds: 12));
+        .timeout(const Duration(seconds: 22));
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode != 200) {
       throw FormatException(
@@ -116,6 +135,12 @@ class AddressAutocompleteService {
     final items = decoded['suggestions'] as List<dynamic>? ?? const [];
     final suggestions = items
         .whereType<Map<String, dynamic>>()
+        .where(
+          (row) => validDeliveryCoordinates(
+            parseDeliveryCoordinate(row['latitude']),
+            parseDeliveryCoordinate(row['longitude']),
+          ),
+        )
         .map(AddressSuggestion.fromJson)
         .toList();
     _cache[normalized] = _CachedAddressSearch(DateTime.now(), suggestions);
@@ -137,9 +162,9 @@ class AddressAutocompleteService {
     if (token == null || token.isEmpty) {
       throw const FormatException('Please log in again.');
     }
-    final uri = Uri.parse('$baseUrl/api/locations/reverse').replace(
-      queryParameters: {'lat': '$latitude', 'lng': '$longitude'},
-    );
+    final uri = Uri.parse(
+      '$baseUrl/api/locations/reverse',
+    ).replace(queryParameters: {'lat': '$latitude', 'lng': '$longitude'});
     final response = await http
         .get(uri, headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 12));
@@ -151,21 +176,27 @@ class AddressAutocompleteService {
     final address = decoded['address'];
     if (address is! Map) return null;
     final map = Map<String, dynamic>.from(address);
-    final addressLine = map['addressLine']?.toString().trim() ?? '';
+    final addressLine =
+        map['address']?.toString().trim() ??
+        map['addressLine']?.toString().trim() ??
+        '';
     final city = map['city']?.toString().trim() ?? '';
     if (addressLine.isEmpty && city.isEmpty) return null;
-    final latitudeValue = (map['latitude'] as num?)?.toDouble() ?? latitude;
-    final longitudeValue = (map['longitude'] as num?)?.toDouble() ?? longitude;
+    // Reverse geocoding describes the requested position; it never moves it.
+    if (!validDeliveryCoordinates(latitude, longitude)) return null;
     return AddressSuggestion(
       id: '$latitude,$longitude',
       label: map['formattedAddress']?.toString() ?? addressLine,
-      address: addressLine.isEmpty ? city : addressLine,
+      address: addressLine,
       city: city,
-      state: '',
+      street: map['street']?.toString() ?? '',
+      area: map['area']?.toString() ?? '',
+      landmark: map['landmark']?.toString() ?? '',
+      state: map['state']?.toString() ?? '',
       postalCode: map['postalCode']?.toString() ?? '',
-      country: map['country']?.toString() ?? 'Nigeria',
-      latitude: latitudeValue,
-      longitude: longitudeValue,
+      country: map['country']?.toString() ?? '',
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }

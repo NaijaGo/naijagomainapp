@@ -1,3 +1,4 @@
+import '../../models/delivery_address_details.dart';
 // lib/screens/Main/add_edit_address_screen.dart
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ import '../../models/address.dart';
 import '../../services/address_resolution_service.dart';
 import '../../services/address_autocomplete_service.dart';
 import '../../widgets/tech_glow_background.dart';
+
 // Import the Address model
 
 // Defined custom colors for consistency and enchantment
@@ -46,6 +48,11 @@ class AddEditAddressScreen extends StatefulWidget {
 
 class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _streetController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _landmarkController = TextEditingController();
+  final _stateController = TextEditingController();
+  int _addressRevision = 0;
 
   late TextEditingController _addressController;
   late TextEditingController _phoneNumberController;
@@ -71,8 +78,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   void _onAddressChanged(String value) {
     _searchBiasLatitude ??= _latitude;
     _searchBiasLongitude ??= _longitude;
-    _latitude = null;
-    _longitude = null;
+    _addressRevision++;
     _searchDebounce?.cancel();
     final query = value.trim();
     if (query.length < 2) {
@@ -87,7 +93,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     final shouldSearchImmediately =
         cached.isEmpty && !_isSearchingAddress && _suggestions.isEmpty;
     setState(() {
-      if (cached.isNotEmpty) _suggestions = cached;
+      _suggestions = cached;
       _isSearchingAddress = true;
       _searchMessage = null;
     });
@@ -104,7 +110,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     if (!_addressFocusNode.hasFocus) return;
     Future<void>.delayed(const Duration(milliseconds: 250), () {
       final context = _addressFieldKey.currentContext;
-      if (mounted && context != null) {
+      if (mounted && context != null && context.mounted) {
         Scrollable.ensureVisible(
           context,
           alignment: 0.12,
@@ -116,12 +122,18 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   }
 
   void _invalidateCoordinates(String _) {
-    _latitude = null;
-    _longitude = null;
+    _addressRevision++;
+    _searchDebounce?.cancel();
+    setState(() {
+      _suggestions = const [];
+      _isSearchingAddress = false;
+      _searchMessage = null;
+    });
   }
 
   Future<void> _searchAddresses(String query) async {
     if (!mounted) return;
+    final revision = _addressRevision;
     setState(() {
       _isSearchingAddress = true;
       _searchMessage = null;
@@ -132,38 +144,53 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         latitude: _searchBiasLatitude,
         longitude: _searchBiasLongitude,
       );
-      if (!mounted || _addressController.text.trim() != query) return;
+      if (!mounted ||
+          revision != _addressRevision ||
+          _addressController.text.trim() != query) {
+        return;
+      }
       setState(() {
         _suggestions = results;
         _searchMessage = results.isEmpty ? 'No matching address found.' : null;
       });
     } catch (_) {
-      if (!mounted || _addressController.text.trim() != query) return;
+      if (!mounted ||
+          revision != _addressRevision ||
+          _addressController.text.trim() != query)
+        return;
       setState(() {
         _suggestions = const [];
         _searchMessage =
             'Address suggestions are unavailable. You can still enter the address manually.';
       });
     } finally {
-      if (mounted && _addressController.text.trim() == query) {
+      if (mounted &&
+          revision == _addressRevision &&
+          _addressController.text.trim() == query) {
         setState(() => _isSearchingAddress = false);
       }
     }
   }
 
   void _selectSuggestion(AddressSuggestion suggestion) {
+    if (!suggestion.hasValidCoordinates) return;
+    _searchDebounce?.cancel();
     setState(() {
       _addressController.text = suggestion.address;
       _cityController.text = suggestion.city;
-      if (suggestion.postalCode.isNotEmpty) {
-        _postalCodeController.text = suggestion.postalCode;
-      }
+      _postalCodeController.text = suggestion.postalCode;
       _countryController.text = suggestion.country;
+      _addressRevision++;
+      _streetController.text = suggestion.street;
+      _areaController.text = suggestion.area;
+      _landmarkController.text = suggestion.landmark;
+      _stateController.text = suggestion.state;
       _latitude = suggestion.latitude;
       _longitude = suggestion.longitude;
       _searchBiasLatitude = suggestion.latitude;
       _searchBiasLongitude = suggestion.longitude;
       _suggestions = const [];
+      _isSearchingAddress = false;
       _searchMessage = null;
     });
   }
@@ -181,7 +208,9 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   }
 
   Future<void> _loadInitialData() async {
+    final initialRevision = _addressRevision;
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted || initialRevision != _addressRevision) return;
     final fallbackPhoneNumber = prefs.getString('phoneNumber') ?? '';
 
     // If editing an existing address
@@ -192,6 +221,10 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       _cityController.text = existingAddress.city;
       _postalCodeController.text = existingAddress.postalCode;
       _countryController.text = existingAddress.country;
+      _streetController.text = existingAddress.street;
+      _areaController.text = existingAddress.area;
+      _landmarkController.text = existingAddress.landmark;
+      _stateController.text = existingAddress.state;
       _isDefault = existingAddress.isDefault;
       _latitude = existingAddress.latitude;
       _longitude = existingAddress.longitude;
@@ -213,6 +246,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       setState(() {
         _isLoading = true;
       });
+      final revision = _addressRevision;
       try {
         final resolvedAddress =
             await AddressResolutionService.resolveFromCoordinates(
@@ -220,6 +254,11 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               widget.initialLongitude!,
             );
 
+        if (!mounted || revision != _addressRevision) return;
+        _streetController.text = resolvedAddress.street;
+        _areaController.text = resolvedAddress.area;
+        _landmarkController.text = resolvedAddress.landmark;
+        _stateController.text = resolvedAddress.state;
         _addressController.text = resolvedAddress.addressLine;
         _cityController.text = resolvedAddress.city;
         _postalCodeController.text = resolvedAddress.postalCode;
@@ -228,7 +267,9 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to get address details from location: $e'),
+              content: const Text(
+                'Your location is selected. Please complete the address details.',
+              ),
             ),
           );
         }
@@ -249,6 +290,14 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     _addressFocusNode.dispose();
     _addressController.dispose();
     _phoneNumberController.dispose();
+    for (final controller in [
+      _streetController,
+      _areaController,
+      _landmarkController,
+      _stateController,
+    ]) {
+      controller.dispose();
+    }
     _cityController.dispose();
     _postalCodeController.dispose();
     _countryController.dispose();
@@ -257,6 +306,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
   Future<void> _saveAddress() async {
     if (_formKey.currentState!.validate()) {
+      final revision = _addressRevision;
       if (_latitude == null || _longitude == null) {
         setState(() => _isLoading = true);
         try {
@@ -269,7 +319,12 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
           final locations = await locationFromAddress(
             query,
           ).timeout(const Duration(seconds: 10));
-          if (locations.isNotEmpty) {
+          if (!mounted || revision != _addressRevision) return;
+          if (locations.isNotEmpty &&
+              validDeliveryCoordinates(
+                locations.first.latitude,
+                locations.first.longitude,
+              )) {
             _latitude = locations.first.latitude;
             _longitude = locations.first.longitude;
           }
@@ -280,7 +335,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         }
       }
 
-      if (_latitude == null || _longitude == null) {
+      if (!mounted || revision != _addressRevision) return;
+      if (!validDeliveryCoordinates(_latitude, _longitude)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -294,6 +350,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       }
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
+      if (!mounted || revision != _addressRevision) return;
       final String? token = prefs.getString('jwt_token');
 
       if (token == null) {
@@ -309,7 +366,19 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         return;
       }
 
+      if (!validDeliveryCoordinates(_latitude, _longitude)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select a valid delivery location.'),
+          ),
+        );
+        return;
+      }
       final addressData = {
+        'street': _streetController.text.trim(),
+        'area': _areaController.text.trim(),
+        'landmark': _landmarkController.text.trim(),
+        'state': _stateController.text.trim(),
         'address': _addressController.text.trim(),
         'phoneNumber': _phoneNumberController.text.trim(),
         'city': _cityController.text.trim(),
@@ -567,7 +636,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                           controller: _postalCodeController,
                           onChanged: _invalidateCoordinates,
                           decoration: InputDecoration(
-                            labelText: 'Postal Code',
+                            labelText: 'Postal Code (optional)',
                             labelStyle: const TextStyle(color: deepNavyBlue),
                             focusedBorder: const OutlineInputBorder(
                               borderSide: BorderSide(
@@ -587,9 +656,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                             ),
                           ),
                           cursorColor: deepNavyBlue,
-                          validator: (value) => value!.isEmpty
-                              ? 'Please enter postal code'
-                              : null,
+                          validator: (_) => null,
                         ),
                         const SizedBox(height: 20),
                         TextFormField(
@@ -619,6 +686,26 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                           validator: (value) =>
                               value!.isEmpty ? 'Please enter a country' : null,
                         ),
+                        for (final entry
+                            in <MapEntry<String, TextEditingController>>[
+                              MapEntry('Street (optional)', _streetController),
+                              MapEntry('Area (optional)', _areaController),
+                              MapEntry(
+                                'State (where available)',
+                                _stateController,
+                              ),
+                              MapEntry(
+                                'Landmark / instructions (optional)',
+                                _landmarkController,
+                              ),
+                            ]) ...[
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: entry.value,
+                            decoration: InputDecoration(labelText: entry.key),
+                            onChanged: _invalidateCoordinates,
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         CheckboxListTile(
                           title: const Text(

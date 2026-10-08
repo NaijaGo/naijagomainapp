@@ -43,7 +43,14 @@ class LocationAccessResult {
 class LocationAccessService {
   static const String temporaryPreciseLocationPurposeKey = 'delivery_location';
 
-  static Future<LocationAccessResult> ensureAccess() async {
+  static Future<LocationAccessResult>? _pendingAccess;
+  static bool get permissionRequestPending => _pendingAccess != null;
+  static Future<LocationAccessResult> ensureAccess() =>
+      _pendingAccess ??= _ensureAccess().whenComplete(() {
+        _pendingAccess = null;
+      });
+
+  static Future<LocationAccessResult> _ensureAccess() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return const LocationAccessResult.blocked(
@@ -87,22 +94,23 @@ class LocationAccessService {
     }
   }
 
-  static Future<void> requestPreciseLocationIfNeeded() async {
-    if (defaultTargetPlatform != TargetPlatform.iOS) {
-      return;
-    }
-
+  static Future<LocationAccuracyStatus?>? _pendingAccuracy;
+  static Future<LocationAccuracyStatus?> requestPreciseLocationIfNeeded() =>
+      _pendingAccuracy ??= _requestAccuracy().whenComplete(() {
+        _pendingAccuracy = null;
+      });
+  static Future<LocationAccuracyStatus?> _requestAccuracy() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
     try {
-      final accuracyStatus = await Geolocator.getLocationAccuracy();
-      if (accuracyStatus != LocationAccuracyStatus.reduced) {
-        return;
+      if (await Geolocator.getLocationAccuracy() ==
+          LocationAccuracyStatus.reduced) {
+        await Geolocator.requestTemporaryFullAccuracy(
+          purposeKey: temporaryPreciseLocationPurposeKey,
+        );
       }
-
-      await Geolocator.requestTemporaryFullAccuracy(
-        purposeKey: temporaryPreciseLocationPurposeKey,
-      );
-    } catch (error) {
-      debugPrint('Unable to request temporary precise location: $error');
+      return await Geolocator.getLocationAccuracy();
+    } catch (_) {
+      return null;
     }
   }
 
@@ -110,6 +118,7 @@ class LocationAccessService {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return AppleSettings(
         accuracy: LocationAccuracy.bestForNavigation,
+        timeLimit: const Duration(seconds: 15),
         activityType: ActivityType.otherNavigation,
         pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: false,
@@ -117,7 +126,10 @@ class LocationAccessService {
       );
     }
 
-    return const LocationSettings(accuracy: LocationAccuracy.high);
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      timeLimit: Duration(seconds: 15),
+    );
   }
 
   static Future<void> openRelevantSettings(LocationAccessResult result) async {

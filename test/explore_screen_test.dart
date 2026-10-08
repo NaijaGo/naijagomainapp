@@ -22,6 +22,12 @@ void main() {
     await tester.tap(find.text('Create'));
     await tester.pumpAndSettle();
     expect(find.text('Posting as Approved vendor'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Publish video'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Publish video'), findsOneWidget);
   });
 }

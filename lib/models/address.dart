@@ -1,3 +1,4 @@
+import 'delivery_address_details.dart';
 // lib/models/address.dart
 import 'package:equatable/equatable.dart';
 
@@ -5,6 +6,7 @@ import 'package:equatable/equatable.dart';
 // to use the 'Equatable' mixin for reliable object comparison.
 
 class Address extends Equatable {
+  final String street, area, landmark;
   final String id;
   final String name;
   final String phoneNumber;
@@ -19,6 +21,9 @@ class Address extends Equatable {
   final double? longitude;
 
   const Address({
+    this.street = '',
+    this.area = '',
+    this.landmark = '',
     this.id = '',
     required this.name,
     required this.phoneNumber,
@@ -35,9 +40,15 @@ class Address extends Equatable {
 
   // Factory constructor to create an Address from a JSON map
   factory Address.fromJson(Map<String, dynamic> json) {
+    final lat = parseDeliveryCoordinate(json['latitude']);
+    final lon = parseDeliveryCoordinate(json['longitude']);
+    final valid = validDeliveryCoordinates(lat, lon);
     return Address(
       // Handles '_id' from the backend and standard 'id'
       id: json['_id'] ?? json['id'] ?? '',
+      street: json['street'] ?? '',
+      area: json['area'] ?? '',
+      landmark: json['landmark'] ?? '',
       name: json['name'] ?? '',
       phoneNumber: json['phoneNumber'] ?? '',
       // Accepts both 'addressLine' (Flutter default) or 'address' (Backend)
@@ -50,8 +61,8 @@ class Address extends Equatable {
       apartmentNumber: json['apartmentNumber'],
       isDefault: json['isDefault'] ?? false,
       // Safely converts 'num' (int or double) from JSON to 'double?'
-      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
-      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      latitude: valid ? lat : null,
+      longitude: valid ? lon : null,
     );
   }
 
@@ -63,11 +74,11 @@ class Address extends Equatable {
       'name': name,
       'phoneNumber': phoneNumber,
       // Mongoose expects 'address' for the address line
-      'address': addressLine, 
+      'address': addressLine,
       'city': city,
-      'state': state,
+      'state': state, 'street': street, 'area': area, 'landmark': landmark,
       // Mongoose expects 'postalCode'
-      'postalCode': zipCode, 
+      'postalCode': zipCode,
       'country': country,
       'apartmentNumber': apartmentNumber,
       'isDefault': isDefault,
@@ -80,6 +91,9 @@ class Address extends Equatable {
   Address copyWith({
     String? id,
     String? name,
+    String? street,
+    String? area,
+    String? landmark,
     String? phoneNumber,
     String? addressLine,
     String? city,
@@ -92,6 +106,9 @@ class Address extends Equatable {
     double? longitude,
   }) {
     return Address(
+      street: street ?? this.street,
+      area: area ?? this.area,
+      landmark: landmark ?? this.landmark,
       id: id ?? this.id,
       name: name ?? this.name,
       phoneNumber: phoneNumber ?? this.phoneNumber,
@@ -128,17 +145,20 @@ class Address extends Equatable {
   // Implementation of Equatable properties for deep equality check
   @override
   List<Object?> get props => [
-        id,
-        name,
-        phoneNumber,
-        addressLine,
-        city,
-        state,
-        zipCode,
-        country,
-        apartmentNumber,
-        isDefault,
-        latitude,
-        longitude,
-      ];
+    street,
+    area,
+    landmark,
+    id,
+    name,
+    phoneNumber,
+    addressLine,
+    city,
+    state,
+    zipCode,
+    country,
+    apartmentNumber,
+    isDefault,
+    latitude,
+    longitude,
+  ];
 }

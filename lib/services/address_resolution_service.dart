@@ -1,3 +1,4 @@
+import '../models/delivery_address_details.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geocoding/geocoding.dart';
@@ -6,6 +7,10 @@ import 'address_autocomplete_service.dart';
 
 class ResolvedAddress {
   const ResolvedAddress({
+    this.street = '',
+    this.area = '',
+    this.landmark = '',
+    this.state = '',
     required this.addressLine,
     required this.city,
     required this.postalCode,
@@ -14,6 +19,17 @@ class ResolvedAddress {
     required this.placemark,
   });
 
+  final String street, area, landmark, state;
+  DeliveryAddressDetails get details => DeliveryAddressDetails(
+    address: addressLine,
+    street: street,
+    area: area,
+    landmark: landmark,
+    city: city,
+    state: state,
+    country: country,
+    postalCode: postalCode,
+  );
   final String addressLine;
   final String city;
   final String postalCode;
@@ -31,11 +47,16 @@ class AddressResolutionService {
 
   static Future<ResolvedAddress> resolveFromCoordinates(
     double latitude,
-    double longitude,
-  ) async {
+    double longitude, {
+    AddressAutocompleteService? remoteService,
+  }) async {
     final remoteFirst = kIsWeb || defaultTargetPlatform == TargetPlatform.iOS;
     if (remoteFirst) {
-      final remote = await _resolveRemoteAddress(latitude, longitude);
+      final remote = await _resolveRemoteAddress(
+        latitude,
+        longitude,
+        remoteService,
+      );
       if (remote != null) return remote;
     }
 
@@ -50,7 +71,11 @@ class AddressResolutionService {
     }
 
     if (!remoteFirst) {
-      final remote = await _resolveRemoteAddress(latitude, longitude);
+      final remote = await _resolveRemoteAddress(
+        latitude,
+        longitude,
+        remoteService,
+      );
       if (remote != null) return remote;
     }
 
@@ -59,13 +84,19 @@ class AddressResolutionService {
 
   static Future<ResolvedAddress?> _resolveRemoteAddress(
     double latitude,
-    double longitude,
-  ) async {
+    double longitude, [
+    AddressAutocompleteService? remoteService,
+  ]) async {
     try {
-      final remote = await AddressAutocompleteService().reverseGeocode(latitude, longitude);
+      final remote = await (remoteService ?? AddressAutocompleteService())
+          .reverseGeocode(latitude, longitude);
       if (remote == null) return null;
       return ResolvedAddress(
         addressLine: remote.address,
+        street: remote.street,
+        area: remote.area,
+        landmark: remote.landmark,
+        state: remote.state,
         city: remote.city,
         postalCode: remote.postalCode,
         country: remote.country,
@@ -92,12 +123,10 @@ class AddressResolutionService {
         _firstNonEmpty([
           primary.locality,
           primary.subAdministrativeArea,
-          primary.administrativeArea,
           ...rankedPlacemarks.map((placemark) => placemark.locality),
           ...rankedPlacemarks.map(
             (placemark) => placemark.subAdministrativeArea,
           ),
-          ...rankedPlacemarks.map((placemark) => placemark.administrativeArea),
         ]) ??
         '';
     final postalCode =
@@ -110,12 +139,20 @@ class AddressResolutionService {
         _firstNonEmpty([
           primary.country,
           ...rankedPlacemarks.map((placemark) => placemark.country),
-          'Nigeria',
         ]) ??
-        'Nigeria';
+        '';
 
     return ResolvedAddress(
       addressLine: addressLine,
+      street:
+          _firstNonEmpty(
+            rankedPlacemarks.expand((p) => [p.thoroughfare, p.street]),
+          ) ??
+          '',
+      area: _firstNonEmpty(rankedPlacemarks.map((p) => p.subLocality)) ?? '',
+      state:
+          _firstNonEmpty(rankedPlacemarks.map((p) => p.administrativeArea)) ??
+          '',
       city: city,
       postalCode: postalCode,
       country: country,
@@ -146,7 +183,6 @@ class AddressResolutionService {
           nativeResolvedAddress?.addressLine,
           geoapifyAddress?.addressLine,
           geoapifyAddress?.streetOnly,
-          'Current Location',
         ]) ??
         'Current Location';
     final city =
@@ -245,17 +281,26 @@ class AddressResolutionService {
                 _joinNonEmpty([placemark.thoroughfare, placemark.subLocality]),
           ),
           ...placemarks.map((placemark) => _clean(placemark.street)),
-          ...placemarks.map((placemark) => _clean(placemark.name)),
+          ...placemarks.map((placemark) {
+            final name = _clean(placemark.name);
+            if (name == null ||
+                [
+                  placemark.locality,
+                  placemark.administrativeArea,
+                  placemark.country,
+                ].any(
+                  (value) => _clean(value)?.toLowerCase() == name.toLowerCase(),
+                ))
+              return null;
+            return name;
+          }),
         ]) ??
         _firstNonEmpty([
           primary.subLocality,
-          primary.locality,
           ...placemarks.map((placemark) => placemark.subLocality),
-          ...placemarks.map((placemark) => placemark.locality),
-          'Current Location',
         ]);
 
-    return resolvedAddress ?? 'Current Location';
+    return resolvedAddress ?? '';
   }
 
   static String? _joinNonEmpty(

@@ -1,3 +1,5 @@
+import 'delivery_address_details.dart';
+
 enum CheckoutAddressMode { none, saved, currentLocation, manual }
 
 /// Owns the delivery destination independently of GPS/search bias coordinates.
@@ -6,10 +8,11 @@ class CheckoutAddressState {
   CheckoutAddressMode mode = CheckoutAddressMode.none;
   double? latitude;
   double? longitude;
+  DeliveryAddressDetails selectedAddress = const DeliveryAddressDetails();
   bool isReady = false;
   int revision = 0;
 
-  bool get hasCoordinates => latitude != null && longitude != null;
+  bool get hasCoordinates => validDeliveryCoordinates(latitude, longitude);
 
   void select(
     CheckoutAddressMode value, {
@@ -27,6 +30,7 @@ class CheckoutAddressState {
     revision++;
     isReady = false;
     if (!keepCoordinates) {
+      selectedAddress = const DeliveryAddressDetails();
       latitude = null;
       longitude = null;
     }
@@ -35,6 +39,7 @@ class CheckoutAddressState {
   bool resolveCoordinates(int expectedRevision, double lat, double lon) {
     if (expectedRevision != revision ||
         mode == CheckoutAddressMode.none ||
+        (lat == 0 && lon == 0) ||
         !lat.isFinite ||
         !lon.isFinite ||
         lat < -90 ||

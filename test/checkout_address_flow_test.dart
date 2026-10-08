@@ -1,3 +1,8 @@
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:naija_go/widgets/checkout_location_map.dart';
+import 'helpers/location_tiles.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -75,6 +80,7 @@ Future<void> _showCheckout(
       value: cart,
       child: MaterialApp(
         home: CheckoutScreen(
+          locationTileProvider: LocationTestTiles(),
           onOrderSuccess: () {},
           httpClient: client,
           autocompleteService: suggestions ?? _Suggestions(),
@@ -92,11 +98,47 @@ Finder _field(String label) => find.byWidgetPredicate(
 Future<void> _selectManual(WidgetTester tester) async {
   await tester.tap(find.text('Enter address manually'));
   await tester.pumpAndSettle();
-  await tester.enterText(_field('Street address'), 'Wuse');
+  await tester.enterText(_field('Search delivery address'), 'Wuse');
   await tester.pumpAndSettle();
   await tester.tap(find.text('12 Test Road, Wuse, Abuja'));
 }
 
+class _PendingGps extends GeolocatorPlatform {
+  final reply = Completer<Position>();
+  @override
+  Future<bool> isLocationServiceEnabled() async => true;
+  @override
+  Future<LocationPermission> checkPermission() async =>
+      LocationPermission.whileInUse;
+  @override
+  Future<LocationAccuracyStatus> getLocationAccuracy() async =>
+      LocationAccuracyStatus.precise;
+  @override
+  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) =>
+      reply.future;
+}
+
+class _ReverseReplies extends _Suggestions {
+  final replies = <String, Completer<AddressSuggestion?>>{};
+  @override
+  Future<AddressSuggestion?> reverseGeocode(double lat, double lon) =>
+      (replies['$lat,$lon'] ??= Completer<AddressSuggestion?>()).future;
+}
+
+AddressSuggestion _address(double lat, double lon, String street) =>
+    AddressSuggestion(
+      id: street,
+      label: street,
+      address: street,
+      street: street,
+      area: 'Gwarinpa',
+      city: 'Abuja',
+      state: 'FCT',
+      country: 'Nigeria',
+      postalCode: '',
+      latitude: lat,
+      longitude: lon,
+    );
 void main() {
   testWidgets(
     'suggestion automatically quotes its coordinates and stays manual',
@@ -122,7 +164,7 @@ void main() {
       expect(find.text('Manual address'), findsOneWidget);
       expect(find.text('Current location'), findsNothing);
       expect(find.text('Ready'), findsOneWidget);
-      await tester.tap(find.text('Use this address'));
+      await tester.tap(find.text('Confirm location'));
       await tester.pumpAndSettle();
       expect(quotes, hasLength(2));
       expect(tester.takeException(), isNull);
@@ -130,7 +172,7 @@ void main() {
   );
 
   testWidgets(
-    'missing postal code waits for completion then calculates total',
+    'missing postal code is accepted; adding it preserves coordinates and requotes',
     (tester) async {
       final quotes = <Map<String, dynamic>>[];
       final client = MockClient((request) async {
@@ -147,13 +189,13 @@ void main() {
       );
       await _selectManual(tester);
       await tester.pumpAndSettle();
-      expect(quotes, isEmpty);
-      expect(find.textContaining('Add postal code below'), findsOneWidget);
-      await tester.enterText(_field('Postal code'), '900001');
-      await tester.tap(find.text('Use this address'));
-      await tester.pumpAndSettle();
       expect(quotes, hasLength(1));
-      expect(quotes.single['userLocation']['latitude'], 9.08);
+      expect(quotes.single['shippingAddress']['postalCode'], '');
+      await tester.enterText(_field('Postal code (optional)'), '900001');
+      await tester.tap(find.text('Confirm location'));
+      await tester.pumpAndSettle();
+      expect(quotes, hasLength(2));
+      expect(quotes.last['userLocation']['latitude'], 9.08);
       expect(find.text('Ready'), findsOneWidget);
     },
   );
@@ -231,4 +273,143 @@ void main() {
       expect(quotes.last['shippingAddress']['address'], '2 Office Road');
     },
   );
+
+  testWidgets('GPS arriving after manual search cannot overwrite destination', (
+    tester,
+  ) async {
+    final old = GeolocatorPlatform.instance;
+    final gps = _PendingGps();
+    GeolocatorPlatform.instance = gps;
+    addTearDown(() => GeolocatorPlatform.instance = old);
+    final quotes = <Map<String, dynamic>>[];
+    final client = MockClient((request) async {
+      if (request.url.path == '/api/auth/me')
+        return http.Response(jsonEncode({'deliveryAddresses': []}), 200);
+      quotes.add(jsonDecode(request.body));
+      return _quote();
+    });
+    await _showCheckout(tester, client);
+    await tester.tap(find.text('Use current location'));
+    await tester.pump();
+    await _selectManual(tester);
+    await tester.pumpAndSettle();
+    gps.reply.complete(
+      Position(
+        latitude: 8,
+        longitude: 6,
+        timestamp: DateTime.now(),
+        accuracy: 5,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(quotes, hasLength(1));
+    expect(quotes.single['userLocation'], {
+      'latitude': 9.08,
+      'longitude': 7.46,
+    });
+    expect(find.text('Ready'), findsOneWidget);
+  });
+  testWidgets(
+    'reverse A after pin B cannot overwrite B; summary and final payload agree',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final service = _ReverseReplies();
+      final quotes = <Map<String, dynamic>>[];
+      final orders = <Map<String, dynamic>>[];
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/auth/me')
+          return http.Response(jsonEncode({'deliveryAddresses': []}), 200);
+        if (request.url.path == '/api/orders') {
+          orders.add(jsonDecode(request.body));
+          return http.Response(
+            jsonEncode({'message': 'Isolated test stops before payment'}),
+            400,
+          );
+        }
+        expect(request.url.path, '/api/orders/summary');
+        quotes.add(jsonDecode(request.body));
+        return _quote();
+      });
+      await http.runWithClient(() async {
+        await _showCheckout(tester, client, suggestions: service);
+        tester
+            .widget<CheckoutLocationMap>(find.byType(CheckoutLocationMap))
+            .onSelected(const LatLng(9.1, 7.1));
+        await tester.pump(const Duration(milliseconds: 601));
+        tester
+            .widget<CheckoutLocationMap>(find.byType(CheckoutLocationMap))
+            .onSelected(const LatLng(9.2, 7.2));
+        await tester.pump(const Duration(milliseconds: 601));
+        service.replies['9.2,7.2']!.complete(_address(9.2, 7.2, 'B Road'));
+        await tester.pumpAndSettle();
+        service.replies['9.1,7.1']!.complete(_address(9.1, 7.1, 'A Road'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(_field('Street address')).controller!.text,
+          'B Road',
+        );
+        await tester.enterText(_field('Street address'), 'B Road, gate 2');
+        await tester.tap(find.text('Confirm location'));
+        await tester.pumpAndSettle();
+        expect(quotes.single['userLocation'], {
+          'latitude': 9.2,
+          'longitude': 7.2,
+        });
+        expect(quotes.single['shippingAddress']['address'], 'B Road, gate 2');
+        await tester.ensureVisible(find.text('Place Order'));
+        await tester.tap(find.text('Place Order'));
+        await tester.pumpAndSettle();
+        expect(orders, hasLength(1));
+        expect(orders.single['userLocation'], quotes.single['userLocation']);
+        expect(
+          orders.single['shippingAddress'],
+          quotes.single['shippingAddress'],
+        );
+        expect(tester.takeException(), isNull);
+      }, () => client);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+  testWidgets('older autocomplete reply cannot replace newer results', (
+    tester,
+  ) async {
+    final old = Completer<List<AddressSuggestion>>();
+    final latest = Completer<List<AddressSuggestion>>();
+    final service = _SearchReplies(old, latest);
+    final client = MockClient(
+      (request) async =>
+          http.Response(jsonEncode({'deliveryAddresses': []}), 200),
+    );
+    await _showCheckout(tester, client, suggestions: service);
+    await tester.tap(find.text('Enter address manually'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_field('Search delivery address'), 'Old');
+    await tester.pump();
+    await tester.enterText(_field('Search delivery address'), 'Latest');
+    await tester.pump(const Duration(milliseconds: 121));
+    latest.complete([_address(9.2, 7.2, 'Latest Road')]);
+    await tester.pumpAndSettle();
+    old.complete([_address(9.1, 7.1, 'Old Road')]);
+    await tester.pumpAndSettle();
+    expect(find.text('Latest Road'), findsOneWidget);
+    expect(find.text('Old Road'), findsNothing);
+  });
+}
+
+class _SearchReplies extends _Suggestions {
+  final Completer<List<AddressSuggestion>> old, latest;
+  _SearchReplies(this.old, this.latest);
+  @override
+  Future<List<AddressSuggestion>> search(
+    String query, {
+    double? latitude,
+    double? longitude,
+  }) => query == 'Old' ? old.future : latest.future;
 }

@@ -5,6 +5,10 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../../widgets/checkout_location_map.dart';
+import '../../models/delivery_address_details.dart';
 
 import '../../widgets/visible_back_button.dart';
 import 'package:geocoding/geocoding.dart';
@@ -117,8 +121,8 @@ class ShipmentSummary {
       subscriptionFreeDeliveryApplied:
           json['subscriptionFreeDeliveryApplied'] == true,
       pickupAvailable: json['pickupAvailable'] == true,
-      deliveryRouteLegDistanceKm:
-          (json['deliveryRouteLegDistanceKm'] as num?)?.toDouble(),
+      deliveryRouteLegDistanceKm: (json['deliveryRouteLegDistanceKm'] as num?)
+          ?.toDouble(),
       fulfillmentMethod: json['fulfillmentMethod']?.toString() == 'pickup'
           ? 'pickup'
           : 'delivery',
@@ -214,8 +218,11 @@ class FullOrderSummary {
     final consolidatedFee = deliveryFeePolicy['consolidatedFee'] is Map
         ? Map<String, dynamic>.from(deliveryFeePolicy['consolidatedFee'] as Map)
         : <String, dynamic>{};
-    final freeDeliveryCampaign = deliveryFeePolicy['freeDeliveryCampaign'] is Map
-        ? Map<String, dynamic>.from(deliveryFeePolicy['freeDeliveryCampaign'] as Map)
+    final freeDeliveryCampaign =
+        deliveryFeePolicy['freeDeliveryCampaign'] is Map
+        ? Map<String, dynamic>.from(
+            deliveryFeePolicy['freeDeliveryCampaign'] as Map,
+          )
         : <String, dynamic>{};
 
     return FullOrderSummary(
@@ -263,11 +270,13 @@ class CheckoutScreen extends StatefulWidget {
   final VoidCallback onOrderSuccess;
   final http.Client? httpClient;
   final AddressAutocompleteService? autocompleteService;
+  final TileProvider? locationTileProvider;
 
   const CheckoutScreen({
     required this.onOrderSuccess,
     this.httpClient,
     this.autocompleteService,
+    this.locationTileProvider,
     super.key,
   });
 
@@ -277,11 +286,21 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _streetController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _landmarkController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _destinationSearchController = TextEditingController();
+  Timer? _pinGeocodeDebounce;
+  bool _isResolvingAddress = false;
+  int? _approvedLocationRevision;
+
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _postalCodeController = TextEditingController();
   final TextEditingController _countryController = TextEditingController();
-  final TextEditingController _deliveryPromoCodeController = TextEditingController();
+  final TextEditingController _deliveryPromoCodeController =
+      TextEditingController();
   final GlobalKey _manualAddressFieldKey = GlobalKey();
   final FocusNode _manualAddressFocusNode = FocusNode();
   late final AddressAutocompleteService _autocompleteService;
@@ -292,7 +311,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   List<AddressSuggestion> _addressSuggestions = const [];
   bool _isSearchingAddress = false;
   String? _addressSearchMessage;
-  bool _manualCoordinatesFromGps = false;
+
   double? _addressSearchBiasLatitude;
   double? _addressSearchBiasLongitude;
 
@@ -327,6 +346,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   // Lock to prevent concurrent location fetching
   bool _isFetchingLocation = false;
+  bool _isRequestingLocationAccess = false;
   // Lock to prevent concurrent summary fetching
   bool _isFetchingSummary = false;
   int _summaryRequestVersion = 0;
@@ -334,6 +354,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // Called inside setState whenever the destination changes. Old quote replies
   // cannot restore a total for the previous address or unlock checkout.
   void _invalidateSummary() {
+    _approvedLocationRevision = null;
     _summaryRequestVersion++;
     _fullOrderSummary = null;
     _isSummaryCalculated = false;
@@ -354,6 +375,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    _pinGeocodeDebounce?.cancel();
+    for (final controller in [
+      _streetController,
+      _areaController,
+      _landmarkController,
+      _stateController,
+      _destinationSearchController,
+    ]) {
+      controller.dispose();
+    }
     if (widget.httpClient == null) _checkoutClient.close();
     _addressSearchDebounce?.cancel();
     _addressSuggestionsScrollController.dispose();
@@ -372,6 +403,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _fetchAddressesAndWallet() async {
+    final initialRevision = _deliveryAddress.revision;
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
 
@@ -404,7 +436,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               .toList();
           _walletBalance = wallet;
 
-          if (_userAddresses.isNotEmpty) {
+          if (_userAddresses.isNotEmpty &&
+              initialRevision == _deliveryAddress.revision &&
+              _deliveryAddress.mode == CheckoutAddressMode.none) {
             _selectedAddress = _userAddresses.firstWhere(
               (addr) => addr.isDefault == true,
               orElse: () => _userAddresses.first,
@@ -413,6 +447,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               CheckoutAddressMode.saved,
               latitude: _selectedAddress!.latitude,
               longitude: _selectedAddress!.longitude,
+            );
+            _setAddressFields(
+              DeliveryAddressDetails.fromJson(_selectedAddress!.toJson()),
             );
           }
         });
@@ -505,6 +542,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         setState(() {
           _fullOrderSummary = FullOrderSummary.fromJson(responseData);
           _isSummaryCalculated = true;
+          _approvedLocationRevision = addressRevision;
         });
         debugPrint(
           '✅ Summary fetched: Total ₦${_fullOrderSummary?.totalPrice ?? 0}',
@@ -650,189 +688,181 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   //   }
   // }
 
-  Future<void> _fetchCurrentLocation() async {
-    if (_isFetchingLocation) return; // Prevent concurrent location fetching
-    var locationRevision = _deliveryAddress.revision;
+  void _setAddressFields(DeliveryAddressDetails details) {
+    _deliveryAddress.selectedAddress = details;
+    _addressController.text = details.address;
+    _streetController.text = details.street;
+    _areaController.text = details.area;
+    _landmarkController.text = details.landmark;
+    _cityController.text = details.city;
+    _stateController.text = details.state;
+    _postalCodeController.text = details.postalCode;
+    _countryController.text = details.country;
+  }
 
+  void _syncAddressDetails() {
+    _deliveryAddress.selectedAddress = DeliveryAddressDetails(
+      address: _addressController.text,
+      street: _streetController.text,
+      area: _areaController.text,
+      landmark: _landmarkController.text,
+      city: _cityController.text,
+      state: _stateController.text,
+      country: _countryController.text,
+      postalCode: _postalCodeController.text,
+    );
+  }
+
+  Future<void> _resolveSelectedCoordinates(int revision) async {
+    if (!mounted ||
+        revision != _deliveryAddress.revision ||
+        !_deliveryAddress.hasCoordinates) {
+      return;
+    }
+    final lat = _userLatitude!, lon = _userLongitude!;
+    _addressSearchBiasLatitude = lat;
+    _addressSearchBiasLongitude = lon;
     setState(() {
-      _isFetchingLocation = true;
-      _isLoading = true;
+      _isResolvingAddress = true;
     });
-
     try {
+      final address = await AddressResolutionService.resolveFromCoordinates(
+        lat,
+        lon,
+        remoteService: _autocompleteService,
+      ).timeout(const Duration(seconds: 25));
+      if (!mounted || revision != _deliveryAddress.revision) return;
       setState(() {
-        _deliveryAddress.select(CheckoutAddressMode.currentLocation);
-        _manualCoordinatesFromGps = false;
-        _selectedAddress = null;
-        _addressController.clear();
-        _cityController.clear();
-        _postalCodeController.clear();
-        _countryController.text = 'Nigeria';
-        _invalidateSummary();
-        _addressSearchDebounce?.cancel();
-        _addressSuggestions = const [];
-        _isSearchingAddress = false;
+        _setAddressFields(address.details);
+        _deliveryAddress.confirm(fieldsComplete: address.details.complete);
+        _addressSearchMessage = address.details.complete
+            ? 'Review the address and pin before continuing.'
+            : 'Your location is selected. Complete the address, city, and country below.';
       });
-      locationRevision = _deliveryAddress.revision;
-
-      final locationAccess = await _ensureLocationAccessWithRetry();
-      if (!mounted || locationRevision != _deliveryAddress.revision ||
-          _deliveryAddress.mode != CheckoutAddressMode.currentLocation) {
-        return;
-      }
-      if (!locationAccess.granted) {
-        if (mounted) {
-          await LocationAccessService.presentIssue(context, locationAccess);
-          if (mounted && locationRevision == _deliveryAddress.revision &&
-              _deliveryAddress.mode == CheckoutAddressMode.currentLocation) {
-            setState(() {
-              _deliveryAddress.select(CheckoutAddressMode.manual);
-              _addressSearchMessage =
-                  'Allow location access for automatic location, or enter your delivery address manually.';
-            });
-          }
-        }
-        return;
-      }
-
-      await LocationAccessService.requestPreciseLocationIfNeeded();
-
-      final position = await _getCurrentPositionWithRetry();
-      if (!mounted || locationRevision != _deliveryAddress.revision ||
-          _deliveryAddress.mode != CheckoutAddressMode.currentLocation) {
-        return;
-      }
-      final coordinatesAccepted = _deliveryAddress.resolveCoordinates(
-        locationRevision, position.latitude, position.longitude,
-      );
-      if (!coordinatesAccepted) throw const FormatException('Invalid GPS coordinates.');
-
-      ResolvedAddress? resolvedAddress;
-      try {
-        resolvedAddress = await AddressResolutionService.resolveFromCoordinates(
-          position.latitude,
-          position.longitude,
-        ).timeout(const Duration(seconds: 25));
-      } catch (error) {
-        debugPrint('Checkout reverse geocoding failed: $error');
-      }
-
-      if (!mounted || locationRevision != _deliveryAddress.revision ||
-          _deliveryAddress.mode != CheckoutAddressMode.currentLocation) {
-        return;
-      }
-
-      if (resolvedAddress != null) {
-        _addressController.text = resolvedAddress.addressLine;
-        _cityController.text = resolvedAddress.city;
-        _postalCodeController.text = resolvedAddress.postalCode;
-        _countryController.text = resolvedAddress.country;
-      } else {
-        _addressController.clear();
-        _cityController.clear();
-        _postalCodeController.clear();
-        _countryController.text = 'Nigeria';
-      }
-
-      // iOS-specific hint (only show on iPhone — Android usually has good data)
-      if (Platform.isIOS) {
-        _showSnackBar(
-          resolvedAddress == null
-              ? 'Your iPhone location was saved, but we could not determine the address. Enter and confirm it below.'
-              : 'Precise iPhone location loaded successfully. Please review the address.',
-          isError: false,
-        );
-      }
-
-      final missingAddressFields = _missingShippingAddressFields();
-      if (missingAddressFields.isNotEmpty) {
-        setState(() {
-          _manualCoordinatesFromGps = true;
-          _deliveryAddress.select(
-            CheckoutAddressMode.manual,
-            latitude: position.latitude,
-            longitude: position.longitude,
-          );
-          _addressSearchMessage =
-              'Your GPS coordinates are saved. Add ${missingAddressFields.join(' and ')} below, then confirm the address.';
-        });
-        _showSnackBar(
-          'Your location was found. Add ${missingAddressFields.join(' and ')} to confirm the address.',
-        );
-        return;
-      }
-
+    } catch (_) {
+      if (!mounted || revision != _deliveryAddress.revision) return;
       setState(() {
-        _deliveryAddress.resolveCoordinates(
-          _deliveryAddress.revision,
-          position.latitude,
-          position.longitude,
-        );
-        _deliveryAddress.confirm(fieldsComplete: true);
+        _addressSearchMessage =
+            "We found your location, but couldn't fully identify the address. Please confirm or edit the address below.";
       });
-
-      _showSnackBar(
-        'Location fetched successfully! Calculating delivery fee...',
-      );
-      await _fetchOrderSummary();
-    } catch (error, stackTrace) {
-      if (!mounted || locationRevision != _deliveryAddress.revision) return;
-      final locationWasAcquired = _deliveryAddress.hasCoordinates;
-      if (mounted && !locationWasAcquired) {
-        setState(() {
-          _deliveryAddress.select(CheckoutAddressMode.manual);
-          _addressSearchMessage =
-              'We could not get your current location. Enter your delivery address manually.';
-        });
-      }
-      _showSnackBar(
-        locationWasAcquired
-            ? 'Your location was found, but checkout could not update. Please try again.'
-            : _currentLocationFailureMessage(error),
-        isError: true,
-      );
-      debugPrint('Current location error: $error');
-      debugPrintStack(stackTrace: stackTrace);
     } finally {
-      if (mounted) {
+      if (mounted && revision == _deliveryAddress.revision) {
         setState(() {
-          _isLoading = false;
-          _isFetchingLocation = false;
+          _isResolvingAddress = false;
         });
       }
     }
   }
 
-  Future<Position> _getCurrentPositionWithRetry() async {
-    return _retryIosLocationStartup(() async {
-      Object? lastError;
-      StackTrace? lastStackTrace;
-
-      for (var attempt = 0; attempt < 4; attempt++) {
-        try {
-          return await Geolocator.getCurrentPosition(
-            locationSettings: LocationAccessService.currentLocationSettings(),
-          ).timeout(const Duration(seconds: 20));
-        } catch (error, stackTrace) {
-          lastError = error;
-          lastStackTrace = stackTrace;
-          final shouldRetry =
-              _isPluginNotInitializedError(error) || error is TimeoutException;
-          if (!shouldRetry || attempt == 3) {
-            break;
-          }
-
-          await Future<void>.delayed(
-            Duration(milliseconds: 500 + attempt * 300),
-          );
-        }
-      }
-
-      // A cached position may belong to an earlier delivery destination.
-      // Offer manual entry rather than treating it as current GPS.
-      Error.throwWithStackTrace(lastError!, lastStackTrace!);
+  void _onMapLocationSelected(LatLng point) {
+    if (_isPlacingOrder ||
+        _isProcessingPayment ||
+        !validDeliveryCoordinates(point.latitude, point.longitude)) {
+      return;
+    }
+    _pinGeocodeDebounce?.cancel();
+    _addressSearchDebounce?.cancel();
+    setState(() {
+      _selectedAddress = null;
+      _deliveryAddress.select(
+        CheckoutAddressMode.manual,
+        latitude: point.latitude,
+        longitude: point.longitude,
+      );
+      _setAddressFields(const DeliveryAddressDetails());
+      _addressSuggestions = const [];
+      _isSearchingAddress = false;
+      _isResolvingAddress = true;
+      _invalidateSummary();
     });
+    final revision = _deliveryAddress.revision;
+    _pinGeocodeDebounce = Timer(
+      const Duration(milliseconds: 600),
+      () => _resolveSelectedCoordinates(revision),
+    );
   }
+
+  Future<void> _fetchCurrentLocation() async {
+    if (_isFetchingLocation || _isPlacingOrder || _isProcessingPayment) return;
+    _pinGeocodeDebounce?.cancel();
+    setState(() {
+      _isFetchingLocation = true;
+      _isRequestingLocationAccess = true;
+      _isResolvingAddress = false;
+      _selectedAddress = null;
+      _deliveryAddress.select(CheckoutAddressMode.currentLocation);
+      _setAddressFields(const DeliveryAddressDetails());
+      _addressSuggestions = const [];
+      _invalidateSummary();
+    });
+    final revision = _deliveryAddress.revision;
+    try {
+      final access = await _ensureLocationAccessWithRetry();
+      if (!mounted || revision != _deliveryAddress.revision) return;
+      setState(() => _isRequestingLocationAccess = false);
+      if (!access.granted) {
+        setState(() {
+          _deliveryAddress.mode = CheckoutAddressMode.manual;
+          _addressSearchMessage =
+              'Location permission is unavailable. You can search for your delivery address or select it on the map.';
+        });
+        await LocationAccessService.presentIssue(context, access);
+        return;
+      }
+      final accuracyState =
+          await LocationAccessService.requestPreciseLocationIfNeeded();
+      final position = await _getCurrentPositionWithRetry();
+      if (!mounted || revision != _deliveryAddress.revision) return;
+      if (!_deliveryAddress.resolveCoordinates(
+        revision,
+        position.latitude,
+        position.longitude,
+      )) {
+        throw const FormatException('Invalid location');
+      }
+      await _resolveSelectedCoordinates(revision);
+      if (!mounted || revision != _deliveryAddress.revision) return;
+      if (accuracyState == LocationAccuracyStatus.reduced ||
+          position.accuracy > 100) {
+        setState(() {
+          _addressSearchMessage =
+              'GPS accuracy is limited. Check or move the delivery pin, then confirm the address.';
+        });
+      }
+      if (_deliveryAddress.isReady) await _fetchOrderSummary();
+    } catch (_) {
+      if (!mounted || revision != _deliveryAddress.revision) return;
+      setState(() {
+        _deliveryAddress.mode = CheckoutAddressMode.manual;
+        _isResolvingAddress = false;
+        _addressSearchMessage =
+            "We couldn't get your current location. Please try again, search for your delivery address, or select it on the map.";
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingLocation = false;
+          _isRequestingLocationAccess = false;
+        });
+      }
+    }
+  }
+
+  Future<Position> _getCurrentPositionWithRetry() =>
+      _retryIosLocationStartup(() async {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: LocationAccessService.currentLocationSettings(),
+        ).timeout(const Duration(seconds: 18));
+        final age = DateTime.now().difference(position.timestamp);
+        if (age > const Duration(seconds: 30) ||
+            age < const Duration(seconds: -10) ||
+            !position.accuracy.isFinite ||
+            position.accuracy < 0 ||
+            !validDeliveryCoordinates(position.latitude, position.longitude)) {
+          throw const FormatException('Invalid or stale location');
+        }
+        return position;
+      });
 
   Future<LocationAccessResult> _ensureLocationAccessWithRetry() async {
     return _retryIosLocationStartup(LocationAccessService.ensureAccess);
@@ -843,8 +873,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       Duration(milliseconds: 350),
       Duration(milliseconds: 750),
       Duration(milliseconds: 1250),
-      Duration(seconds: 2),
-      Duration(seconds: 3),
     ];
 
     for (var attempt = 0; ; attempt += 1) {
@@ -871,21 +899,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return normalized.contains('notinitializederror') ||
         normalized.contains('notlnitializederror') ||
         normalized.contains('not initialized');
-  }
-
-  String _currentLocationFailureMessage(Object error) {
-    if (_isPluginNotInitializedError(error)) {
-      if (Platform.isIOS) {
-        return 'Location is still starting on this iPhone. Please wait a few seconds and tap Use current location again.';
-      }
-      return 'Location is still starting on this phone. Please try again in a moment, or restart the app if it continues.';
-    }
-
-    if (error is TimeoutException) {
-      return 'Current location took too long. Please check your signal and try again.';
-    }
-
-    return 'Failed to get current location. Please check location access and try again.';
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -946,7 +959,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (!mounted || revision != _deliveryAddress.revision) {
           return false;
         }
-        if (locations.isEmpty) throw StateError('No matching delivery location');
+        if (locations.isEmpty ||
+            !validDeliveryCoordinates(
+              locations.first.latitude,
+              locations.first.longitude,
+            )) {
+          throw StateError('No matching delivery location');
+        }
         setState(() {
           _deliveryAddress.resolveCoordinates(
             revision,
@@ -958,18 +977,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         debugPrint('Delivery address geocoding failed: $e');
         // Manual entry must remain usable when the phone geocoder is unavailable.
         // Offer server-resolved candidates for explicit selection, never guess a destination.
-        if (_isManualAddress && addressParts.join(', ').length <= 160) {
+        if ((_isManualAddress || _useSavedAddress) &&
+            addressParts.join(', ').length <= 160) {
           try {
-            final suggestions = await _autocompleteService.search(addressParts.join(', '));
+            final suggestions = await _autocompleteService.search(
+              addressParts.join(', '),
+            );
             if (!mounted || revision != _deliveryAddress.revision) return false;
             if (suggestions.isNotEmpty) {
               setState(() {
                 _addressSuggestions = suggestions;
-                _addressSearchMessage = 'Select the matching address below to confirm its delivery location.';
+                _addressSearchMessage =
+                    'Select the matching address below to confirm its delivery location.';
               });
               return false;
             }
-          } catch (_) { /* Keep the manual address and allow another lookup. */ }
+          } catch (_) {
+            /* Keep the manual address and allow another lookup. */
+          }
         }
         return false;
       }
@@ -1017,7 +1042,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return false;
     }
 
-    if (!_isSummaryCalculated || _fullOrderSummary == null) {
+    if (!_isSummaryCalculated ||
+        _fullOrderSummary == null ||
+        _approvedLocationRevision != _deliveryAddress.revision ||
+        !_deliveryAddress.hasCoordinates) {
       _showSnackBar('Please wait for delivery fee calculation', isError: true);
       return false;
     }
@@ -1248,8 +1276,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       // Ensure coordinates are available
+      final approvedRevision = _approvedLocationRevision;
       final hasCoords = await _ensureUserLocation();
-      if (!hasCoords) {
+      if (!hasCoords || approvedRevision != _deliveryAddress.revision) {
         throw Exception('Failed to determine delivery coordinates');
       }
 
@@ -1263,6 +1292,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           .map((item) => item.toJson())
           .toList();
 
+      if (approvedRevision != _deliveryAddress.revision) return;
       final summary = _fullOrderSummary!;
       final totalPrice = summary.totalPrice;
 
@@ -1765,7 +1795,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _buildNoticeCard(
             icon: Icons.local_offer_outlined,
             title: 'Free delivery campaign applied',
-            message: 'You saved ${_formatPriceWithCommas(summary.freeDeliveryCampaignDiscount)} on delivery.',
+            message:
+                'You saved ${_formatPriceWithCommas(summary.freeDeliveryCampaignDiscount)} on delivery.',
             accentColor: AppTheme.accentGreen,
           ),
         ] else if (summary.freeDeliveryCampaignReason.isNotEmpty &&
@@ -1816,7 +1847,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             'Base delivery fee',
             _formatPriceWithCommas(summary.deliveryBaseFee!),
           ),
-        if (summary.pricingMode == 'road_km' && summary.deliveryDistanceFee != null)
+        if (summary.pricingMode == 'road_km' &&
+            summary.deliveryDistanceFee != null)
           _buildSummaryRow(
             'Road distance charge',
             _formatPriceWithCommas(summary.deliveryDistanceFee!),
@@ -2407,6 +2439,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               latitude: selected.latitude,
                               longitude: selected.longitude,
                             );
+                            _setAddressFields(
+                              DeliveryAddressDetails.fromJson(
+                                selected.toJson(),
+                              ),
+                            );
                             _invalidateSummary();
                             _addressSearchDebounce?.cancel();
                             _addressSuggestions = const [];
@@ -2419,7 +2456,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
               final manualAddressButton = _buildAddressActionButton(
                 title: 'Enter address manually',
-                subtitle: 'Type the exact street and city; postal code is optional',
+                subtitle:
+                    'Type the exact street and city; postal code is optional',
                 icon: Icons.edit_location_alt_outlined,
                 selected: _isManualAddress,
                 onPressed: (_isLoading || _isFetchingLocation)
@@ -2456,12 +2494,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               );
             },
           ),
-          if (_isManualAddress) ...[
+          const SizedBox(height: AppSpacing.md),
+          CheckoutLocationMap(
+            latitude: _userLatitude,
+            longitude: _userLongitude,
+            tileProvider: widget.locationTileProvider,
+            enabled: !_isPlacingOrder && !_isProcessingPayment,
+            onSelected: _onMapLocationSelected,
+          ),
+          if (_isManualAddress || _deliveryAddress.hasCoordinates) ...[
             const SizedBox(height: AppSpacing.md),
             _buildManualAddressForm(),
           ],
           const SizedBox(height: AppSpacing.md),
           if (_isFetchingLocation) ...[
+            Text(
+              _isRequestingLocationAccess
+                  ? 'Waiting for location permission?'
+                  : 'Getting your current location?',
+            ),
+            const SizedBox(height: 6),
             const LinearProgressIndicator(minHeight: 3),
             const SizedBox(height: 14),
           ],
@@ -2573,7 +2625,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> _applyDeliveryPromoCode() async {
     if (!_addressSelectedOrFetched) {
-      _showSnackBar('Choose a delivery address before applying a delivery code.', isError: true);
+      _showSnackBar(
+        'Choose a delivery address before applying a delivery code.',
+        isError: true,
+      );
       return;
     }
     _invalidateSummary();
@@ -3259,22 +3314,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Map<String, dynamic> _buildShippingAddressPayload() {
-    if (_useSavedAddress && _selectedAddress != null) {
-      final address = _selectedAddress!;
-      return {
-        ...address.toJson(),
-        'address': address.addressLine.trim(),
-        'city': address.city.trim(),
-        'postalCode': address.postalCode.trim(),
-        'country': address.country.trim(),
-      };
-    }
-
+    _syncAddressDetails();
     return {
-      'address': _addressController.text.trim(),
-      'city': _cityController.text.trim(),
-      'postalCode': _postalCodeController.text.trim(),
-      'country': _countryController.text.trim(),
+      ..._deliveryAddress.selectedAddress.toJson(),
+      if (_useSavedAddress && _selectedAddress != null)
+        'phoneNumber': _selectedAddress!.phoneNumber,
     };
   }
 
@@ -3296,11 +3340,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _activateManualAddress() {
+    _pinGeocodeDebounce?.cancel();
+    _isResolvingAddress = false;
     _addressSearchBiasLatitude ??= _userLatitude;
     _addressSearchBiasLongitude ??= _userLongitude;
     setState(() {
-      _manualCoordinatesFromGps = false;
-      _deliveryAddress.select(CheckoutAddressMode.manual);
+      _deliveryAddress.mode = CheckoutAddressMode.manual;
+      _deliveryAddress.invalidate(keepCoordinates: true);
       _selectedAddress = null;
       _invalidateSummary();
       _addressSearchDebounce?.cancel();
@@ -3312,20 +3358,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _handleManualAddressChanged(String _) {
-    if (!_isManualAddress) {
-      return;
-    }
+    if (_isPlacingOrder || _isProcessingPayment) return;
 
     setState(() {
-      _deliveryAddress.invalidate(keepCoordinates: _manualCoordinatesFromGps);
+      _deliveryAddress.mode = CheckoutAddressMode.manual;
+      _selectedAddress = null;
+      _isResolvingAddress = false;
+      _deliveryAddress.invalidate(keepCoordinates: true);
+      _syncAddressDetails();
       _invalidateSummary();
     });
   }
 
-  void _handleStreetAddressChanged(String value) {
+  void _handleDestinationSearchChanged(String value) {
+    _pinGeocodeDebounce?.cancel();
+    _isResolvingAddress = false;
     _addressSearchBiasLatitude ??= _userLatitude;
     _addressSearchBiasLongitude ??= _userLongitude;
-    _handleManualAddressChanged(value);
+    _deliveryAddress.invalidate(keepCoordinates: true);
+    _invalidateSummary();
     _addressSearchDebounce?.cancel();
     final query = value.trim();
     if (query.length < 2) {
@@ -3340,7 +3391,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final shouldSearchImmediately =
         cached.isEmpty && !_isSearchingAddress && _addressSuggestions.isEmpty;
     setState(() {
-      if (cached.isNotEmpty) _addressSuggestions = cached;
+      _addressSuggestions = cached;
       _isSearchingAddress = true;
       _addressSearchMessage = null;
     });
@@ -3369,7 +3420,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _searchCheckoutAddresses(String query) async {
-    if (!mounted || !_isManualAddress) return;
+    if (!mounted) return;
     final revision = _deliveryAddress.revision;
     setState(() {
       _isSearchingAddress = true;
@@ -3382,9 +3433,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         longitude: _addressSearchBiasLongitude,
       );
       if (!mounted ||
-          !_isManualAddress ||
           revision != _deliveryAddress.revision ||
-          _addressController.text.trim() != query) {
+          _destinationSearchController.text.trim() != query) {
         return;
       }
       setState(() {
@@ -3395,9 +3445,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
     } catch (_) {
       if (!mounted ||
-          !_isManualAddress ||
           revision != _deliveryAddress.revision ||
-          _addressController.text.trim() != query) {
+          _destinationSearchController.text.trim() != query) {
         return;
       }
       setState(() {
@@ -3407,28 +3456,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
     } finally {
       if (mounted &&
-          _isManualAddress &&
           revision == _deliveryAddress.revision &&
-          _addressController.text.trim() == query) {
+          _destinationSearchController.text.trim() == query) {
         setState(() => _isSearchingAddress = false);
       }
     }
   }
 
   Future<void> _selectCheckoutAddress(AddressSuggestion suggestion) async {
+    if (!suggestion.hasValidCoordinates) {
+      _showSnackBar('Please select a valid delivery location.', isError: true);
+      return;
+    }
+    _pinGeocodeDebounce?.cancel();
     _addressSearchDebounce?.cancel();
     setState(() {
-      _manualCoordinatesFromGps = false;
       _deliveryAddress.select(
         CheckoutAddressMode.manual,
         latitude: suggestion.latitude,
         longitude: suggestion.longitude,
       );
       _selectedAddress = null;
-      _addressController.text = suggestion.address;
-      _cityController.text = suggestion.city;
-      _postalCodeController.text = suggestion.postalCode;
-      _countryController.text = suggestion.country;
+      _setAddressFields(suggestion.details);
+      _isResolvingAddress = false;
       _addressSearchBiasLatitude = suggestion.latitude;
       _addressSearchBiasLongitude = suggestion.longitude;
       _addressSuggestions = const [];
@@ -3445,7 +3495,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } else {
       setState(() {
         _addressSearchMessage =
-            'Add ${_missingShippingAddressFields().join(' and ')} below, then tap Use this address.';
+            'Add ${_missingShippingAddressFields().join(' and ')} below, then tap Confirm location.';
       });
     }
   }
@@ -3526,11 +3576,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          TextField(
+            controller: _destinationSearchController,
+            enabled: !_isPlacingOrder && !_isProcessingPayment,
+            decoration: const InputDecoration(
+              labelText: 'Search delivery address',
+              prefixIcon: Icon(Icons.search),
+            ),
+            onChanged: _handleDestinationSearchChanged,
+          ),
+          const SizedBox(height: 12),
           _buildManualAddressField(
             controller: _addressController,
             label: 'Street address',
             icon: Icons.home_outlined,
-            onChanged: _handleStreetAddressChanged,
+            onChanged: _handleManualAddressChanged,
             fieldKey: _manualAddressFieldKey,
             focusNode: _manualAddressFocusNode,
           ),
@@ -3562,15 +3622,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final suggestion = _addressSuggestions[index];
-                    return ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.location_on_outlined),
-                      title: Text(
-                        suggestion.label,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    return Material(
+                      color: Colors.white,
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.location_on_outlined),
+                        title: Text(
+                          suggestion.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => _selectCheckoutAddress(suggestion),
                       ),
-                      onTap: () => _selectCheckoutAddress(suggestion),
                     );
                   },
                 ),
@@ -3584,6 +3647,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 style: const TextStyle(color: AppTheme.mutedText, fontSize: 12),
               ),
             ),
+          const SizedBox(height: 12),
+          _buildManualAddressField(
+            controller: _streetController,
+            label: 'Street (optional)',
+            icon: Icons.signpost_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildManualAddressField(
+            controller: _areaController,
+            label: 'Area (optional)',
+            icon: Icons.place_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildManualAddressField(
+            controller: _landmarkController,
+            label: 'Landmark / delivery instructions (optional)',
+            icon: Icons.flag_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildManualAddressField(
+            controller: _stateController,
+            label: 'State (where available)',
+            icon: Icons.map_outlined,
+          ),
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -3633,11 +3720,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
-              onPressed: _isLoading || _isFetchingLocation
+              onPressed: _isLoading || _isResolvingAddress
                   ? null
                   : _applyManualAddress,
               icon: const Icon(Icons.check_circle_outline_rounded),
-              label: const Text('Use this address'),
+              label: const Text('Confirm location'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryNavy,
                 foregroundColor: Colors.white,
