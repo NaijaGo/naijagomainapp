@@ -130,6 +130,10 @@ class OrderTrackingWidget extends StatelessWidget {
       progressLevel = 5;
     }
 
+    // Shipments can start as processing before payment has been verified.
+    // Their status must not mark payment or fulfilment stages as completed.
+    if (!isPaid) progressLevel = 0;
+
     final currentLevel = progressLevel == 5 ? 5 : progressLevel + 1;
 
     return <_TrackingStage>[
@@ -144,7 +148,9 @@ class OrderTrackingWidget extends StatelessWidget {
       ),
       _TrackingStage(
         title: 'Order processing',
-        subtitle: 'The vendor is preparing your items for dispatch.',
+        subtitle: isPaid
+            ? 'The vendor is preparing your items for dispatch.'
+            : 'Preparation starts after payment confirmation.',
         icon: Icons.inventory_2_outlined,
         isCompleted: progressLevel >= 2,
         isCurrent: currentLevel == 2,
