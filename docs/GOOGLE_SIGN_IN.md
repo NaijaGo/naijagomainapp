@@ -27,3 +27,28 @@ The visual editor and codemagic.yaml are separate workflow configurations. A cha
 The public OAuth IDs are in codemagic.yaml. They do not contain Google client secrets. Render configuration still uses the matching Web audience separately.
 
 Before building a Play release, use the existing upload keystore and register the Play app-signing certificate SHA-1 for this package in Google Cloud. Test on Play internal testing before production rollout.
+
+
+## Pre-build configuration troubleshooting
+
+In the Flutter workflow editor, set both variables in the same workflow that is being built. The YAML values are not automatically imported into a visual-editor workflow. Use the raw public IDs as the variable values; do not include quotes, --dart-define flags, dollar signs or client secrets.
+
+| Variable | Public value for this app |
+| --- | --- |
+| GOOGLE_SERVER_CLIENT_ID | 878060644963-ujmbu0ka7g3rh07muknotij2lbsaq4oh.apps.googleusercontent.com |
+| GOOGLE_IOS_CLIENT_ID | 878060644963-fidv0hop5uu6ekj6ee0tts9885jluoc8.apps.googleusercontent.com |
+
+The server client is a Web OAuth client. The iOS client must match this app's bundle ID; each app has a different iOS client. Preserve the existing Google --dart-define arguments so these environment variables also reach the Flutter build.
+
+Pre-build script (preserve other existing setup commands):
+
+~~~bash
+#!/usr/bin/env bash
+set -e
+cd "$CM_BUILD_DIR"
+dart run tool/configure_google_sign_in.dart
+~~~
+
+The script reports the missing or invalid variable by name without printing its value. A separate filesystem error points to the project root or ios/Flutter/GoogleSignIn.xcconfig; it is not reported as an OAuth ID failure. Both IDs omitted still leaves Google disabled for existing non-Google build configurations; partial or malformed configuration remains an error.
+
+Codemagic references: [visual workflow environment variables](https://docs.codemagic.io/flutter-configuration/env-variables/) and [custom build steps](https://docs.codemagic.io/flutter-configuration/custom-scripts/).

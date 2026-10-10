@@ -6,10 +6,20 @@ String? googleIosCallbackScheme(Map<String, String> environment) {
   final ios = (environment['GOOGLE_IOS_CLIENT_ID'] ?? '').trim();
   if (server.isEmpty && ios.isEmpty) return null;
   final valid = RegExp(r'^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$');
-  if (!valid.hasMatch(server) || !valid.hasMatch(ios)) {
-    throw const FormatException(
-      'Both public Google server and iOS OAuth client IDs are required.',
-    );
+  for (final entry in {
+    'GOOGLE_SERVER_CLIENT_ID': server,
+    'GOOGLE_IOS_CLIENT_ID': ios,
+  }.entries) {
+    if (entry.value.isEmpty) {
+      throw FormatException(
+        '${entry.key} is missing. Add its public OAuth client ID to the environment variables of this Codemagic workflow.',
+      );
+    }
+    if (!valid.hasMatch(entry.value)) {
+      throw FormatException(
+        '${entry.key} is invalid. Paste only the client ID ending in .apps.googleusercontent.com, without quotes, a variable name, JSON or a client secret.',
+      );
+    }
   }
   return 'com.googleusercontent.apps.${ios.split('.').first}';
 }
@@ -32,10 +42,16 @@ void main() {
     }
     config.writeAsStringSync(googleIosConfigContent(scheme));
     stdout.writeln('Google iOS callback configuration prepared.');
-  } catch (_) {
+  } on FormatException catch (error) {
+    stderr.writeln('Google configuration is invalid: ${error.message}');
+    exitCode = 1;
+  } on FileSystemException {
     stderr.writeln(
-      'Google configuration is invalid. Configure GOOGLE_SERVER_CLIENT_ID and GOOGLE_IOS_CLIENT_ID with public OAuth client IDs.',
+      'Cannot prepare the Google iOS callback file. Run the Pre-build script from the Flutter project root and check that ios/Flutter/GoogleSignIn.xcconfig exists and is writable.',
     );
+    exitCode = 1;
+  } catch (_) {
+    stderr.writeln('Google iOS configuration could not be prepared.');
     exitCode = 1;
   }
 }

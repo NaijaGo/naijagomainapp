@@ -83,4 +83,65 @@ void main() {
       'com.googleusercontent.apps.123456-example',
     );
   });
+  for (final field in ['GOOGLE_SERVER_CLIENT_ID', 'GOOGLE_IOS_CLIENT_ID']) {
+    test('missing OAuth field identifies the variable: $field', () {
+      final environment = {
+        'GOOGLE_SERVER_CLIENT_ID': 'server.apps.googleusercontent.com',
+        'GOOGLE_IOS_CLIENT_ID': '123456-ios.apps.googleusercontent.com',
+      }..remove(field);
+      expect(
+        () => googleIosCallbackScheme(environment),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('$field is missing'),
+          ),
+        ),
+      );
+    });
+    test(
+      'invalid OAuth field is identified without logging its value: $field',
+      () {
+        const malformed = 'do-not-log-this-value';
+        final environment = {
+          'GOOGLE_SERVER_CLIENT_ID': 'server.apps.googleusercontent.com',
+          'GOOGLE_IOS_CLIENT_ID': '123456-ios.apps.googleusercontent.com',
+          field: malformed,
+        };
+        expect(
+          () => googleIosCallbackScheme(environment),
+          throwsA(
+            isA<FormatException>()
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('$field is invalid'),
+                )
+                .having(
+                  (e) => e.message,
+                  'message',
+                  isNot(contains(malformed)),
+                ),
+          ),
+        );
+      },
+    );
+  }
+  test('surrounding whitespace is accepted while quoted IDs stay invalid', () {
+    expect(
+      googleIosCallbackScheme({
+        'GOOGLE_SERVER_CLIENT_ID': ' server.apps.googleusercontent.com ',
+        'GOOGLE_IOS_CLIENT_ID': ' 123456-ios.apps.googleusercontent.com ',
+      }),
+      'com.googleusercontent.apps.123456-ios',
+    );
+    expect(
+      () => googleIosCallbackScheme({
+        'GOOGLE_SERVER_CLIENT_ID': 'server.apps.googleusercontent.com',
+        'GOOGLE_IOS_CLIENT_ID': '"123456-ios.apps.googleusercontent.com"',
+      }),
+      throwsFormatException,
+    );
+  });
 }
