@@ -23,7 +23,6 @@ import 'dispute_list_screen.dart';
 import 'faq_screen.dart';
 import 'referral_screen.dart';
 import 'subscription_screen.dart';
-import '../../widgets/account_page_background.dart';
 import '../../theme/app_theme.dart';
 
 // Define your color constants (consistent with vendor registration)
@@ -576,7 +575,7 @@ class _AccountScreenState extends State<AccountScreen>
       secondary: greenYellow, // Accent color for floating buttons, highlights
       onSecondary: deepNavyBlue, // Text and icons on top of secondary color
       surface: white, // Background for cards, sheets, elevated elements
-      onSurface: deepNavyBlue, // Text and icons on top of background color
+      onSurface: Color(0xFF111111), // Account text on the white canvas
       error: Colors.red, // Error states
       onError: white, // Text and icons on top of error color
       brightness: Brightness.light, // Overall theme brightness
@@ -586,9 +585,7 @@ class _AccountScreenState extends State<AccountScreen>
     const panelDecoration = BoxDecoration(color: Colors.transparent);
 
     Widget buildShell(Widget body) {
-      return AccountPageBackground(
-        child: Scaffold(backgroundColor: Colors.transparent, body: body),
-      );
+      return Scaffold(backgroundColor: Colors.white, body: body);
     }
 
     if (_isLoading) {
@@ -640,90 +637,61 @@ class _AccountScreenState extends State<AccountScreen>
     return buildShell(
       SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
-          child: Container(
-            decoration: panelDecoration,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 🧑 Profile Section
-                  _buildProfileSection(color),
-                  Divider(
-                    height: 30,
-                    thickness: 1,
-                    color: color.onSurface.withValues(alpha: 0.2),
-                  ),
-
-                  // 🛍️ FOR BUYERS – Tabs or List Items (Always shown, but content changes)
-                  _buildBuyerSection(color),
-                  Divider(
-                    height: 30,
-                    thickness: 1,
-                    color: color.onSurface.withValues(alpha: 0.2),
-                  ),
-
-                  // ⚙️ COMMON TOOLS (For All Users)
-                  _buildCommonToolsSection(color),
-                  const SizedBox(height: 20),
-
-                  // Log Out Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
+          key: const ValueKey('account-scroll'),
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildProfileSection(color),
+              const ColoredBox(
+                color: Color(0xFFF6F6F6),
+                child: SizedBox(height: 12),
+              ),
+              _buildBuyerSection(color),
+              const ColoredBox(
+                color: Color(0xFFF6F6F6),
+                child: SizedBox(height: 12),
+              ),
+              _buildCommonToolsSection(color),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
                       onPressed: _handleLogout,
-                      icon: Icon(
-                        Icons.logout,
-                        color: white,
-                      ), // White icon for contrast on red
-                      label: const Text(
-                        'Log Out',
-                        style: TextStyle(color: white, fontSize: 18),
-                      ), // White text for contrast
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color.primary,
+                      icon: const Icon(Icons.logout, size: 19),
+                      label: const Text('Log Out'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: color.onSurface,
+                        side: const BorderSide(color: Color(0xFFE8E8E8)),
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        elevation: 0,
                       ),
                     ),
-                  ),
-
-                  // --- ADD THIS NEW WIDGET HERE ---
-                  const SizedBox(
-                    height: 10,
-                  ), // Add a small space between the two buttons
-                  // Delete Account Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
+                    const SizedBox(height: 10),
+                    TextButton.icon(
                       onPressed: _handleAccountDeletion,
                       icon: Icon(
                         Icons.delete_forever_outlined,
                         color: Colors.red.shade700,
+                        size: 19,
                       ),
                       label: Text(
                         'Delete Account',
-                        style: TextStyle(
-                          color: Colors.red.shade700,
-                          fontSize: 18,
-                        ),
+                        style: TextStyle(color: Colors.red.shade700),
                       ),
-                      style: OutlinedButton.styleFrom(
+                      style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        side: BorderSide(color: Colors.red.shade700, width: 2),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -733,83 +701,132 @@ class _AccountScreenState extends State<AccountScreen>
   // --- Helper Widgets for Sections ---
 
   Widget _buildProfileSection(ColorScheme color) {
-    return Column(
-      children: [
-        Center(
-          child: CircleAvatar(
-            radius: 42,
-            backgroundColor: color.surface, // Fallback background for avatar
-            child: ClipOval(
-              child: SizedBox.expand(
-                child: CachedNetworkImage(
-                  imageUrl: _profilePicUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Center(
-                    child: CircularProgressIndicator(color: color.primary),
+    final initials = [_firstName, _lastName]
+        .where((name) => name.trim().isNotEmpty)
+        .map((name) => name.trim().characters.first.toUpperCase())
+        .join();
+    final fallback = initials.isEmpty
+        ? const Icon(Icons.person_outline, color: Colors.white, size: 40)
+        : Text(
+            initials,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w600,
+            ),
+          );
+    final hasProfilePhoto =
+        _profilePicUrl.isNotEmpty &&
+        !_profilePicUrl.startsWith('https://placehold.co/');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
+      child: Column(
+        children: [
+          CircleAvatar(
+            key: const ValueKey('account-avatar'),
+            radius: 48,
+            backgroundColor: const Color(0xFF111111),
+            child: hasProfilePhoto
+                ? ClipOval(
+                    child: SizedBox.expand(
+                      child: CachedNetworkImage(
+                        imageUrl: _profilePicUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Center(child: fallback),
+                        errorWidget: (context, url, error) =>
+                            Center(child: fallback),
+                      ),
+                    ),
+                  )
+                : fallback,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '$_firstName $_lastName',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF737373),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _email,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF737373),
+              height: 1.5,
+            ),
+          ),
+          Text(
+            _phoneNumber,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF737373),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Wallet balance: ₦${_userWalletBalance.toStringAsFixed(2)}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: color.onSurface,
                   ),
-                  errorWidget: (context, url, error) {
-                    return Icon(
-                      Icons.person,
-                      size: 60,
-                      color: color.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(
+                height: 44,
+                child: VerticalDivider(
+                  width: 24,
+                  thickness: 1,
+                  color: Color(0xFFE8E8E8),
+                ),
+              ),
+              Expanded(
+                child: TextButton.icon(
+                  key: const ValueKey('account-edit-profile'),
+                  onPressed: () async {
+                    final bool? result = await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const EditProfileScreen(),
+                      ),
                     );
+                    if (result == true) {
+                      _fetchUserData();
+                    }
                   },
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit Profile'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: color.onSurface,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 8,
+                    ),
+                    textStyle: TextStyle(
+                      fontFamily: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.fontFamily,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '$_firstName $_lastName',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: color.onSurface, // Use onBackground for main text
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          _email,
-          style: TextStyle(
-            fontSize: 16,
-            color: color.onSurface.withValues(alpha: 0.7),
-          ),
-        ),
-        Text(
-          _phoneNumber,
-          style: TextStyle(
-            fontSize: 16,
-            color: color.onSurface.withValues(alpha: 0.7),
-          ),
-        ),
-        const SizedBox(height: 15),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              final bool? result = await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const EditProfileScreen(),
-                ),
-              );
-              if (result == true) {
-                _fetchUserData(); // Refresh AccountScreen data after profile is updated
-              }
-            },
-            icon: Icon(Icons.edit, color: color.primary),
-            label: Text('Edit Profile', style: TextStyle(color: color.primary)),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: color.primary,
-              ), // Border matches primary color
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -817,15 +834,17 @@ class _AccountScreenState extends State<AccountScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Orders & shopping',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color.primary,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 8),
+          child: Text(
+            'Orders & shopping',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.onSurface,
+            ),
           ),
         ),
-        const SizedBox(height: 10),
         _buildAccountListItem(
           context,
           color,
@@ -972,15 +991,17 @@ class _AccountScreenState extends State<AccountScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Support & preferences',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color.primary,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 8),
+          child: Text(
+            'Support & preferences',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.onSurface,
+            ),
           ),
         ),
-        const SizedBox(height: 10),
         _buildAccountListItem(
           context,
           color,
@@ -1043,7 +1064,7 @@ class _AccountScreenState extends State<AccountScreen>
   Widget _buildCustomerSupportCard(ColorScheme color) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: const RoundedRectangleBorder(),
       margin: EdgeInsets.zero,
       color: color.surface,
       child: Padding(
@@ -1165,40 +1186,49 @@ class _AccountScreenState extends State<AccountScreen>
     String subtitle,
     VoidCallback onTap,
   ) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: color.outline.withValues(alpha: 0.12)),
-      ),
-      margin: const EdgeInsets.symmetric(vertical: 5.0),
-      color: color.surface, // Card background color
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: color.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(12),
+    return Column(
+      children: [
+        Material(
+          color: Colors.white,
+          child: ListTile(
+            key: ValueKey('account-row-$title'),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 10,
+            ),
+            minVerticalPadding: 14,
+            title: Text(
+              title,
+              style: TextStyle(
+                color: color.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              subtitle,
+              style: const TextStyle(
+                color: Color(0xFF737373),
+                fontSize: 12.5,
+                height: 1.4,
+              ),
+            ),
+            trailing: const Icon(
+              Icons.chevron_right_rounded,
+              size: 21,
+              color: Color(0xFF737373),
+            ),
+            onTap: onTap,
           ),
-          child: Icon(icon, color: color.primary, size: 23),
-        ), // Icon color
-        title: Text(
-          title,
-          style: TextStyle(color: color.onSurface, fontWeight: FontWeight.w600),
-        ), // Title text color
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(color: color.onSurface.withValues(alpha: 0.7)),
-        ), // Subtitle text color
-        trailing: Icon(
-          Icons.chevron_right_rounded,
-          size: 20,
-          color: color.onSurface.withValues(alpha: 0.5),
-        ), // Arrow icon color
-        onTap: onTap,
-      ),
+        ),
+        const Divider(
+          height: 1,
+          thickness: 0.7,
+          indent: 24,
+          endIndent: 24,
+          color: Color(0xFFE8E8E8),
+        ),
+      ],
     );
   }
 

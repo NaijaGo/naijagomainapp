@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
+import '../../widgets/naijago_wordmark.dart';
 import '../../services/socket_service.dart';
 import '../../services/explore_notification_intent.dart';
 import '../../services/product_request_service.dart';
@@ -329,7 +330,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           : protectedCartScreen,
       categoriesScreen,
       _isLoggedIn
-          ? ExploreScreen(canPublish: _canPublishExplore, publisherLabel: _explorePublisherLabel)
+          ? ExploreScreen(
+              canPublish: _canPublishExplore,
+              publisherLabel: _explorePublisherLabel,
+            )
           : GuestPlaceholderScreen(
               title: 'Explore NaijaGo',
               message: 'Sign in to discover local business videos.',
@@ -380,9 +384,13 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
         setState(() {
           _isLoggedIn = true;
           final isAdmin = responseData['isAdmin'] == true;
-          final isApprovedVendor = responseData['isVendor'] == true && responseData['vendorStatus'] == 'approved';
+          final isApprovedVendor =
+              responseData['isVendor'] == true &&
+              responseData['vendorStatus'] == 'approved';
           _canPublishExplore = isAdmin || isApprovedVendor;
-          _explorePublisherLabel = isAdmin ? 'Administrator' : 'Approved vendor';
+          _explorePublisherLabel = isAdmin
+              ? 'Administrator'
+              : 'Approved vendor';
           _notifications = _dedupeNotifications([
             ...notifications,
             ..._notifications,
@@ -734,26 +742,9 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               onPressed: () => _onItemTapped(0),
             ),
       titleSpacing: _selectedIndex == 0 ? 16 : 0,
+      centerTitle: _selectedIndex == 4,
       title: _selectedIndex == 0
-          ? const Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Naija',
-                    style: TextStyle(color: Color(0xFF4169E1)),
-                  ),
-                  TextSpan(
-                    text: 'Go',
-                    style: TextStyle(color: Color(0xFFADFF2F)),
-                  ),
-                ],
-              ),
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-              ),
-            )
+          ? const NaijaGoWordmark()
           : Text(
               _getAppBarTitle(_selectedIndex),
               style: const TextStyle(
@@ -906,10 +897,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
               label: 'Categories',
             ),
             const BottomNavigationBarItem(
-                icon: Icon(Icons.explore_outlined),
-                activeIcon: Icon(Icons.explore),
-                label: 'Explore',
-              ),
+              icon: Icon(Icons.explore_outlined),
+              activeIcon: Icon(Icons.explore),
+              label: 'Explore',
+            ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
               activeIcon: Icon(Icons.person),
@@ -943,7 +934,13 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
           : _errorMessage != null
           ? _buildErrorState()
           : VisitorAnalyticsConsent(
-              page: const ['home', 'cart', 'categories', 'explore', 'account'][_selectedIndex],
+              page: const [
+                'home',
+                'cart',
+                'categories',
+                'explore',
+                'account',
+              ][_selectedIndex],
               child: _widgetOptions.elementAt(_selectedIndex),
             ),
       bottomNavigationBar: _buildBottomNav(),

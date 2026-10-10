@@ -31,6 +31,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/product_social_proof.dart';
 import '../../widgets/deals_home_section.dart';
+import '../../widgets/shopping_assistant_identity.dart';
 import 'shopping_assistant_screen.dart';
 import 'categories_screen.dart'
     hide
@@ -224,20 +225,32 @@ class _SearchScreenState extends State<SearchScreen> {
     final service = ProductRequestService();
     try {
       final config = await service.config();
-      if (mounted) setState(() => _productRequestsEnabled = config['enabled'] == true);
-    } catch (_) { /* Search remains usable if the optional feature is offline. */ }
-    finally { service.dispose(); }
+      if (mounted)
+        setState(() => _productRequestsEnabled = config['enabled'] == true);
+    } catch (_) {
+      /* Search remains usable if the optional feature is offline. */
+    } finally {
+      service.dispose();
+    }
   }
 
   void _requestMissingProduct() {
     FocusScope.of(context).unfocus();
-    Navigator.push(context, MaterialPageRoute(builder: (_) => ProductRequestScreen(query: _submittedQuery, criteria: {
-      if (_category?.isNotEmpty == true) 'category': _category!,
-      if (_minimumPrice != null) 'minPrice': _minimumPrice.toString(),
-      if (_maximumPrice != null) 'maxPrice': _maximumPrice.toString(),
-      if (_productType != null) 'productType': _productType!,
-      if (widget.vendorId != null) 'vendor': widget.vendorId!,
-    })));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductRequestScreen(
+          query: _submittedQuery,
+          criteria: {
+            if (_category?.isNotEmpty == true) 'category': _category!,
+            if (_minimumPrice != null) 'minPrice': _minimumPrice.toString(),
+            if (_maximumPrice != null) 'maxPrice': _maximumPrice.toString(),
+            if (_productType != null) 'productType': _productType!,
+            if (widget.vendorId != null) 'vendor': widget.vendorId!,
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -298,7 +311,8 @@ class _SearchScreenState extends State<SearchScreen> {
               ? [..._searchResults, ...results.products]
               : results.products;
           _matchingVendors = loadMore
-              ? [..._matchingVendors, ...results.vendors] : results.vendors;
+              ? [..._matchingVendors, ...results.vendors]
+              : results.vendors;
           _collection = results.collection;
           _usedSmartMatching = results.interpretation == 'gemini_intent';
           if (!loadMore) {
@@ -317,17 +331,16 @@ class _SearchScreenState extends State<SearchScreen> {
           if (!loadMore) _errorMessage = error.userMessage;
         });
         if (loadMore) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error.userMessage),
-            ),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error.userMessage)));
         }
       }
     } catch (_) {
       if (mounted && requestVersion == _requestVersion) {
         setState(() {
-          if (!loadMore) _errorMessage = 'Something went wrong. Please try again.';
+          if (!loadMore)
+            _errorMessage = 'Something went wrong. Please try again.';
         });
       }
     } finally {
@@ -602,7 +615,10 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_externalLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            _externalLabel,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Text(_externalAnswer),
           const SizedBox(height: 10),
@@ -686,8 +702,17 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         actions: [
-          if (_productRequestsEnabled) IconButton(tooltip: 'My product requests', icon: const Icon(Icons.manage_search),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductRequestsScreen()))),
+          if (_productRequestsEnabled)
+            IconButton(
+              tooltip: 'My product requests',
+              icon: const Icon(Icons.manage_search),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProductRequestsScreen(),
+                ),
+              ),
+            ),
           Badge(
             isLabelVisible: _activeFilterCount > 0,
             label: Text('$_activeFilterCount'),
@@ -748,11 +773,21 @@ class _SearchScreenState extends State<SearchScreen> {
                       icon: Icons.inventory_2_outlined,
                       iconColor: primaryNavy,
                       title: 'No products found',
-                      message: 'Try another keyword, category, or product name to explore more results.',
-                      action: _productRequestsEnabled && _submittedQuery.length >= 3 && _total == 0
-                          ? FilledButton.icon(onPressed: _requestMissingProduct, icon: const Icon(Icons.manage_search), label: const Text('Request This Product')) : null,
+                      message:
+                          'Try another keyword, category, or product name to explore more results.',
+                      action:
+                          _productRequestsEnabled &&
+                              _submittedQuery.length >= 3 &&
+                              _total == 0
+                          ? FilledButton.icon(
+                              onPressed: _requestMissingProduct,
+                              icon: const Icon(Icons.manage_search),
+                              label: const Text('Request This Product'),
+                            )
+                          : null,
                     ),
-                    if (_externalAnswer.isNotEmpty && _externalSources.isNotEmpty)
+                    if (_externalAnswer.isNotEmpty &&
+                        _externalSources.isNotEmpty)
                       _buildExternalSearchCard(),
                   ],
                 ),
@@ -835,23 +870,39 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildVendorResults() => Padding(
     padding: const EdgeInsets.all(16),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Registered vendors', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-      const SizedBox(height: 8),
-      for (final vendor in _matchingVendors)
-        Card(child: ListTile(
-          leading: const Icon(Icons.storefront_outlined),
-          title: Text(vendor['name']?.toString() ?? 'Vendor'),
-          subtitle: Text(vendor['address']?.toString() ?? ''),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            final id = vendor['id']?.toString();
-            if (id == null || !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(id)) return;
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => SearchScreen(
-              initialQuery: '', vendorId: id, vendorName: vendor['name']?.toString())));
-          },
-        )),
-    ]),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Registered vendors',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        const SizedBox(height: 8),
+        for (final vendor in _matchingVendors)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: Text(vendor['name']?.toString() ?? 'Vendor'),
+              subtitle: Text(vendor['address']?.toString() ?? ''),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                final id = vendor['id']?.toString();
+                if (id == null || !RegExp(r'^[a-fA-F0-9]{24}$').hasMatch(id))
+                  return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SearchScreen(
+                      initialQuery: '',
+                      vendorId: id,
+                      vendorName: vendor['name']?.toString(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    ),
   );
 
   Widget _buildCollection() {
@@ -2376,21 +2427,25 @@ class _HomeScreenState extends State<HomeScreen>
                 onReturnToDashboard: widget.onReturnToDashboard,
               ),
             ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: ShoppingAssistantEntry(
+                  onOpen: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ShoppingAssistantScreen(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             SliverToBoxAdapter(child: _buildServiceShortcuts()),
-            SliverToBoxAdapter(child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Card(child: ListTile(
-                leading: const Icon(Icons.auto_awesome, color: AppTheme.primaryNavy),
-                title: const Text('Tell us what you need'),
-                subtitle: const Text('Find real NaijaGo listings with Shopping Assistant'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShoppingAssistantScreen())),
-              )),
-            )),
             SliverToBoxAdapter(child: _buildBannerCarousel()),
 
             SliverToBoxAdapter(child: _buildFoodDiscoveryBars()),
-            SliverToBoxAdapter(child: DealsHomeSection(refreshToken: _dealsRefreshToken)),
+            SliverToBoxAdapter(
+              child: DealsHomeSection(refreshToken: _dealsRefreshToken),
+            ),
 
             if (_flashSales.isNotEmpty) ...[
               _buildSectionHeader(

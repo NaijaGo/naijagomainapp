@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'app_tokens.dart';
 
 class AppTheme {
+  // Original blue/green wordmark, sampled from assets/naijago-brand.jpg.
+  static const Color logoBlue = Color(0xFF0000FE);
+  static const Color logoGreen = Color(0xFF008953);
+
   // Brand colors
   static const Color primaryNavy = Color(0xFF102B5C);
   static const Color deepNavy = Color(0xFF081A3A);

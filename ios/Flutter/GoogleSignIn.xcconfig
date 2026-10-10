@@ -1,0 +1,4 @@
+// Public OAuth configuration. Set to the reversed iOS OAuth client ID
+// before building an iOS app with Google sign-in enabled.
+// This valid placeholder is never used while GOOGLE_IOS_CLIENT_ID is absent.
+GOOGLE_REVERSED_CLIENT_ID = com.naijago.customer.google-unconfigured

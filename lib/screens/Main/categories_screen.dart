@@ -35,9 +35,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _leftPaneController = ScrollController();
   final ScrollController _rightPaneController = ScrollController();
-  final Map<String, GlobalKey> _sectionKeys = {};
   final Map<String, GlobalKey> _sidebarKeys = {};
-  final GlobalKey _rightPaneViewportKey = GlobalKey();
   String? _activeSection;
 
   final Map<String, List<String>> _allCategories = {
@@ -243,6 +241,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'Lighting Equipment',
       'Camera Bags & Cases',
       'Tripods & Supports',
+      'Content Creator Equipment',
     ],
     'Food & Beverage': [
       'Restaurant Equipment',
@@ -480,6 +479,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     'Lighting Equipment': 'assets/categories/lightning.jpg',
     'Camera Bags & Cases': 'assets/categories/camera_bags.jpg',
     'Tripods & Supports': 'assets/categories/tripod_supports.jpg',
+    'Content Creator Equipment': 'assets/categories/tripod_supports.jpg',
     'Restaurant Equipment': 'assets/categories/restuarant_equipment.jpg',
     'Catering Supplies': 'assets/categories/catering_supplies.jpg',
     'Baking Supplies': 'assets/categories/baking_supplies.jpg',
@@ -503,7 +503,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         ? _filteredCategories.first.key
         : null;
     _searchController.addListener(_onSearchChanged);
-    _rightPaneController.addListener(_syncActiveSectionFromScroll);
   }
 
   @override
@@ -554,8 +553,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _handleSidebarTap(BuildContext context, String categoryName) {
+    if (_searchController.text.isNotEmpty) _searchController.clear();
     setState(() => _activeSection = categoryName);
-    _handleCategoryTap(context, categoryName, null);
+    if (_rightPaneController.hasClients) _rightPaneController.jumpTo(0);
+    _bringSidebarItemIntoView(categoryName);
   }
 
   void _showPharmacyOptions(BuildContext context) {
@@ -700,14 +701,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     String mainCategory,
     String? subCategory,
   ) {
+    if (subCategory == null) {
+      _handleSidebarTap(context, mainCategory);
+      return;
+    }
+
     if (subCategory == 'Medicine') {
       _showPharmacyOptions(context);
       return;
     }
 
-    final categoryString = subCategory != null
-        ? '$mainCategory > $subCategory'
-        : mainCategory;
+    final categoryString = '$mainCategory > $subCategory';
 
     Navigator.push(
       context,
@@ -779,53 +783,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         ),
       );
     }
-  }
-
-  void _syncActiveSectionFromScroll() {
-    if (!mounted || _searchQuery.isNotEmpty || _filteredCategories.isEmpty) {
-      return;
-    }
-
-    final viewportContext = _rightPaneViewportKey.currentContext;
-    final viewportBox = viewportContext?.findRenderObject() as RenderBox?;
-    if (viewportBox == null || !viewportBox.hasSize) return;
-
-    final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
-    const activationOffset = 28.0;
-
-    String? candidate;
-    double closestPastSection = double.infinity;
-    String? fallback;
-    double closestFutureSection = double.infinity;
-
-    for (final entry in _filteredCategories) {
-      final sectionContext = _sectionKeys[entry.key]?.currentContext;
-      final sectionBox = sectionContext?.findRenderObject() as RenderBox?;
-      if (sectionBox == null || !sectionBox.hasSize) continue;
-
-      final sectionTop = sectionBox.localToGlobal(Offset.zero).dy - viewportTop;
-
-      if (sectionTop <= activationOffset) {
-        final distance = activationOffset - sectionTop;
-        if (distance < closestPastSection) {
-          closestPastSection = distance;
-          candidate = entry.key;
-        }
-      } else if (sectionTop < closestFutureSection) {
-        closestFutureSection = sectionTop;
-        fallback = entry.key;
-      }
-    }
-
-    final nextActiveSection = candidate ?? fallback;
-    if (nextActiveSection == null || nextActiveSection == _activeSection) {
-      return;
-    }
-
-    setState(() {
-      _activeSection = nextActiveSection;
-    });
-    _bringSidebarItemIntoView(nextActiveSection);
   }
 
   void _bringSidebarItemIntoView(String categoryName) {
@@ -998,6 +955,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                   key: sidebarKey,
                                   padding: sidebarItemPadding,
                                   child: InkWell(
+                                    key: ValueKey(
+                                      'main-category-$categoryName',
+                                    ),
                                     borderRadius: BorderRadius.circular(12),
                                     onTap: () => _handleSidebarTap(
                                       context,
@@ -1056,7 +1016,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   Expanded(
                     child: Container(
                       color: softGrey,
-                      key: _rightPaneViewportKey,
                       child: _searchQuery.isNotEmpty
                           ? _buildSearchResults()
                           : _buildCategorySections(),
@@ -1198,6 +1157,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               final imagePath = _getImageForSubCategory(subcat);
 
               return ListTile(
+                key: ValueKey('subcategory-$section-$subcat'),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 0),
                 leading: Container(
                   width: 34,
@@ -1234,6 +1194,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildCategorySections() {
+    final selectedCategories = _filteredCategories
+        .where((entry) => entry.key == _activeSection)
+        .toList();
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompactLayout = screenWidth < 390;
 
@@ -1245,21 +1208,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         isCompactLayout ? 12 : 16,
         isCompactLayout ? 24 : 32,
       ),
-      itemCount: _filteredCategories.length,
+      itemCount: selectedCategories.length,
       separatorBuilder: (context, index) =>
           SizedBox(height: isCompactLayout ? 22 : 28),
       itemBuilder: (context, index) {
-        final entry = _filteredCategories[index];
+        final entry = selectedCategories[index];
         final sectionName = entry.key;
         final items = entry.value;
 
-        final sectionKey = _sectionKeys.putIfAbsent(
-          sectionName,
-          () => GlobalKey(),
-        );
-
         return Column(
-          key: sectionKey,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
@@ -1294,25 +1251,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () =>
-                        _handleCategoryTap(context, sectionName, null),
-                    style: TextButton.styleFrom(
-                      foregroundColor: primaryNavy,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isCompactLayout ? 8 : 10,
-                        vertical: isCompactLayout ? 6 : 8,
-                      ),
-                    ),
-                    child: Text(
-                      'See all',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: isCompactLayout ? 12.2 : 13,
-                      ),
-                    ),
-                  ),
                 ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Choose a subcategory to see products.',
+                style: TextStyle(color: lightGrey, fontSize: 12.5),
               ),
             ),
             LayoutBuilder(
@@ -1349,6 +1295,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     return MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
+                        key: ValueKey('subcategory-$sectionName-$subcat'),
                         onTap: () =>
                             _handleCategoryTap(context, sectionName, subcat),
                         child: Container(

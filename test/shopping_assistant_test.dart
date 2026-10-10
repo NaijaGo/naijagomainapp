@@ -488,9 +488,13 @@ void main() {
     await localReads(() async {
       await show(tester, const HomeScreen());
       await tester.pump(const Duration(seconds: 1));
-      await tester.ensureVisible(find.text('Tell us what you need'));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('open-shopping-assistant')),
+      );
       await tester.pump();
-      await tester.tap(find.text('Tell us what you need'));
+      expect(find.text('Shopping Assistant'), findsOneWidget);
+      expect(find.text('Open assistant'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('open-shopping-assistant')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(ShoppingAssistantScreen), findsOneWidget);

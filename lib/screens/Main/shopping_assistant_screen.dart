@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/shopping_assistant_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/shopping_assistant_identity.dart';
 import 'home_screen.dart' show ProductCard, SearchScreen;
 
 class ShoppingAssistantScreen extends StatefulWidget {
@@ -59,7 +60,13 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
     final result = _suggestions;
     final products = result?.products ?? [];
     return Scaffold(
-      appBar: AppBar(title: const Text('Shopping Assistant')),
+      backgroundColor: AppTheme.softGrey,
+      appBar: AppBar(
+        title: const Text('Shopping Assistant'),
+        foregroundColor: AppTheme.logoBlue,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) => CustomScrollView(
           slivers: [
@@ -69,19 +76,8 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Tell us what you need',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.primaryNavy,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Find real NaijaGo listings with a shopping request. The assistant helps with search; you choose products and review checkout.',
-                    ),
-                    const SizedBox(height: 16),
+                    const ShoppingAssistantIntro(),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: _request,
                       enabled: !_loading,
@@ -89,6 +85,8 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                       minLines: 2,
                       maxLines: 5,
                       decoration: const InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
                         labelText: 'What are you looking for?',
                         hintText: 'Find me a phone charger under ₦15k',
                         border: OutlineInputBorder(),
@@ -118,6 +116,17 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                     ),
                     const SizedBox(height: 16),
                     FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.logoBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                       onPressed: _loading ? null : _find,
                       icon: const Icon(Icons.auto_awesome),
                       label: Text(

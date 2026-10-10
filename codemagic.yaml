@@ -14,6 +14,8 @@ workflows:
       cocoapods: default
 
       vars:
+        GOOGLE_SERVER_CLIENT_ID: "878060644963-ujmbu0ka7g3rh07muknotij2lbsaq4oh.apps.googleusercontent.com"
+        GOOGLE_IOS_CLIENT_ID: "878060644963-fidv0hop5uu6ekj6ee0tts9885jluoc8.apps.googleusercontent.com"
         BUNDLE_ID: com.naijago.naijaGo
         API_BASE_URL: "https://naijago-backend.onrender.com"
         ONESIGNAL_APP_ID: "76438b8d-4b39-49eb-805c-11eb934f5a66"
@@ -54,8 +56,12 @@ workflows:
             exit 1
           fi
 
+          dart run tool/configure_google_sign_in.dart
+
           flutter build ipa --release --export-method app-store \
             --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="${GOOGLE_SERVER_CLIENT_ID:-}" \
+            --dart-define=GOOGLE_IOS_CLIENT_ID="${GOOGLE_IOS_CLIENT_ID:-}" \
             --dart-define=ONESIGNAL_APP_ID="$ONESIGNAL_APP_ID" \
             --dart-define=FLUTTERWAVE_PUBLIC_KEY="$FLUTTERWAVE_PUBLIC_KEY" \
             --dart-define=FLUTTERWAVE_TEST_MODE="$FLUTTERWAVE_TEST_MODE" \

@@ -1,3 +1,4 @@
+import 'services/google_auth_service.dart';
 // lib/main.dart
 
 import 'dart:async';
@@ -477,6 +478,7 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
     await prefs.remove('order_count');
 
     // SDK v5.x FIX: Changed from removeExternalUserId() to logout()
+    await GoogleAuthService.signOut();
     await OneSignal.logout();
 
     setState(() {
