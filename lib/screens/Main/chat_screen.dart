@@ -11,6 +11,8 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../constants.dart';
 import '../../services/analytics_service.dart';
 import '../../widgets/pharmacy_ui.dart';
+import '../../widgets/pharmacy_chat_widgets.dart';
+import '../../services/pharmacy_chat_service.dart';
 
 Future<String?> _getAuthToken() async {
   try {
@@ -23,6 +25,7 @@ Future<String?> _getAuthToken() async {
 }
 
 class ChatScreen extends StatefulWidget {
+  final io.Socket? Function(String apiUrl, String token)? socketFactory;
   final String? sessionId;
   final bool isPharmacistView;
   final String? assignedPharmacistName;
@@ -30,6 +33,7 @@ class ChatScreen extends StatefulWidget {
 
   const ChatScreen({
     super.key,
+    this.socketFactory,
     this.sessionId,
     this.isPharmacistView = false,
     this.assignedPharmacistName,
@@ -49,15 +53,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   io.Socket? _socket;
   Timer? _joinTimeoutTimer;
+  Timer? _historyTimer;
+  bool _isForeground = true;
+  bool _historyFetching = false;
+  bool _historyLoaded = false;
+  bool _historyError = false;
+  bool _isClosed = false;
+  final Set<String> _sendingIds = {};
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _isLiveConnected = false;
-  String? _socketAuthToken;
   String? _sessionId;
   bool _isAssignedToPharmacist = false;
   String? _pharmacistName;
   bool _isTyping = false;
-  bool _globalPharmacistOnline = false;
   bool _isBootstrapping = true;
   bool _sentInitialConsultationTopic = false;
   bool _isLoadingSubscriptionPlans = false;
@@ -80,13 +89,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _controller.addListener(_handleComposerChanged);
     _bootstrapConversation();
+    _historyTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_isForeground && !_isLiveConnected && _sessionId != null) {
+        unawaited(_refreshHistoryFromRest());
+      }
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _sessionId != null) {
-      _refreshHistoryFromRest();
-      _scheduleSocketReconnect(immediate: true);
+    _isForeground = state == AppLifecycleState.resumed;
+    if (_isForeground && _sessionId != null) {
+      unawaited(_refreshConversation());
     }
   }
 
@@ -98,40 +112,43 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _bootstrapConversation() async {
     _pharmacistName = widget.assignedPharmacistName;
-
-    if (widget.isPharmacistView) {
-      if (widget.sessionId == null) {
-        _addSystemMessage('No consultation session was supplied.');
-        setState(() {
-          _isBootstrapping = false;
-        });
-        return;
-      }
-
-      _sessionId = widget.sessionId;
-      _isAssignedToPharmacist = true;
-      final token = await _getAuthToken();
-      if (token == null) {
-        _addSystemMessage('Authentication failed. Please log in again.');
-        setState(() {
-          _isBootstrapping = false;
-        });
-        return;
-      }
-      await _refreshHistoryFromRest(token: token);
-      _connectSocket(token);
-      return;
-    }
-
     final token = await _getAuthToken();
+    if (!mounted) return;
     if (token == null) {
       _addSystemMessage('Authentication failed. Please log in again.');
-      setState(() {
-        _isBootstrapping = false;
-      });
+      setState(() => _isBootstrapping = false);
       return;
     }
-
+    _sessionId = widget.sessionId;
+    if (_sessionId == null && !widget.isPharmacistView) {
+      try {
+        final response = await http
+            .get(
+              Uri.parse('$_apiUrl/api/chat/active'),
+              headers: {'Authorization': 'Bearer $token'},
+            )
+            .timeout(const Duration(seconds: 12));
+        if (!mounted) return;
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data is Map && data['session'] is Map) {
+            _sessionId = data['session']['_id']?.toString();
+          }
+        }
+      } catch (_) {
+        /* Older servers can still use the existing start flow. */
+      }
+    }
+    if (_sessionId != null) {
+      await _refreshHistoryFromRest(token: token);
+      if (mounted) _connectSocket(token);
+      return;
+    }
+    if (widget.isPharmacistView) {
+      _addSystemMessage('No consultation session was supplied.');
+      setState(() => _isBootstrapping = false);
+      return;
+    }
     await _loadPharmacistsForChoice(token);
   }
 
@@ -157,7 +174,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   .map((item) => Map<String, dynamic>.from(item))
                   .toList()
             : [];
-        _globalPharmacistOnline = _pharmacistChoices.isNotEmpty;
 
         if (_pharmacistChoices.isEmpty) {
           _addSystemMessage(
@@ -183,6 +199,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _choosePharmacist(Map<String, dynamic> pharmacist) async {
+    if (_isBootstrapping || !mounted) return;
     final id = pharmacist['id']?.toString() ?? '';
     if (id.isEmpty) return;
 
@@ -194,6 +211,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _startChatSessionAndConnect({String? pharmacistId}) async {
     final token = await _getAuthToken();
+    if (!mounted) return;
     if (token == null) {
       _addSystemMessage('Authentication failed. Please log in again.');
       setState(() {
@@ -216,7 +234,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }),
       );
 
+      if (!mounted) return;
       if (res.statusCode == 200 || res.statusCode == 201) {
+        if (!mounted) return;
         final data = jsonDecode(res.body);
         _sessionId = data['_id']?.toString();
         _isAssignedToPharmacist = data['pharmacist'] != null;
@@ -247,6 +267,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
       }
     } catch (_) {
+      if (!mounted) return;
       _addSystemMessage('Network error: Could not connect to chat service.');
       setState(() {
         _isBootstrapping = false;
@@ -506,177 +527,104 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _connectSocket(String token) {
+    if (!mounted) return;
     _joinTimeoutTimer?.cancel();
-    _socketAuthToken = token;
+    _reconnectTimer?.cancel();
     _socket?.dispose();
-    _socket = io.io(
-      _apiUrl,
-      io.OptionBuilder()
-          .setTransports(['websocket', 'polling'])
-          .disableAutoConnect()
-          .setAuth({'token': token})
-          .build(),
-    );
-
-    _socket!.connect();
-    _joinTimeoutTimer = Timer(const Duration(seconds: 15), () {
-      if (!mounted || !_isBootstrapping) return;
-      _addSystemMessage(
-        'Live chat is taking too long to connect. Please check your network and try again.',
-      );
-      setState(() {
-        _isBootstrapping = false;
-      });
-    });
-
-    _socket!.onConnect((_) {
+    _isLiveConnected = false;
+    final socket = widget.socketFactory != null
+        ? widget.socketFactory!(_apiUrl, token)
+        : io.io(
+            _apiUrl,
+            io.OptionBuilder()
+                .setTransports(['websocket', 'polling'])
+                .disableAutoConnect()
+                .enableForceNew()
+                .setAuth({'token': token})
+                .build(),
+          );
+    _socket = socket;
+    if (socket == null) return;
+    socket.onConnect((_) {
+      if (!mounted || _socket != socket) return;
       _reconnectTimer?.cancel();
       _reconnectAttempt = 0;
-      if (mounted) setState(() => _isLiveConnected = true);
-      _joinTimeoutTimer?.cancel();
-      if (_sessionId == null) {
-        // Presence-only connection. A room is joined after a session is made.
-        return;
-      }
-
+      if (_sessionId == null) return;
       _joinTimeoutTimer = Timer(const Duration(seconds: 12), () {
-        if (!mounted || !_isBootstrapping) return;
-        _addSystemMessage(
-          'Chat connected slowly. You can type your message while we keep trying to sync the chat history.',
-        );
-        setState(() {
-          _isBootstrapping = false;
-        });
+        if (mounted && _socket == socket) {
+          setState(() => _isLiveConnected = false);
+        }
       });
-
-      _socket!.emitWithAck(
+      socket.emitWithAck(
         'join_chat',
-        {'sessionId': _sessionId, 'authToken': _socketAuthToken},
+        {'sessionId': _sessionId, 'authToken': token},
         ack: (response) {
+          if (!mounted || _socket != socket) return;
           _joinTimeoutTimer?.cancel();
           final data = _ackPayload(response);
-          if (data['success'] == true) {
-            final List<dynamic> messages = data['messages'] ?? [];
-            final session = data['session'] ?? {};
-            final actorRole = data['actorRole']?.toString();
-
-            if (!mounted) return;
-            setState(() {
-              if (actorRole == 'user' || actorRole == 'pharmacist') {
-                _authenticatedChatRole = actorRole;
-              }
-              _isAssignedToPharmacist =
-                  widget.isPharmacistView || session['pharmacist'] != null;
-              _messages.clear();
-              for (final msg in messages) {
-                if (_isAiSocketMessage(msg)) {
-                  continue;
-                }
-                _appendMessageIfNew(_formatSocketMessage(msg));
-              }
-              _isBootstrapping = false;
-            });
-
-            _scrollToBottom();
-            _addSystemMessage(
-              widget.isPharmacistView
-                  ? 'You joined this consultation as the assigned pharmacist.'
-                  : _isAssignedToPharmacist
-                  ? 'Chat history loaded. A pharmacist is now supporting this conversation.'
-                  : 'Chat history loaded. Your messages will be available for a pharmacist to review.',
-            );
-            _sendInitialConsultationTopicIfNeeded();
-          } else {
-            _addSystemMessage(
-              'Unable to join the chat right now. Please wait a moment and try again.',
-            );
-            if (mounted) {
-              setState(() {
-                _isBootstrapping = false;
-              });
-            }
+          if (data['success'] != true ||
+              data['session'] is! Map ||
+              data['session']['_id']?.toString() != _sessionId) {
+            setState(() => _isLiveConnected = false);
+            return;
           }
+          _applyHistory(data);
+          setState(() => _isLiveConnected = true);
+          _scrollToBottom();
+          _sendInitialConsultationTopicIfNeeded();
         },
       );
     });
-
-    _socket!.onConnectError((err) {
-      debugPrint('Socket connect error: $err');
-      if (!mounted) return;
-      setState(() => _isLiveConnected = false);
-      _scheduleSocketReconnect();
-      if (!_isBootstrapping) return;
-      _joinTimeoutTimer?.cancel();
-      _addSystemMessage(
-        'Could not connect to live chat right now. Please check your network and try again.',
-      );
+    socket.on('new_message', (raw) {
+      if (!mounted || _socket != socket) return;
+      final message = pharmacyMessage(raw);
+      if (message == null || message['session'] != _sessionId) return;
       setState(() {
-        _isBootstrapping = false;
-      });
-    });
-
-    _socket!.on('pharmacistStatus', (data) {
-      if (!mounted || widget.isPharmacistView || data is! Map) return;
-      final pharmacists = data['pharmacists'];
-      setState(() {
-        if (pharmacists is List) {
-          _pharmacistChoices = pharmacists
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .toList();
-          _hasLoadedPharmacistChoices = true;
-        }
-        _globalPharmacistOnline =
-            _pharmacistChoices.isNotEmpty || data['online'] == true;
-      });
-    });
-
-    _socket!.on('new_message', (data) {
-      if (_isAiSocketMessage(data)) {
-        return;
-      }
-
-      final formattedMessage = _formatSocketMessage(data);
-      if (formattedMessage['from'] == _myRole) {
-        return;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _isTyping = false;
-        _appendMessageIfNew(formattedMessage);
+        _appendMessageIfNew(message);
+        _isTyping = _messages.any((item) => item['status'] == 'pending');
       });
       _scrollToBottom();
     });
-
-    _socket!.on('pharmacist_joined', (data) {
-      final String name = (data['name'] ?? 'A certified pharmacist').toString();
-      if (!mounted) return;
+    socket.on('pharmacist_joined', (data) {
+      if (!mounted || _socket != socket || data is! Map) return;
       setState(() {
         _isAssignedToPharmacist = true;
-        _pharmacistName = name;
-        _isTyping = false;
+        _pharmacistName = data['name']?.toString();
       });
+      unawaited(_refreshHistoryFromRest());
     });
-
-    _socket!.onDisconnect((_) {
-      if (!mounted) return;
-      setState(() {
-        _globalPharmacistOnline = false;
-        _isLiveConnected = false;
-      });
+    socket.on('pharmacistStatus', (data) {
+      if (!mounted ||
+          _socket != socket ||
+          widget.isPharmacistView ||
+          data is! Map) {
+        return;
+      }
+      _updatePharmacistChoices(data);
+    });
+    void disconnected(dynamic _) {
+      if (!mounted || _socket != socket) return;
+      setState(() => _isLiveConnected = false);
       _scheduleSocketReconnect();
-    });
+    }
 
-    _socket!.onError((err) {
-      debugPrint('Socket error: $err');
-      if (!mounted || !_isBootstrapping) return;
-      _joinTimeoutTimer?.cancel();
-      _addSystemMessage('Chat connection failed. Please try again.');
+    socket.onDisconnect(disconnected);
+    socket.onConnectError(disconnected);
+    socket.onError(disconnected);
+    socket.connect();
+  }
+
+  void _updatePharmacistChoices(Map data) {
+    final pharmacists = data['pharmacists'];
+    if (pharmacists is List && _sessionId == null) {
       setState(() {
-        _isBootstrapping = false;
+        _pharmacistChoices = pharmacists
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        _hasLoadedPharmacistChoices = true;
       });
-    });
+    }
   }
 
   Map<String, dynamic> _ackPayload(dynamic response) {
@@ -689,32 +637,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return <String, dynamic>{};
   }
 
-  Map<String, dynamic> _formatSocketMessage(Map<String, dynamic> data) {
-    String sender = 'user';
-    if (data['senderType'] == 'pharmacist') {
-      sender = 'pharmacist';
-    } else if (data['senderType'] == 'system') {
-      sender = 'system';
-    }
-
-    return {
-      'from': sender,
-      'text': (data['text'] ?? '').toString(),
-      'id': data['id']?.toString(),
-      'createdAt': data['createdAt']?.toString(),
-    };
-  }
-
-  bool _isAiSocketMessage(dynamic data) {
-    return data is Map && data['senderType']?.toString().toLowerCase() == 'ai';
-  }
-
   void _appendMessageIfNew(Map<String, dynamic> message) {
-    final id = message['id'];
-    if (id != null && _messages.any((msg) => msg['id'] == id)) {
-      return;
-    }
-    _messages.add(message);
+    mergePharmacyMessage(_messages, message);
   }
 
   void _addSystemMessage(String text) {
@@ -731,145 +655,175 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _sessionId == null) {
+    if (text.isEmpty ||
+        text.length > 5000 ||
+        _sessionId == null ||
+        _isClosed ||
+        !_historyLoaded) {
       return;
     }
+    _controller.clear();
+    await _queueMessage(text);
+  }
 
+  Future<void> _queueMessage(String text) async {
+    final message = {
+      'id': newPharmacyMessageId(),
+      'from': _myRole,
+      'text': text,
+      'session': _sessionId,
+      'createdAt': DateTime.now().toUtc().toIso8601String(),
+      'status': 'pending',
+    };
     setState(() {
-      _appendMessageIfNew({
-        'from': _myRole,
-        'text': text,
-        'id': 'local-${DateTime.now().millisecondsSinceEpoch}',
-      });
-      _controller.clear();
+      _appendMessageIfNew(message);
       _isTyping = true;
     });
     _scrollToBottom();
-
-    if (_socket?.connected != true) {
-      _scheduleSocketReconnect();
-      await _sendMessageViaRest(text);
-      return;
-    }
-
-    var handled = false;
-    final fallbackTimer = Timer(const Duration(seconds: 8), () async {
-      if (handled || !mounted) return;
-      handled = true;
-      _scheduleSocketReconnect();
-      await _sendMessageViaRest(text);
-    });
-
-    _socket!.emitWithAck(
-      'send_chat_message',
-      {'sessionId': _sessionId, 'text': text, 'authToken': _socketAuthToken},
-      ack: (response) async {
-        if (handled) return;
-        handled = true;
-        fallbackTimer.cancel();
-        final data = _ackPayload(response);
-
-        if (!mounted) return;
-        if (data['success'] != true) {
-          _scheduleSocketReconnect();
-          await _sendMessageViaRest(text);
-          return;
-        }
-
-        setState(() => _isTyping = false);
-        _scrollToBottom();
-      },
-    );
+    await _deliverMessage(message);
   }
 
-  Future<void> _sendMessageViaRest(String text) async {
-    final sessionId = _sessionId;
-    if (sessionId == null) return;
-
+  Future<void> _deliverMessage(Map<String, dynamic> message) async {
+    final id = message['id'].toString();
+    if (_sendingIds.contains(id) || _isClosed || _sessionId == null) return;
+    _sendingIds.add(id);
+    setState(() {
+      mergePharmacyMessage(_messages, {...message, 'status': 'pending'});
+      _isTyping = true;
+    });
     try {
       final token = await _getAuthToken();
       if (token == null) {
-        throw Exception('Missing token');
+        throw const PharmacyChatSendException(
+          'Please sign in again to send messages.',
+        );
       }
-
-      final response = await http.post(
-        Uri.parse('$_apiUrl/api/chat/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'sessionId': sessionId, 'message': text}),
+      final confirmed = await sendPharmacyMessage(
+        apiUrl: _apiUrl,
+        token: token,
+        sessionId: _sessionId!,
+        text: message['text'].toString(),
+        clientMessageId: id,
       );
-
-      if (!mounted) return;
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        setState(() => _isTyping = false);
-      } else {
-        throw Exception('Status ${response.statusCode}');
-      }
-    } catch (error) {
       if (!mounted) return;
       setState(() {
-        _messages.add({
-          'from': 'system',
-          'text':
-              'Message failed to send. Please check your connection and try again.',
-          'id': 'local-fail-${DateTime.now().millisecondsSinceEpoch}',
-        });
-        _isTyping = false;
+        // Older servers may return a generated ID. Replace the local row too.
+        if (confirmed['id'] != id) {
+          _messages.removeWhere((item) => item['id'] == id);
+        }
+        _appendMessageIfNew(confirmed);
       });
+    } catch (error) {
+      if (!mounted) return;
+      setState(
+        () => mergePharmacyMessage(_messages, {...message, 'status': 'failed'}),
+      );
+      if (_messages.any(
+        (item) => item['id'] == id && item['status'] == 'failed',
+      )) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is PharmacyChatSendException
+                  ? error.message
+                  : 'Message not confirmed. Tap Retry when connected.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      _sendingIds.remove(id);
+      if (mounted) {
+        setState(
+          () =>
+              _isTyping = _messages.any((item) => item['status'] == 'pending'),
+        );
+        _scrollToBottom();
+      }
     }
-    _scrollToBottom();
   }
 
   void _scheduleSocketReconnect({bool immediate = false}) {
     final socket = _socket;
-    if (socket == null || socket.connected) return;
-    if (_reconnectTimer?.isActive == true) return;
-    final boundedAttempt = _reconnectAttempt.clamp(0, 5).toInt();
-    final delaySeconds = immediate ? 0 : (1 << boundedAttempt);
-    _reconnectAttempt += 1;
-    _reconnectTimer = Timer(
-      Duration(seconds: delaySeconds.clamp(0, 30).toInt()),
-      () {
-        if (!mounted || socket.connected) return;
-        try {
-          socket.connect();
-        } catch (error) {
-          debugPrint('Pharmacy chat reconnect failed: $error');
-          _scheduleSocketReconnect();
+    if (socket == null ||
+        socket.connected ||
+        _reconnectTimer?.isActive == true) {
+      return;
+    }
+    final delay = immediate ? 0 : (1 << _reconnectAttempt.clamp(0, 5).toInt());
+    _reconnectAttempt++;
+    _reconnectTimer = Timer(Duration(seconds: delay.clamp(0, 30).toInt()), () {
+      if (mounted && _isForeground && _socket == socket && !socket.connected) {
+        socket.connect();
+      }
+    });
+  }
+
+  void _applyHistory(Map<String, dynamic> data) {
+    final session = data['session'];
+    if (session is! Map || session['_id']?.toString() != _sessionId) return;
+    setState(() {
+      _isClosed = session['status'] == 'closed';
+      _isAssignedToPharmacist = session['pharmacist'] != null;
+      if (data['actorRole'] == 'user' || data['actorRole'] == 'pharmacist') {
+        _authenticatedChatRole = data['actorRole'];
+      }
+      _pharmacistName = data['pharmacistName']?.toString() ?? _pharmacistName;
+      for (final raw
+          in (data['messages'] is List ? data['messages'] as List : const [])) {
+        final message = pharmacyMessage(raw);
+        if (message != null && message['session'] == _sessionId) {
+          _appendMessageIfNew(message);
         }
-      },
-    );
+      }
+      _historyLoaded = true;
+      _historyError = false;
+      _isBootstrapping = false;
+      _isTyping = _messages.any((item) => item['status'] == 'pending');
+    });
   }
 
   Future<void> _refreshHistoryFromRest({String? token}) async {
     final sessionId = _sessionId;
-    if (sessionId == null || !mounted) return;
+    if (sessionId == null || !mounted || _historyFetching) return;
+    _historyFetching = true;
     try {
       final authToken = token ?? await _getAuthToken();
-      if (authToken == null) return;
-      final response = await http.get(
-        Uri.parse('$_apiUrl/api/chat/$sessionId/messages'),
-        headers: {'Authorization': 'Bearer $authToken'},
-      );
-      if (response.statusCode != 200 || !mounted) return;
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final messages = data['messages'] as List? ?? const [];
-      final session = data['session'] as Map? ?? const {};
-      setState(() {
-        _isAssignedToPharmacist =
-            widget.isPharmacistView || session['pharmacist'] != null;
-        for (final message in messages.whereType<Map>()) {
-          _appendMessageIfNew(
-            _formatSocketMessage(Map<String, dynamic>.from(message)),
-          );
-        }
-      });
+      if (authToken == null) throw const FormatException();
+      final response = await http
+          .get(
+            Uri.parse('$_apiUrl/api/chat/$sessionId/messages'),
+            headers: {'Authorization': 'Bearer $authToken'},
+          )
+          .timeout(const Duration(seconds: 12));
+      if (!mounted || _sessionId != sessionId) return;
+      if (response.statusCode != 200) throw const FormatException();
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic> ||
+          data['session'] is! Map ||
+          data['session']['_id']?.toString() != sessionId) {
+        throw const FormatException();
+      }
+      _applyHistory(data);
       _scrollToBottom();
-    } catch (error) {
-      debugPrint('Pharmacy chat history refresh failed: $error');
+      _sendInitialConsultationTopicIfNeeded();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _historyError = true;
+          _isBootstrapping = false;
+        });
+      }
+    } finally {
+      _historyFetching = false;
     }
+  }
+
+  Future<void> _refreshConversation() async {
+    await _refreshHistoryFromRest();
+    if (!mounted) return;
+    final token = await _getAuthToken();
+    if (mounted && token != null && !_isLiveConnected) _connectSocket(token);
   }
 
   void _sendInitialConsultationTopicIfNeeded() {
@@ -878,44 +832,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _sentInitialConsultationTopic ||
         topic == null ||
         topic.isEmpty ||
-        _sessionId == null ||
-        _socket?.connected != true) {
+        !_historyLoaded ||
+        _isClosed) {
       return;
     }
-
     _sentInitialConsultationTopic = true;
-    final text = 'I need pharmacist guidance for: $topic';
-
-    setState(() {
-      _appendMessageIfNew({
-        'from': _myRole,
-        'text': text,
-        'id': 'local-topic-${DateTime.now().millisecondsSinceEpoch}',
-      });
-      _isTyping = true;
-    });
-    _scrollToBottom();
-
-    _socket!.emitWithAck(
-      'send_chat_message',
-      {'sessionId': _sessionId, 'text': text, 'authToken': _socketAuthToken},
-      ack: (response) {
-        final data = _ackPayload(response);
-        if (!mounted) return;
-        setState(() {
-          if (data['success'] != true) {
-            _messages.add({
-              'from': 'system',
-              'text':
-                  'Consultation topic could not be sent automatically. Please type your medicine question.',
-              'id': 'local-topic-fail-${DateTime.now().millisecondsSinceEpoch}',
-            });
-          }
-          _isTyping = false;
-        });
-        _scrollToBottom();
-      },
-    );
+    unawaited(_queueMessage('I need pharmacist guidance for: $topic'));
   }
 
   void _scrollToBottom() {
@@ -930,236 +852,52 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  Widget _buildBubble(Map<String, dynamic> msg) {
-    final isSystem = msg['from'] == 'system';
-    final isPharmacist = msg['from'] == 'pharmacist';
-    final isCustomer = msg['from'] == 'user';
-
-    if (isSystem) {
-      return Center(
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          decoration: BoxDecoration(
-            color: PharmacyUi.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: PharmacyUi.border),
-          ),
-          child: Text(
-            msg['text'],
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: PharmacyUi.mutedText,
-              fontSize: 13,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final senderLabel = isPharmacist ? 'Pharmacist' : 'Customer';
-
-    final Color bubbleColor = isCustomer
-        ? PharmacyUi.deepNavy
-        : PharmacyUi.mint;
-
-    final Color textColor = isCustomer ? PharmacyUi.card : PharmacyUi.deepNavy;
-    final Border? border = isCustomer
+  Widget _buildBubble(Map<String, dynamic> message) => PharmacyMessageBubble(
+    key: ValueKey('chat-message-${message['id']}'),
+    message: message,
+    myRole: _myRole,
+    onRetry: _isClosed || _sendingIds.contains(message['id'])
         ? null
-        : Border.all(color: PharmacyUi.teal.withValues(alpha: 0.18));
+        : () => _deliverMessage(message),
+  );
 
-    return Align(
-      alignment: isCustomer ? Alignment.centerRight : Alignment.centerLeft,
-      child: Column(
-        crossAxisAlignment: isCustomer
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          if (senderLabel.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(
-                top: 8,
-                left: 12,
-                right: 12,
-                bottom: 2,
-              ),
-              child: Text(
-                senderLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isPharmacist ? PharmacyUi.teal : PharmacyUi.mutedText,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
-            padding: const EdgeInsets.all(12),
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.76,
-            ),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              border: border,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(isCustomer ? 18 : 4),
-                bottomRight: Radius.circular(isCustomer ? 4 : 18),
-              ),
-            ),
-            child: Text(
-              msg['text'],
-              style: TextStyle(color: textColor, fontSize: 15, height: 1.35),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConversationHeader() {
-    late final String badge;
-    late final String title;
-    late final String subtitle;
-    late final IconData icon;
-    late final Color accent;
-
-    if (widget.isPharmacistView) {
-      badge = 'Live consultation';
-      title = 'Pharmacist support in progress';
-      subtitle =
-          'You are handling this consultation directly. Keep your responses clear, safe, and action-focused.';
-      icon = Icons.local_pharmacy_rounded;
-      accent = PharmacyUi.success;
-    } else if (_isAssignedToPharmacist) {
-      badge = 'Pharmacist assigned';
-      title = _pharmacistName != null
-          ? '$_pharmacistName is with you now'
-          : 'A pharmacist has joined your conversation';
-      subtitle =
-          'Your consultation is now with a live pharmacist for more specific help.';
-      icon = Icons.medical_services_outlined;
-      accent = PharmacyUi.success;
-    } else if (_globalPharmacistOnline) {
-      badge = 'Pharmacist available';
-      title = 'A pharmacist can join shortly';
-      subtitle =
-          'Send your question now. An available pharmacist can review and respond in this consultation.';
-      icon = Icons.support_agent_outlined;
-      accent = PharmacyUi.warning;
-    } else {
-      badge = 'Awaiting pharmacist';
-      title = 'Pharmacist consultation';
-      subtitle =
-          'Send your medicine question here. A pharmacist will reply when available.';
-      icon = Icons.local_pharmacy_outlined;
-      accent = PharmacyUi.deepNavy;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: PharmacyUi.panelDecoration(radius: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    badge,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: PharmacyUi.deepNavy,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: PharmacyUi.mutedText,
-                    height: 1.45,
-                  ),
-                ),
-                if (_sessionId != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Session ${_sessionId!.length > 8 ? '${_sessionId!.substring(0, 8)}...' : _sessionId!}',
-                    style: const TextStyle(
-                      color: PharmacyUi.mutedText,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTypingIndicator() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: widget.isPharmacistView
-                  ? PharmacyUi.teal
-                  : PharmacyUi.deepNavy,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            widget.isPharmacistView
-                ? 'Sending your response...'
-                : _isAssignedToPharmacist
-                ? 'Pharmacist is typing...'
-                : 'Sending your message...',
-            style: const TextStyle(color: PharmacyUi.mutedText),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildConversationHeader() => PharmacyChatHeader(
+    title: widget.isPharmacistView
+        ? 'Customer consultation'
+        : _pharmacistName ?? 'Pharmacy Support',
+    subtitle: _isClosed
+        ? 'Consultation closed'
+        : _sessionId == null
+        ? 'Choose a pharmacist to start your consultation'
+        : _isAssignedToPharmacist
+        ? (_myRole == 'pharmacist'
+              ? 'Private conversation with your customer'
+              : 'Messages with your assigned pharmacist')
+        : 'Waiting for a pharmacist to join',
+  );
+  Widget _buildConnectionStatus() => Container(
+    key: const ValueKey('chat-connection-status'),
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    color: _isLiveConnected ? PharmacyUi.mint : Colors.white,
+    child: Text(
+      _isClosed
+          ? 'Consultation closed'
+          : _historyError
+          ? 'Could not refresh messages. Tap Refresh to try again.'
+          : _isLiveConnected
+          ? 'Live chat connected'
+          : 'Live chat reconnecting. Messages use the server connection.',
+      style: const TextStyle(color: PharmacyUi.mutedText, fontSize: 12),
+    ),
+  );
+  Widget _buildTypingIndicator() => const Padding(
+    padding: EdgeInsets.all(8),
+    child: Text(
+      'Sending message...',
+      style: TextStyle(color: PharmacyUi.mutedText, fontSize: 12),
+    ),
+  );
 
   Widget _buildSafetyBanner() {
     final text = widget.isPharmacistView
@@ -1329,7 +1067,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final canSend =
         _controller.text.trim().isNotEmpty &&
         _sessionId != null &&
-        !_isBootstrapping;
+        !_isBootstrapping &&
+        _historyLoaded &&
+        !_isClosed &&
+        _controller.text.trim().length <= 5000;
 
     return SafeArea(
       top: false,
@@ -1347,9 +1088,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 decoration: PharmacyUi.panelDecoration(radius: 22),
                 child: TextField(
                   controller: _controller,
-                  maxLines: null,
+                  key: const ValueKey('chat-composer'),
+                  enabled: _historyLoaded && !_isClosed,
+                  minLines: 1,
+                  maxLines: 4,
+                  maxLength: 5000,
                   textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
+                    counterText: '',
                     isDense: true,
                     hintText: widget.isPharmacistView
                         ? 'Write your guidance...'
@@ -1364,28 +1110,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(width: 10),
-            GestureDetector(
-              onTap: canSend ? _sendMessage : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: canSend ? PharmacyUi.deepNavy : PharmacyUi.border,
-                  shape: BoxShape.circle,
-                  boxShadow: canSend
-                      ? [
-                          BoxShadow(
-                            color: PharmacyUi.deepNavy.withValues(alpha: 0.25),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: const Icon(
-                  Icons.send_rounded,
-                  color: PharmacyUi.card,
-                  size: 20,
+            Semantics(
+              label: 'Send message',
+              button: true,
+              enabled: canSend,
+              child: InkWell(
+                key: const ValueKey('chat-send'),
+                borderRadius: BorderRadius.circular(30),
+                onTap: canSend ? _sendMessage : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: canSend ? PharmacyUi.deepNavy : PharmacyUi.border,
+                    shape: BoxShape.circle,
+                    boxShadow: canSend
+                        ? [
+                            BoxShadow(
+                              color: PharmacyUi.deepNavy.withValues(
+                                alpha: 0.25,
+                              ),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: const Icon(
+                    Icons.send_rounded,
+                    color: PharmacyUi.card,
+                    size: 20,
+                  ),
                 ),
               ),
             ),
@@ -1401,6 +1156,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _controller.removeListener(_handleComposerChanged);
     _joinTimeoutTimer?.cancel();
     _reconnectTimer?.cancel();
+    _historyTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _socket?.disconnect();
@@ -1411,9 +1167,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: PharmacyUi.theme,
+      data: PharmacyUi.theme.copyWith(
+        appBarTheme: PharmacyUi.theme.appBarTheme.copyWith(
+          titleTextStyle: PharmacyUi.theme.textTheme.titleLarge?.copyWith(
+            color: PharmacyUi.card,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
       child: Scaffold(
         appBar: AppBar(
+          actions: [
+            IconButton(
+              key: const ValueKey('chat-refresh'),
+              tooltip: 'Refresh messages',
+              onPressed: _refreshConversation,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
           leading: const VisibleBackButton(),
           title: Text(
             widget.isPharmacistView ? 'Live Consultation' : 'Pharmacy Support',
@@ -1422,35 +1194,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         body: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: _buildConversationHeader(),
-              ),
-              if (_sessionId != null)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 7,
-                  ),
-                  color: _isLiveConnected
-                      ? PharmacyUi.mint.withValues(alpha: 0.65)
-                      : const Color(0xFFFFF4E5),
-                  child: Text(
-                    _isLiveConnected
-                        ? 'Live connection active'
-                        : 'Reconnecting… Messages will be safely retried.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _isLiveConnected
-                          ? PharmacyUi.teal
-                          : const Color(0xFF9A4B00),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+              if (MediaQuery.viewInsetsOf(context).bottom == 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                  child: _buildConversationHeader(),
                 ),
+              if (_sessionId != null) _buildConnectionStatus(),
               Expanded(
                 child:
                     _sessionId == null &&
@@ -1476,7 +1225,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
               ),
               if (_sessionId != null || widget.isPharmacistView) ...[
-                _buildSafetyBanner(),
+                if (MediaQuery.viewInsetsOf(context).bottom == 0)
+                  _buildSafetyBanner(),
                 _buildComposer(),
               ],
             ],
