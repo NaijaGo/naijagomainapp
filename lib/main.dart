@@ -26,7 +26,7 @@ import './splash_screen.dart';
 const Color _darkPrimaryColor = AppTheme.sageAccent;
 const Color _darkSecondaryColor = AppTheme.sageAccent;
 const Color _darkBackgroundColor = AppTheme.deepForest;
-const Color _darkSurfaceColor = Color(0xFF193C2A);
+const Color _darkSurfaceColor = AppTheme.darkSurface;
 final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
 
 final ThemeData _lightTheme = AppTheme.lightTheme;

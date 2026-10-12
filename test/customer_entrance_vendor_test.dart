@@ -61,6 +61,15 @@ void main() {
     (tester) async {
       var completions = 0;
       await entrance(tester, () => completions++);
+      final backdrop = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('entrance-blue-gradient')),
+      );
+      final gradient = (backdrop.decoration as BoxDecoration).gradient!;
+      expect(gradient.colors, [
+        Colors.white,
+        AppTheme.blueSurface,
+        AppTheme.blueAccent,
+      ]);
       await savePremiumPreview(
         tester,
         const ValueKey('entrance-preview'),
@@ -79,7 +88,7 @@ void main() {
                     w is Image &&
                     w.image is AssetImage &&
                     (w.image as AssetImage).assetName ==
-                        'assets/naijago-brand.jpg',
+                        'assets/naijago-logo-transparent.png',
               ),
             )
             .image,

@@ -2,7 +2,7 @@ name: naija_go
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.26+63
+version: 1.0.27+64
 
 environment:
   sdk: ">=3.8.1 <4.0.0"
@@ -58,6 +58,8 @@ flutter:
   assets:
     - assets/categories/
     - assets/
+    - assets/naijago-deals-banner.png
+    - assets/naijago-logo-transparent.png
     - assets/academic_text_book.jpg
     - assets/bg-erased_logo.png
     - assets/naijago-flier1.jpg

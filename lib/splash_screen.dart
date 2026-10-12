@@ -36,165 +36,123 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
     value: SystemUiOverlayStyle.dark,
     child: Scaffold(
-      backgroundColor: AppTheme.softGrey,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+      body: DecoratedBox(
+        key: const ValueKey('entrance-blue-gradient'),
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.15, -0.2),
+            radius: 1.1,
+            colors: [Colors.white, AppTheme.blueSurface, AppTheme.blueAccent],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _finishSplash,
-                          child: const Text('Skip'),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 420),
-                        child: Column(
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppTheme.deepForest,
-                                borderRadius: BorderRadius.circular(32),
-                              ),
-                              padding: const EdgeInsets.all(22),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    child: Semantics(
-                                      label: 'NaijaGo',
-                                      image: true,
-                                      child: AspectRatio(
-                                        aspectRatio: 2.6,
-                                        child: Image.asset(
-                                          'assets/naijago-brand.jpg',
-                                          fit: BoxFit.contain,
-                                          excludeFromSemantics: true,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  const Icon(
-                                    Icons.shopping_bag_outlined,
-                                    color: AppTheme.sageAccent,
-                                    size: 58,
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Row(
-                                    children: [
-                                      for (final asset in [
-                                        'assets/categories/groceries.jpg',
-                                        'assets/categories/fashion_women.jpg',
-                                        'assets/categories/smartphones.jpg',
-                                      ])
-                                        Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 4,
-                                            ),
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                              child: Image.asset(
-                                                asset,
-                                                height: 76,
-                                                fit: BoxFit.cover,
-                                                excludeFromSemantics: true,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 30),
-                            const Text(
-                              'Your neighbourhood. Delivered.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppTheme.deepForest,
-                                fontSize: 28,
-                                height: 1.15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -.6,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            const Text(
-                              'Discover local businesses. Shop with confidence.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppTheme.mutedText,
-                                fontSize: 15,
-                                height: 1.6,
-                              ),
-                            ),
-                            const SizedBox(height: 28),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                key: const ValueKey('entrance-continue'),
-                                onPressed: _finishSplash,
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text('Continue'),
-                                    SizedBox(width: 12),
-                                    Icon(Icons.arrow_forward_rounded, size: 20),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            const SizedBox(
-                              width: 76,
-                              child: LinearProgressIndicator(
-                                minHeight: 3,
-                                color: AppTheme.forestGreen,
-                                backgroundColor: AppTheme.borderGrey,
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(3),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            const Text(
-                              'LOCAL SHOPPING, MADE SIMPLE',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppTheme.mutedText,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.6,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: TextButton(
+                    onPressed: _finishSplash,
+                    child: const Text('Skip'),
                   ),
                 ),
               ),
-            );
-          },
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 20,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Semantics(
+                            label: 'NaijaGo',
+                            image: true,
+                            child: Image.asset(
+                              'assets/naijago-logo-transparent.png',
+                              width: 270,
+                              height: 110,
+                              fit: BoxFit.contain,
+                              excludeFromSemantics: true,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Your neighbourhood. Delivered.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppTheme.deepForest,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              height: 1.3,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Discover local businesses. Shop with confidence.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppTheme.deepForest,
+                              fontSize: 12,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('entrance-continue'),
+                      onPressed: _finishSplash,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.deepForest,
+                        side: BorderSide(
+                          color: AppTheme.deepForest.withValues(alpha: .25),
+                        ),
+                        minimumSize: const Size(156, 44),
+                        shape: const StadiumBorder(),
+                      ),
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                      label: const Text('Continue'),
+                    ),
+                    const SizedBox(height: 18),
+                    const SizedBox(
+                      width: 68,
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        color: AppTheme.forestGreen,
+                        backgroundColor: Color(0x55FFFFFF),
+                        borderRadius: BorderRadius.all(Radius.circular(3)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'LOCAL SHOPPING, MADE SIMPLE',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppTheme.deepForest,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ),

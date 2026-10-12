@@ -17,12 +17,14 @@ class ShoppingAssistantEntry extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppTheme.forestGreen.withValues(alpha: 0.16)),
+          border: Border.all(
+            color: AppTheme.forestGreen.withValues(alpha: 0.16),
+          ),
           gradient: LinearGradient(
             colors: [
               AppTheme.forestGreen.withValues(alpha: 0.045),
               Colors.white,
-              AppTheme.logoGreen.withValues(alpha: 0.07),
+              AppTheme.brightBlue.withValues(alpha: 0.07),
             ],
           ),
         ),
@@ -109,7 +111,7 @@ class ShoppingAssistantIntro extends StatelessWidget {
       gradient: LinearGradient(
         colors: [
           AppTheme.forestGreen.withValues(alpha: 0.055),
-          AppTheme.logoGreen.withValues(alpha: 0.07),
+          AppTheme.brightBlue.withValues(alpha: 0.07),
         ],
       ),
     ),
@@ -171,7 +173,7 @@ class _AssistantMark extends StatelessWidget {
               width: 25,
               height: 25,
               decoration: BoxDecoration(
-                color: AppTheme.logoGreen,
+                color: AppTheme.brightBlue,
                 borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: Colors.white, width: 2),
               ),

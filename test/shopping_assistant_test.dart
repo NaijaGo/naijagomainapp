@@ -492,8 +492,8 @@ void main() {
         find.byKey(const ValueKey('open-shopping-assistant')),
       );
       await tester.pump();
-      expect(find.text('Shopping Assistant'), findsOneWidget);
-      expect(find.text('Open assistant'), findsOneWidget);
+      expect(find.text('AI assistant'), findsOneWidget);
+      expect(find.text('Open assistant'), findsNothing);
       await tester.tap(find.byKey(const ValueKey('open-shopping-assistant')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));

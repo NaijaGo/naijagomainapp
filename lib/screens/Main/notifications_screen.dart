@@ -205,7 +205,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           colors: [
             AppTheme.deepNavy,
             AppTheme.primaryNavy,
-            const Color(0xFF0E7C66),
+            AppTheme.brightBlue,
           ],
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.14)),

@@ -101,25 +101,29 @@ void main() {
     pending.complete(response(page([row()])));
     await request;
   });
-  testWidgets('Home See All opens the paginated Deals screen', (tester) async {
-    final limits = <int>[];
-    final api = service((request) async {
-      final limit = int.parse(request.url.queryParameters['limit']!);
-      limits.add(limit);
-      return response(page([], limit: limit));
-    });
-    addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: DealsHomeSection(service: api)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('See All'));
-    await tester.pumpAndSettle();
-    expect(find.byType(DealsScreen), findsOneWidget);
-    expect(limits, [6, 20]);
-  });
+  testWidgets(
+    'Home banner requests no Deals until tapped, then opens the paginated screen',
+    (tester) async {
+      final limits = <int>[];
+      final api = service((request) async {
+        final limit = int.parse(request.url.queryParameters['limit']!);
+        limits.add(limit);
+        return response(page([], limit: limit));
+      });
+      addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: DealsHomeSection(service: api)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(limits, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('open-naijago-deals')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DealsScreen), findsOneWidget);
+      expect(limits, [20]);
+    },
+  );
   testWidgets('Deal card fits narrow layout with enlarged text', (
     tester,
   ) async {
@@ -532,23 +536,22 @@ void main() {
       expect(calls, 1);
     },
   );
-  testWidgets('Home Deals section has See All and requests only six Deals', (
-    tester,
-  ) async {
-    final api = service((request) async {
-      final limit = int.parse(request.url.queryParameters['limit']!);
-      expect(limit, 6);
-      return response(page([], limit: limit));
-    });
-    addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: DealsHomeSection(service: api)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('NaijaGo Deals'), findsOneWidget);
-    expect(find.text('See All'), findsOneWidget);
-    expect(find.text('New Deals are coming. Check back soon.'), findsOneWidget);
-  });
+  testWidgets(
+    'Home Deals entrance shows only a banner without fetching listings',
+    (tester) async {
+      final api = service((request) async {
+        fail('Home banner must not fetch Deals before a tap');
+      });
+      addTearDown(() async => tester.pumpWidget(const SizedBox.shrink()));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: DealsHomeSection(service: api)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('open-naijago-deals')), findsOneWidget);
+      expect(find.byType(DealCard), findsNothing);
+      expect(find.text('See All'), findsNothing);
+    },
+  );
 }

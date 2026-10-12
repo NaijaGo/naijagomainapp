@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../../core/api_client.dart';
 import '../../../core/file_uploader.dart';
 import '../disputes/dispute_api.dart';
 
 // Color constants
-const Color deepNavyBlue = Color(0xFF000080);
-const Color greenYellow = Color(0xFFADFF2F);
+const Color deepNavyBlue = AppTheme.deepBlue;
+const Color greenYellow = AppTheme.blueAccent;
 const Color whiteBackground = Colors.white;
 
 class DisputeCreateScreen extends StatefulWidget {

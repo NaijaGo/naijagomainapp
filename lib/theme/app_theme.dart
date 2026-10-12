@@ -7,25 +7,33 @@ class AppTheme {
   static const Color logoBlue = Color(0xFF0000FE);
   static const Color logoGreen = Color(0xFF008953);
 
-  // Customer marketplace palette. Legacy token names remain compatible.
-  static const Color forestGreen = Color(0xFF215C36);
-  static const Color deepForest = Color(0xFF103D25);
-  static const Color leafGreen = Color(0xFF407B39);
-  static const Color sageSurface = Color(0xFFEDF3E3);
-  static const Color sageAccent = Color(0xFFDDEBBD);
+  // Muted blue UI palette; the original logo colours remain above.
+  static const Color brandBlue = Color(0xFF365D9B);
+  static const Color deepBlue = Color(0xFF1D2D47);
+  static const Color brightBlue = Color(0xFF5274A8);
+  static const Color blueSurface = Color(0xFFF2F5FA);
+  static const Color blueAccent = Color(0xFFDFE7F3);
+  static const Color darkSurface = Color(0xFF24334B);
+
+  // Existing screens retain these aliases; all resolve to the blue palette.
+  static const Color forestGreen = brandBlue;
+  static const Color deepForest = deepBlue;
+  static const Color leafGreen = brightBlue;
+  static const Color sageSurface = blueSurface;
+  static const Color sageAccent = blueAccent;
   static const Color warmGold = Color(0xFFD7AC50);
   static const Color primaryNavy = forestGreen;
   static const Color deepNavy = deepForest;
-  static const Color accentBlue = Color(0xFF3E7558);
+  static const Color accentBlue = brightBlue;
   static const Color accentGreen = leafGreen;
   static const Color dangerRed = Color(0xFFEF4444);
 
   // Neutral colors
-  static const Color secondaryBlack = Color(0xFF1B2B20);
-  static const Color softGrey = Color(0xFFF7F8F2);
+  static const Color secondaryBlack = Color(0xFF182238);
+  static const Color softGrey = Color(0xFFF7F9FD);
   static const Color cardWhite = Colors.white;
-  static const Color borderGrey = Color(0xFFE4E8DC);
-  static const Color mutedText = Color(0xFF677064);
+  static const Color borderGrey = Color(0xFFE2E8F2);
+  static const Color mutedText = Color(0xFF5E6A7F);
 
   static ThemeData get lightTheme {
     final base = ThemeData.light(useMaterial3: true);

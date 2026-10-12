@@ -441,7 +441,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
                                     'Default delivery address',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFF008348),
+                                      color: AppTheme.deepBlue,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),

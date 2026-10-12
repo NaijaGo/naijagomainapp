@@ -27,7 +27,7 @@ const String cloudinaryUploadPreset =
 // Colors
 const Color primaryNavy = AppTheme.primaryNavy;
 const Color secondaryBlack = AppTheme.secondaryBlack;
-const Color accentGreen = Color(0xFF2ECC40);
+const Color accentGreen = AppTheme.brightBlue;
 const Color softGrey = AppTheme.softGrey;
 const Color lightGrey = Color(0xFF9E9E9E);
 const Color white = Colors.white;

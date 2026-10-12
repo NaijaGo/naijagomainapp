@@ -7,6 +7,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:naija_go/main.dart' show ThemeChanger, ThemeChangerState;
 import 'package:naija_go/models/product.dart';
 import 'package:naija_go/providers/cart_provider.dart';
 import 'package:naija_go/screens/Main/home_screen.dart' show ProductCard;
@@ -286,16 +288,25 @@ Future<void> mountProduct(
 
 void main() {
   test(
-    'shared palette has green emphasis and accessible text/button contrast',
+    'shared palette uses muted blue and accessible text/button contrast',
     () {
       double contrast(Color a, Color b) {
         final aa = a.computeLuminance(), bb = b.computeLuminance();
         return ((aa > bb ? aa : bb) + 0.05) / ((aa < bb ? aa : bb) + 0.05);
       }
 
-      expect(AppTheme.forestGreen, const Color(0xFF215C36));
+      expect(AppTheme.logoBlue, const Color(0xFF0000FE));
+      expect(AppTheme.brandBlue, const Color(0xFF365D9B));
+      expect(AppTheme.primaryNavy, AppTheme.brandBlue);
+      expect(AppTheme.forestGreen, AppTheme.brandBlue);
+      expect(AppTheme.deepForest, AppTheme.deepBlue);
+      expect(AppTheme.sageSurface, AppTheme.blueSurface);
       expect(
         contrast(AppTheme.forestGreen, Colors.white),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrast(AppTheme.brightBlue, Colors.white),
         greaterThanOrEqualTo(4.5),
       );
       expect(
@@ -324,6 +335,71 @@ void main() {
             .isFinite,
         isTrue,
       );
+    },
+  );
+  test('shared actions, forms and navigation use the blue brand theme', () {
+    final theme = AppTheme.lightTheme;
+    expect(theme.colorScheme.primary, AppTheme.brandBlue);
+    expect(theme.colorScheme.surfaceContainerHighest, AppTheme.blueSurface);
+    expect(theme.scaffoldBackgroundColor, AppTheme.softGrey);
+    expect(theme.cardColor, Colors.white);
+    expect(
+      theme.elevatedButtonTheme.style!.backgroundColor!.resolve({}),
+      AppTheme.brandBlue,
+    );
+    expect(
+      theme.outlinedButtonTheme.style!.foregroundColor!.resolve({}),
+      AppTheme.brandBlue,
+    );
+    expect(theme.floatingActionButtonTheme.backgroundColor, AppTheme.brandBlue);
+    expect(
+      theme.bottomNavigationBarTheme.selectedItemColor,
+      AppTheme.brandBlue,
+    );
+    expect(theme.chipTheme.selectedColor, AppTheme.brandBlue);
+    expect(
+      (theme.inputDecorationTheme.focusedBorder! as OutlineInputBorder)
+          .borderSide
+          .color,
+      AppTheme.brandBlue,
+    );
+    expect(
+      theme.checkboxTheme.fillColor!.resolve({WidgetState.selected}),
+      AppTheme.brandBlue,
+    );
+  });
+  testWidgets(
+    'stored dark mode and switching back retain readable blue themes',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'isDarkMode': true});
+      ThemeData? activeTheme;
+      await tester.pumpWidget(
+        ThemeChanger(
+          child: Builder(
+            builder: (context) {
+              activeTheme = Theme.of(context);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(activeTheme!.brightness, Brightness.dark);
+      expect(activeTheme!.cardColor, AppTheme.darkSurface);
+      expect(activeTheme!.colorScheme.primary, AppTheme.blueAccent);
+      expect(activeTheme!.scaffoldBackgroundColor, AppTheme.deepBlue);
+      final primary = activeTheme!.colorScheme.primary.computeLuminance();
+      final onPrimary = activeTheme!.colorScheme.onPrimary.computeLuminance();
+      expect((primary + .05) / (onPrimary + .05), greaterThanOrEqualTo(4.5));
+      tester
+          .state<ThemeChangerState>(find.byType(ThemeChanger))
+          .changeTheme(ThemeMode.light);
+      await tester.pumpAndSettle();
+      expect(activeTheme!.brightness, Brightness.light);
+      expect(activeTheme!.colorScheme.primary, AppTheme.brandBlue);
+      expect(activeTheme!.cardColor, Colors.white);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
     },
   );
   testWidgets('all five tabs retain their original ordering and callbacks', (

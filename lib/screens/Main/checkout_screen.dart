@@ -2101,9 +2101,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFECFDF3),
+                color: AppTheme.blueSurface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFABEFC6)),
+                border: Border.all(color: AppTheme.blueAccent),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2113,7 +2113,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             ?.toString() ??
                         shipment.vendorName,
                     style: const TextStyle(
-                      color: Color(0xFF067647),
+                      color: AppTheme.deepBlue,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2133,7 +2133,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Text(
                     'Usually ready in ${shipment.pickupOption?['estimatedPreparationMinutes'] ?? 30} minutes',
                     style: const TextStyle(
-                      color: Color(0xFF067647),
+                      color: AppTheme.deepBlue,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                     ),

@@ -63,7 +63,7 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
       backgroundColor: AppTheme.softGrey,
       appBar: AppBar(
         title: const Text('Shopping Assistant'),
-        foregroundColor: AppTheme.logoBlue,
+        foregroundColor: AppTheme.brandBlue,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
       ),
@@ -117,7 +117,7 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                     const SizedBox(height: 16),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.logoBlue,
+                        backgroundColor: AppTheme.brandBlue,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 20,

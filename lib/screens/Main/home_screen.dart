@@ -31,7 +31,8 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/product_social_proof.dart';
 import '../../widgets/deals_home_section.dart';
-import '../../widgets/shopping_assistant_identity.dart';
+import '../../widgets/restaurant_photo_banner.dart';
+import 'deals_screen.dart';
 import '../../widgets/vendor_logo_strip.dart';
 import 'shopping_assistant_screen.dart';
 import 'categories_screen.dart'
@@ -1169,7 +1170,6 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   static const int _bannerInitialPage = 10000;
   List<Product> _flashSales = [];
-  int _dealsRefreshToken = 0;
   List<Product> _newArrivals = [];
   List<Product> _recommended = [];
   List<Product> _restaurants = [];
@@ -1179,7 +1179,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   final PageController _bannerController = PageController(
     initialPage: _bannerInitialPage,
-    viewportFraction: 0.92,
+    viewportFraction: 1,
   );
   final PageController _promoController = PageController(
     viewportFraction: 0.85,
@@ -1314,8 +1314,18 @@ class _HomeScreenState extends State<HomeScreen>
     return [_lowCostBannerSlide, ...remoteSlides];
   }
 
-  List<HomeCarouselSlide> get _effectivePromoSlides =>
-      _promoSlides.isNotEmpty ? _promoSlides : _fallbackPromoSlides;
+  List<HomeCarouselSlide> get _effectivePromoSlides => _promoSlides.isNotEmpty
+      ? _promoSlides
+            .where((slide) => slide.isActive && slide.actionType != 'deals')
+            .toList()
+      : _fallbackPromoSlides;
+
+  HomeCarouselSlide? get _dealsBannerSlide {
+    for (final slide in _promoSlides) {
+      if (slide.isActive && slide.actionType == 'deals') return slide;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -1778,7 +1788,7 @@ class _HomeScreenState extends State<HomeScreen>
           (
             label: 'Groceries',
             icon: Icons.local_grocery_store_rounded,
-            color: Color(0xFF2E8B57),
+            color: AppTheme.brightBlue,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => CategoryProductsScreen(
@@ -1925,6 +1935,11 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     switch (actionType) {
+      case 'deals':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const DealsScreen()));
+        return;
       case 'restaurant':
         _openRestaurantStore();
         return;
@@ -2016,7 +2031,6 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _loadHomeContent({bool forceRefresh = false}) async {
-    if (forceRefresh && mounted) setState(() => _dealsRefreshToken++);
     await Future.wait([
       _fetchProducts(forceRefresh: forceRefresh),
       _fetchCarouselSlides(),
@@ -2369,48 +2383,20 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: softGrey,
-      floatingActionButton: Consumer<CartProvider>(
-        builder: (context, cart, _) => Stack(
-          clipBehavior: Clip.none,
-          children: [
-            FloatingActionButton(
-              heroTag: 'home-cart',
-              tooltip: 'Open cart',
-              onPressed: widget.onCartTapped,
-              backgroundColor: AppTheme.accentGreen,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.shopping_cart_rounded),
-            ),
-            if (cart.itemCount > 0)
-              Positioned(
-                right: -4,
-                top: -5,
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 21,
-                    minHeight: 21,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444),
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    cart.itemCount > 99 ? '99+' : '${cart.itemCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-          ],
+      floatingActionButton: FloatingActionButton.extended(
+        key: const ValueKey('open-shopping-assistant'),
+        heroTag: 'home-ai-assistant',
+        tooltip: 'Open Shopping Assistant',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ShoppingAssistantScreen()),
+        ),
+        backgroundColor: AppTheme.forestGreen,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+        label: const Text(
+          'AI assistant',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -2428,18 +2414,6 @@ class _HomeScreenState extends State<HomeScreen>
                 userFirstName: _userFirstName,
                 homeCategories: _homeCategories,
                 onReturnToDashboard: widget.onReturnToDashboard,
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: ShoppingAssistantEntry(
-                  onOpen: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ShoppingAssistantScreen(),
-                    ),
-                  ),
-                ),
               ),
             ),
             SliverToBoxAdapter(child: _buildServiceShortcuts()),
@@ -2466,7 +2440,7 @@ class _HomeScreenState extends State<HomeScreen>
 
             SliverToBoxAdapter(child: _buildFoodDiscoveryBars()),
             SliverToBoxAdapter(
-              child: DealsHomeSection(refreshToken: _dealsRefreshToken),
+              child: DealsHomeSection(bannerSlide: _dealsBannerSlide),
             ),
 
             if (_flashSales.isNotEmpty) ...[
@@ -2647,12 +2621,13 @@ class _HomeScreenState extends State<HomeScreen>
     ];
 
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       child: Column(
         children: [
-          SizedBox(
-            height: 194,
+          AspectRatio(
+            aspectRatio: 2.6,
             child: PageView.builder(
+              key: const ValueKey('home-main-banners'),
               controller: _bannerController,
               onPageChanged: (page) => setState(
                 () => _currentBanner =
@@ -2674,10 +2649,11 @@ class _HomeScreenState extends State<HomeScreen>
                     : 'Shop confidently with NaijaGo';
                 return Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 5,
+                    horizontal: 0,
+                    vertical: 0,
                   ),
                   child: GestureDetector(
+                    key: ValueKey('main-banner-${slide.id}'),
                     onTap: () => _handleCarouselSlideTap(slide),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
@@ -2696,7 +2672,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 colors: [
                                   Color(0x10000000),
                                   Color(0x08000000),
-                                  Color(0xCC103D25),
+                                  Color(0xCC1D2D47),
                                 ],
                               ),
                             ),
@@ -2823,7 +2799,7 @@ class _HomeScreenState extends State<HomeScreen>
                       gradient: LinearGradient(
                         colors: [
                           Colors.white.withValues(alpha: 0),
-                          Colors.white.withValues(alpha: 0.19),
+                          Colors.white.withValues(alpha: 0.06),
                           Colors.white.withValues(alpha: 0),
                         ],
                       ),
@@ -2844,8 +2820,8 @@ class _HomeScreenState extends State<HomeScreen>
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.sageAccent.withValues(alpha: 0.24),
-                        blurRadius: 14,
+                        color: AppTheme.sageAccent.withValues(alpha: 0.06),
+                        blurRadius: 8,
                       ),
                     ],
                   ),
@@ -2873,242 +2849,18 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildFoodDiscoveryBars() {
-    final campaign = _activeFoodCampaign;
-    final mealTitle = campaign?.title.trim().isNotEmpty == true
-        ? campaign!.title.trim()
-        : 'Breakfast, lunch or dinner is ready';
-    final mealMessage = campaign?.message.trim().isNotEmpty == true
-        ? campaign!.message.trim()
-        : 'Fresh meals are waiting for you.';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildFoodDiscoveryCard(
-              title: mealTitle,
-              message: mealMessage,
-              icon: Icons.room_service_rounded,
-              background: primaryNavy,
-              accent: AppTheme.sageAccent,
-              imageUrl: campaign?.imageUrl,
-              routeMotion: false,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _buildFoodDiscoveryCard(
-              title: 'Hungry?',
-              message: 'We found restaurants near you. Check them out.',
-              icon: Icons.near_me_rounded,
-              background: const Color(0xFF146B3A),
-              accent: const Color(0xFFFFD166),
-              routeMotion: true,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFoodDiscoveryCard({
-    required String title,
-    required String message,
-    required IconData icon,
-    required Color background,
-    required Color accent,
-    String? imageUrl,
-    required bool routeMotion,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _openRestaurantStore,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          height: 150,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-            boxShadow: [
-              BoxShadow(
-                color: background.withValues(alpha: 0.18),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: _buildFoodMotionLayer(accent, routeMotion),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(13),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            width: 37,
-                            height: 37,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                            child: imageUrl?.isNotEmpty == true
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(11),
-                                    child: CachedNetworkImage(
-                                      imageUrl: imageUrl!,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (_, _, _) => Icon(
-                                        icon,
-                                        color: background,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  )
-                                : Icon(icon, color: background, size: 20),
-                          ),
-                          Icon(
-                            Icons.arrow_outward_rounded,
-                            color: Colors.white.withValues(alpha: 0.90),
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          height: 1.08,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        message,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.78),
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          height: 1.25,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+  Widget _buildFoodDiscoveryBars() => RestaurantPhotoBanner(
+    products: _restaurantProducts,
+    onOpen: (product) => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RestaurantFoodScreen(
+          initialVendorId: product.vendorId,
+          initialVendorName: product.displayRestaurantName,
+          onReturnToDashboard: widget.onReturnToDashboard,
         ),
       ),
-    );
-  }
-
-  Widget _buildFoodMotionLayer(Color accent, bool routeMotion) {
-    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
-      return const SizedBox.shrink();
-    }
-
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _foodMotionController,
-        builder: (context, _) {
-          final progress = _foodMotionController.value;
-          if (routeMotion) {
-            return Stack(
-              children: [
-                Positioned(
-                  right: -18 + (progress * 24),
-                  top: 38,
-                  child: Transform.rotate(
-                    angle: -0.35,
-                    child: Container(
-                      width: 112,
-                      height: 2,
-                      color: accent.withValues(alpha: 0.16),
-                    ),
-                  ),
-                ),
-                for (var index = 0; index < 3; index++)
-                  Positioned(
-                    right: 15 + (index * 27) - (progress * 18),
-                    top: 50 + (index.isEven ? 0 : 10),
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.28 + (index * 0.08)),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  right: 12,
-                  top: 28 + (math.sin(progress * math.pi * 2) * 5),
-                  child: Icon(
-                    Icons.location_on_rounded,
-                    color: accent.withValues(alpha: 0.24),
-                    size: 34,
-                  ),
-                ),
-              ],
-            );
-          }
-
-          return Stack(
-            children: [
-              for (var index = 0; index < 3; index++)
-                Positioned(
-                  left: 27 + (index * 14),
-                  top: 45 - (((progress + index * 0.22) % 1) * 34),
-                  child: Container(
-                    width: 5,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(
-                        alpha: 0.05 + (((progress + index * 0.22) % 1) * 0.12),
-                      ),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ),
-              Positioned(
-                right: -22 + (math.sin(progress * math.pi * 2) * 5),
-                bottom: -25,
-                child: Container(
-                  width: 98,
-                  height: 98,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: accent.withValues(alpha: 0.13),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+    ),
+  );
 
   void _openCostLowStore() {
     Navigator.of(context).push(
@@ -3132,98 +2884,103 @@ class _HomeScreenState extends State<HomeScreen>
         child: InkWell(
           onTap: _openCostLowStore,
           borderRadius: BorderRadius.circular(24),
-          child: Ink(
-            height: 148,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.accentBlue.withValues(alpha: 0.20),
-                  blurRadius: 26,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/lowcost_world.jpeg',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        Container(color: AppTheme.deepForest),
+          child: AspectRatio(
+            aspectRatio: 2.6,
+            child: Ink(
+              key: const ValueKey('low-cost-entry-banner'),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.deepBlue.withValues(alpha: 0.06),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
                   ),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Color(0xE6103D25),
-                          Color(0x99103D25),
-                          Color(0x22103D25),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      'assets/lowcost_world.jpeg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          Container(color: AppTheme.deepForest),
+                    ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Color(0xE61D2D47),
+                            Color(0x991D2D47),
+                            Color(0x221D2D47),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'LOW COST WORLD',
+                                  style: TextStyle(
+                                    color: AppTheme.sageAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 7),
+                                const Text(
+                                  'Big value. Lower prices.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 21,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.05,
+                                  ),
+                                ),
+                                const SizedBox(height: 7),
+                                Text(
+                                  'Shop every Low Cost product in one place.',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.84),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppTheme.sageAccent,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: AppTheme.deepForest,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'LOW COST WORLD',
-                                style: TextStyle(
-                                  color: AppTheme.sageAccent,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.4,
-                                ),
-                              ),
-                              const SizedBox(height: 7),
-                              const Text(
-                                'Big value. Lower prices.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 21,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.05,
-                                ),
-                              ),
-                              const SizedBox(height: 7),
-                              Text(
-                                'Shop every Low Cost product in one place.',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.84),
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppTheme.sageAccent,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: AppTheme.deepForest,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -4423,7 +4180,7 @@ class ProductCard extends StatelessWidget {
                                 size: 13,
                                 color: isRestaurantItem
                                     ? const Color(0xFF9A4B00)
-                                    : const Color(0xFF08756F),
+                                    : AppTheme.brightBlue,
                               ),
                               const SizedBox(width: 4),
                             ],
@@ -4440,7 +4197,7 @@ class ProductCard extends StatelessWidget {
                                   color: isRestaurantItem
                                       ? const Color(0xFF9A4B00)
                                       : isMedicine
-                                      ? const Color(0xFF08756F)
+                                      ? AppTheme.brightBlue
                                       : AppTheme.mutedText,
                                   height: 1.25,
                                 ),
@@ -4607,7 +4364,7 @@ class ProductCard extends StatelessWidget {
                               ),
                               elevation: 0,
                               backgroundColor: requiresPharmacyConsult
-                                  ? const Color(0xFF08756F)
+                                  ? AppTheme.brightBlue
                                   : restaurantClosed
                                   ? Colors.grey[300]
                                   : product.stockQuantity > 0
