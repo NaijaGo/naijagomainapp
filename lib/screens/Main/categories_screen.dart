@@ -1,3 +1,4 @@
+import '../../services/catalog_category_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -38,221 +39,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   final Map<String, GlobalKey> _sidebarKeys = {};
   String? _activeSection;
 
-  final Map<String, List<String>> _allCategories = {
-    'Home & Office': [
-      'Appliances',
-      'Home & Kitchen',
-      'Home Interior & Exterior',
-      'Office Products',
-      'Furniture',
-      'Lighting',
-      'Home Security',
-      'Cleaning Supplies',
-      'Storage & Organization',
-      'Garden & Outdoor',
-      'Bedding & Bath',
-    ],
-    'Phones & Tablets': [
-      'Mobile Phones',
-      'Tablets',
-      'Mobile Phone Accessories',
-      'Wearable Technology',
-      'Smartphones',
-      'Feature Phones',
-      'Phone Cases & Covers',
-      'Screen Protectors',
-      'Chargers & Cables',
-      'Power Banks',
-      'Bluetooth Accessories',
-    ],
-    'Fashion': [
-      "Men's Fashion",
-      "Women's Fashion",
-      "Kids' Fashion",
-      'Watches',
-      'Luggages & Travel Gear',
-      'Hair & Wigs',
-      'Footwear',
-      'Bags & Purses',
-      'Jewelry',
-      'Eyewear',
-      'Belts & Accessories',
-      'Traditional Attire',
-      'Underwear & Lingerie',
-      'Sportswear',
-    ],
-    'Cosmetics & Beauty': [
-      'Make Up',
-      'Fragrance',
-      'Hair Care',
-      'Oral Care',
-      'Medicine',
-      'Condoms',
-      'Sex Toys',
-      'Skin Care & Cosmetics',
-      'Personal Care',
-      'Shaving & Hair Removal',
-      'Vitamins & Supplements',
-      'First Aid',
-      'Medical Equipment',
-      'Feminine Care',
-    ],
-    'Electronics': [
-      'Television & Video',
-      'Camera & Photo',
-      'Generator & Portable Power',
-      'Audios',
-      'Home Theater Systems',
-      'Headphones & Earbuds',
-      'Gadgets',
-      'Drones',
-      'Smart Home Devices',
-      'Car Electronics',
-      'Batteries & Power',
-    ],
-    'Computing': [
-      'Computers',
-      'Data Storage',
-      'Anti Virus & Security',
-      'Printers & Computer Accessories',
-      'Keyboards & Mice',
-    ],
-    'Groceries': [
-      'Beer, Wine & Spirits',
-      'Food Cupboard',
-      'House Hold Cleaning',
-      'Fresh Produce',
-      'Dairy & Eggs',
-      'Seafood',
-    ],
-    'Automobiles': [
-      'Car Care',
-      'Car Exterior and Interior Accessories',
-      'Tools & Equipment',
-      'Oils & Fluids',
-      'Car Safety',
-      'Performance Parts',
-    ],
-    'Sporting Goods': [
-      'Cardio Training',
-      'Strength & Training Equipment',
-      'Team Sports',
-      'Outdoor & Adventures',
-      'Fitness Trackers',
-      'Yoga & Pilates',
-      'Swimming',
-      'Cycling',
-      'Camping & Hiking',
-      'Golf',
-      'Martial Arts',
-    ],
-    'Gaming': [
-      'Play Station',
-      'Xbox',
-      'Nintendo',
-      'PC Gaming',
-      'Gaming Consoles',
-      'Video Games',
-      'Gaming Accessories',
-      'VR Headsets',
-      'Arcade Games',
-      'Board Games',
-      'Card Games',
-      'Puzzles',
-    ],
-    'Baby Products': [
-      'Apparels & Accessories',
-      'Diapering',
-      'Feeding',
-      'Baby Toddlers Toys',
-      'Gears',
-      'Bathing & Skin Care',
-      'Potty Training',
-      'Safety',
-      'Nursery Furniture',
-      'Strollers & Prams',
-      'Car Seats',
-      'Educational Toys',
-    ],
-    'Books & Stationery': [
-      'Fiction Books',
-      'Comics',
-      'Technology',
-      'Business',
-      'Story',
-      'Religious',
-      'Non-Fiction',
-      'Academic Textbooks',
-      'Children Books',
-      'Magazines',
-      'Writing Instruments',
-      'Office Supplies',
-      'Art Supplies',
-      'Calendars & Planners',
-    ],
-    'Animal Products': [
-      'Chicken Feeds',
-      'Dog Feeds',
-      'Cat Feeds',
-      'Fish Feeds',
-      'Pig Feeds',
-      'Pet Accessories',
-      'Pet Health & Care',
-      'Pet Toys',
-      'Pet Clothing',
-      'Pet Grooming',
-      'Aquarium Supplies',
-      'Bird Supplies',
-    ],
-    'Building & Construction': [
-      'Building Materials',
-      'Electrical',
-      'Plumbing',
-      'Tools & Machinery',
-      'Safety Equipment',
-      'Paints & Coatings',
-      'Hardware',
-    ],
-    'Industrial & Scientific': [
-      'Lab Equipment',
-      'Packaging & Shipping',
-      'Janitorial & Sanitation',
-    ],
-    'Music & Instruments': [
-      'Guitars',
-      'Keyboards & Pianos',
-      'Wind Instruments',
-      'Audio Equipment',
-    ],
-    'Arts & Crafts': ['Painting', 'Beading & Jewelry Making', 'Clay & Pottery'],
-    'Agriculture': ['Fertilizers', 'Pesticides'],
-    'Jewelry & Watches': ['Fine Jewelry', 'Fashion Jewelry', 'Wrist Watches'],
-    'Toys & Games': [
-      'Dolls',
-      'Educational Toys',
-      'Outdoor Toys',
-      'Remote Control Toys',
-      'Stuffed Animals',
-      'Toy Vehicles',
-    ],
-    'Photography': [
-      'Cameras',
-      'Lenses',
-      'Lighting Equipment',
-      'Camera Bags & Cases',
-      'Tripods & Supports',
-      'Content Creator Equipment',
-    ],
-    'Food & Beverage': [
-      'Restaurant Equipment',
-      'Catering Supplies',
-      'Baking Supplies',
-      'Food Processing',
-      'Beverage Equipment',
-      'Kitchen Utensils',
-      'Food Packaging',
-    ],
-  };
+  Map<String, List<String>> _allCategories = {};
 
   final Map<String, IconData> _categoryIcons = {
     'Home & Office': Icons.home_outlined,
@@ -498,6 +285,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   @override
   void initState() {
     super.initState();
+    CatalogCategoryService.load(
+      onReady: (hierarchy) {
+        if (!mounted) return;
+        final selected = _activeSection;
+        _allCategories = hierarchy.categoryMap(includeRestaurant: false);
+        _onSearchChanged();
+        if (_filteredCategories.any((entry) => entry.key == selected)) {
+          setState(() => _activeSection = selected);
+        }
+      },
+    );
     _filteredCategories = _allCategories.entries.toList();
     _activeSection = _filteredCategories.isNotEmpty
         ? _filteredCategories.first.key

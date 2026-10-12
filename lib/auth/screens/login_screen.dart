@@ -690,9 +690,31 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ],
                                   const SizedBox(height: 18),
-                                  OutlinedButton(
+                                  OutlinedButton.icon(
                                     onPressed: _isLoading ? null : _loginGoogle,
-                                    child: const Text('Continue with Google'),
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF1F1F1F),
+                                      side: const BorderSide(
+                                        color: Color(0xFF747775),
+                                      ),
+                                      minimumSize: const Size(
+                                        double.infinity,
+                                        48,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    icon: Image.asset(
+                                      'assets/google_g_logo.png',
+                                      width: 20,
+                                      height: 20,
+                                      fit: BoxFit.contain,
+                                      excludeFromSemantics: true,
+                                    ),
+                                    label: const Text('Continue with Google'),
                                   ),
                                   const SizedBox(height: 16),
                                   SizedBox(

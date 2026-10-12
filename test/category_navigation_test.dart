@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:naija_go/screens/Main/categories_screen.dart';
 import 'package:naija_go/screens/Main/category_products_screen.dart';
@@ -24,6 +27,9 @@ Future<void> _mount(WidgetTester tester, _Routes routes) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(navigatorObservers: [routes], home: const CategoriesScreen()),
+  );
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 50)),
   );
   await tester.pump();
 }
@@ -68,6 +74,28 @@ Future<void> _localRequests(Future<void> Function(List<Uri>) action) async {
 }
 
 void main() {
+  testWidgets('API refresh preserves the selected main category', (
+    tester,
+  ) async {
+    final response = Completer<http.Response>();
+    await http.runWithClient(() async {
+      await _mount(tester, _Routes());
+      await _select(tester, 'Fashion');
+      final data =
+          jsonDecode(File('assets/catalog_taxonomy.v1.json').readAsStringSync())
+              as Map<String, dynamic>;
+      response.complete(
+        http.Response(jsonEncode({...data, 'referencesReady': true}), 200),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey("subcategory-Fashion-Men's Fashion")),
+        findsOneWidget,
+      );
+      expect(find.byType(CategoryProductsScreen), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }, () => MockClient((_) => response.future));
+  });
   testWidgets(
     'main category shows only its subcategories without opening products',
     (tester) async {

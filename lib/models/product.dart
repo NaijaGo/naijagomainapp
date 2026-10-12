@@ -12,6 +12,8 @@ class Product {
   final double? discountPrice;
   final String brand;
   final String category;
+  final String? categoryId;
+  final String? subcategoryId;
   final String subcategory;
   final List<String> searchTags;
   final int stockQuantity;
@@ -56,6 +58,8 @@ class Product {
     this.discountPrice,
     this.brand = '',
     required this.category,
+    this.categoryId,
+    this.subcategoryId,
     this.subcategory = '',
     this.searchTags = const [],
     required this.stockQuantity,
@@ -233,6 +237,8 @@ class Product {
       discountPrice: parsedDiscountPrice,
       brand: json['brand']?.toString() ?? '',
       category: json['category'] ?? '',
+      categoryId: json['categoryId']?.toString(),
+      subcategoryId: json['subcategoryId']?.toString(),
       subcategory: json['subcategory']?.toString() ?? '',
       searchTags: (json['searchTags'] as List? ?? const [])
           .map((tag) => tag.toString())
@@ -310,6 +316,8 @@ class Product {
     'discountPrice': discountPrice,
     'brand': brand,
     'category': category,
+    if (categoryId != null) 'categoryId': categoryId,
+    if (subcategoryId != null) 'subcategoryId': subcategoryId,
     'subcategory': subcategory,
     'searchTags': searchTags,
     'stockQuantity': stockQuantity,
@@ -411,16 +419,18 @@ class Product {
   }
 
   bool get isRestaurantItem {
-    final normalized = category.toLowerCase();
-    if (normalized.contains('restaurant equipment')) return false;
-    return normalized == 'restaurant' ||
-        normalized.startsWith('restaurant >') ||
-        normalized.contains('meal') ||
-        normalized.contains('fast food') ||
-        normalized.contains('local dishes') ||
-        normalized.contains('pastries') ||
-        normalized.contains('drinks') ||
-        normalized.contains('catering');
+    return '$category > $subcategory'.split('>').any((part) {
+      final label = part.trim().toLowerCase();
+      return label == 'restaurant' ||
+          [
+            'meal',
+            'fast food',
+            'local dishes',
+            'pastries',
+            'drinks',
+            'catering',
+          ].any(label.contains);
+    });
   }
 
   String get displayRestaurantName {
@@ -644,15 +654,17 @@ class Product {
   }
 
   bool get isMedicine {
-    final normalized = category.toLowerCase();
+    final normalized = '$category > $subcategory'.toLowerCase();
     return normalized.contains('medicine') ||
         normalized.contains('pharmacy') ||
-        normalized.contains('drug');
+        normalized.contains('drug') ||
+        (medicineAccess?.trim().isNotEmpty ?? false) ||
+        requiresPrescription ||
+        requiresPharmacistApproval;
   }
 
   bool get isRestrictedMedicine {
     if (!isMedicine) return false;
-    if (isOverTheCounter) return false;
 
     final access = medicineAccess?.toLowerCase().trim() ?? '';
     final restrictedByAccess =
