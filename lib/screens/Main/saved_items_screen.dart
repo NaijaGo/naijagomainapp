@@ -16,7 +16,7 @@ import 'product_detail_screen.dart';
 
 // Defined custom colors for consistency and enchantment
 const Color deepNavyBlue = AppTheme.primaryNavy;
-const Color greenYellow = Color(0xFFF4F8FF);
+const Color greenYellow = AppTheme.softGrey;
 const Color whiteBackground = Colors.white;
 const Color secondaryBlack = AppTheme.secondaryBlack;
 const Color borderGrey = AppTheme.borderGrey;

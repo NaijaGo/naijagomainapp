@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -257,7 +258,7 @@ class _PlannedOrderComposerState extends State<PlannedOrderComposer> {
               ),
               const Text(
                 'Stock and prices are checked again before payment. Recurring plans are purchase reminders: no automatic charges, stock holds or guaranteed delivery windows.',
-                style: TextStyle(color: Color(0xFF667085), height: 1.4),
+                style: TextStyle(color: AppTheme.mutedText, height: 1.4),
               ),
               const SizedBox(height: 18),
               SegmentedButton<String>(

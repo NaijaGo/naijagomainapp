@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -9,10 +10,10 @@ import 'package:naija_go/constants.dart';
 import '../../widgets/tech_glow_background.dart';
 
 // Color constants
-const Color deepNavyBlue = Color(0xFF000080);
-const Color greenYellow = Color(0xFFADFF2F);
+const Color deepNavyBlue = AppTheme.primaryNavy;
+const Color greenYellow = AppTheme.sageAccent;
 const Color whiteBackground = Colors.white;
-const Color whiteSmoke = Color(0xFFF5F5F5);
+const Color whiteSmoke = AppTheme.softGrey;
 
 class CreateDisputeScreen extends StatefulWidget {
   final List<dynamic> orders;

@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -99,7 +100,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF081A3A),
+    backgroundColor: AppTheme.deepNavy,
     body: SafeArea(child: Stack(children: [
       Positioned.fill(child: _loading
           ? const Center(child: CircularProgressIndicator(color: Colors.white))
@@ -181,9 +182,9 @@ class _ExploreVideoFeedCardState extends State<ExploreVideoFeedCard> {
   @override
   Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
     if (_videoReady) FittedBox(fit: BoxFit.cover, child: SizedBox(width: _player.value.size.width, height: _player.value.size.height, child: VideoPlayer(_player)))
-    else if (_videoFailed) const ColoredBox(color: Color(0xFF081A3A), child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 44), SizedBox(height: 12), Text('This video is unavailable.', style: TextStyle(color: Colors.white70))])))
+    else if (_videoFailed) const ColoredBox(color: AppTheme.deepNavy, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 44), SizedBox(height: 12), Text('This video is unavailable.', style: TextStyle(color: Colors.white70))])))
     else if (widget.video.posterUrl != null) Image.network(widget.video.posterUrl!, fit: BoxFit.cover)
-    else const ColoredBox(color: Color(0xFF081A3A), child: Center(child: CircularProgressIndicator(color: Colors.white70))),
+    else const ColoredBox(color: AppTheme.deepNavy, child: Center(child: CircularProgressIndicator(color: Colors.white70))),
     GestureDetector(behavior: HitTestBehavior.opaque, onTap: _videoReady ? () { if (_player.value.isPlaying) { _player.pause(); } else { _player.play(); } } : null),
     Positioned(left: 18, right: 90, bottom: 28, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [CircleAvatar(radius: 18, backgroundImage: widget.video.creatorAvatarUrl == null ? null : NetworkImage(widget.video.creatorAvatarUrl!), child: widget.video.creatorAvatarUrl == null ? const Icon(Icons.storefront, size: 19) : null), const SizedBox(width: 9), Text(widget.video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))]),

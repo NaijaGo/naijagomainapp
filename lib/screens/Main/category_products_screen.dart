@@ -655,7 +655,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                               ? const Color(0xFFFFF3E8)
                               : isMedicine
                               ? const Color(0xFFEAFBF9)
-                              : const Color(0xFFF3F6FA),
+                              : AppTheme.sageSurface,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -687,7 +687,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                                       ? const Color(0xFF9A4B00)
                                       : isMedicine
                                       ? const Color(0xFF08756F)
-                                      : const Color(0xFF667085),
+                                      : AppTheme.mutedText,
                                 ),
                               ),
                             ),
@@ -700,7 +700,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                           const Icon(
                             Icons.location_on_outlined,
                             size: 12,
-                            color: Color(0xFF667085),
+                            color: AppTheme.mutedText,
                           ),
                           const SizedBox(width: 3),
                           Expanded(
@@ -711,7 +711,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                               style: const TextStyle(
                                 fontSize: 10.8,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF667085),
+                                color: AppTheme.mutedText,
                                 height: 1.2,
                               ),
                             ),
@@ -726,7 +726,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                               const Icon(
                                 Icons.near_me_outlined,
                                 size: 12,
-                                color: Color(0xFF667085),
+                                color: AppTheme.mutedText,
                               ),
                               const SizedBox(width: 3),
                               Expanded(
@@ -737,7 +737,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                                   style: const TextStyle(
                                     fontSize: 10.8,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF667085),
+                                    color: AppTheme.mutedText,
                                     height: 1.2,
                                   ),
                                 ),

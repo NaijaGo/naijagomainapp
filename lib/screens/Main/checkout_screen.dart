@@ -1760,12 +1760,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ],
                 ),
               ),
-              Text(
-                _formatPriceWithCommas(summary.totalPrice),
-                style: const TextStyle(
-                  color: AppTheme.primaryNavy,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22,
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _formatPriceWithCommas(summary.totalPrice),
+                      style: const TextStyle(
+                        color: AppTheme.primaryNavy,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1967,7 +1975,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppTheme.softGrey,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppTheme.borderGrey),
       ),
@@ -2250,8 +2258,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _buildTotalRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        spacing: 12,
+        runSpacing: 6,
         children: [
           Text(
             label,
@@ -2317,7 +2327,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     decoration: BoxDecoration(
                       color: isSelected
                           ? AppTheme.primaryNavy.withValues(alpha: 0.05)
-                          : const Color(0xFFF8FAFC),
+                          : AppTheme.softGrey,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       border: Border.all(
                         color: isSelected
@@ -2715,7 +2725,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppTheme.softGrey,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
                 border: Border.all(color: AppTheme.borderGrey),
               ),
@@ -2830,33 +2840,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           color: AppTheme.secondaryBlack,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        helperText,
-                        style: const TextStyle(
-                          color: AppTheme.mutedText,
-                          fontSize: 12.5,
-                          height: 1.4,
-                        ),
-                      ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 16),
-                Text(
-                  _formatPriceWithCommas(total),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.primaryNavy,
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _formatPriceWithCommas(total),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primaryNavy,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                helperText,
+                style: const TextStyle(
+                  color: AppTheme.mutedText,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+            ),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
+            ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: double.infinity,
+                minHeight: 48,
+              ),
               child: OutlinedButton.icon(
                 onPressed: canPlanOrder
                     ? () => _openPlannedOrderComposer(cartProvider)
@@ -3151,7 +3174,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: AppTheme.softGrey,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(color: AppTheme.borderGrey),
         ),
@@ -3552,7 +3575,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppTheme.softGrey,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppTheme.borderGrey),
       ),
@@ -3800,7 +3823,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         decoration: BoxDecoration(
           color: selected
               ? AppTheme.primaryNavy.withValues(alpha: 0.05)
-              : const Color(0xFFF8FAFC),
+              : AppTheme.softGrey,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
             color: selected

@@ -20,8 +20,8 @@ const Color secondaryBlack = AppTheme.secondaryBlack;
 const Color borderGrey = AppTheme.borderGrey;
 const Color mutedText = AppTheme.mutedText;
 const Color softGrey = AppTheme.softGrey;
-const Color brandSoftText = Color(0xFFF4F8FF);
-const Color brandMutedText = Color(0xFFD5E0F2);
+const Color brandSoftText = AppTheme.softGrey;
+const Color brandMutedText = AppTheme.sageAccent;
 
 class MyWalletScreen extends StatefulWidget {
   const MyWalletScreen({super.key});

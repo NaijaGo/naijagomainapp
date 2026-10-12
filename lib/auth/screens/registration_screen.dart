@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -33,15 +34,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _isConfirmPasswordVisible = false;
   String? _errorMessage;
 
-  static const Color primaryNavy = Color(0xFF102B5C);
-  static const Color deepNavy = Color(0xFF081A3A);
+  static const Color primaryNavy = AppTheme.primaryNavy;
+  static const Color deepNavy = AppTheme.deepNavy;
   static const Color dangerRed = Color(0xFFEF4444);
-  static const Color secondaryBlack = Color(0xFF111827);
-  static const Color mutedText = Color(0xFF6B7280);
-  static const Color borderGrey = Color(0xFFE5E7EB);
+  static const Color secondaryBlack = AppTheme.secondaryBlack;
+  static const Color mutedText = AppTheme.mutedText;
+  static const Color borderGrey = AppTheme.borderGrey;
   static const Color white = Colors.white;
-  static const Color brandSoftText = Color(0xFFF4F8FF);
-  static const Color brandMutedText = Color(0xFFD5E0F2);
+  static const Color brandSoftText = AppTheme.softGrey;
+  static const Color brandMutedText = AppTheme.sageAccent;
 
   @override
   void initState() {
@@ -440,7 +441,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F6FA),
+                color: AppTheme.sageSurface,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Row(

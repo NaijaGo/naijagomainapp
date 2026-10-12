@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -109,7 +110,7 @@ class _CheckoutLocationMapState extends State<CheckoutLocationMap> {
                       Icons.location_pin,
                       key: const Key('delivery-location-pin'),
                       size: 48,
-                      color: _selected ? const Color(0xFF000080) : Colors.grey,
+                      color: _selected ? AppTheme.primaryNavy : Colors.grey,
                     ),
                   ),
                 ),

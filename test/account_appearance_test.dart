@@ -198,7 +198,7 @@ void main() {
         find.byKey(const ValueKey('account-avatar')),
       );
       expect(avatar.radius, 48);
-      expect(avatar.backgroundColor, const Color(0xFF111111));
+      expect(avatar.backgroundColor, AppTheme.secondaryBlack);
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
         Colors.white,

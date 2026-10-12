@@ -213,12 +213,7 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                   crossAxisCount: constraints.maxWidth >= 700 ? 3 : 2,
                   mainAxisExtent:
                       // Allow wrapped card text on narrow phone columns.
-                      ProductCard.standardCardHeight +
-                      24 +
-                      (MediaQuery.textScalerOf(context).scale(100) - 100).clamp(
-                        0,
-                        300,
-                      ),
+                      ProductCard.height(context) + 24,
                   mainAxisSpacing: 14,
                   crossAxisSpacing: 12,
                 ),

@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
@@ -39,7 +40,7 @@ class ProductSocialProof extends StatelessWidget {
               '${product.formattedSalesCount} sold',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _textStyle(const Color(0xFF667085)),
+              style: _textStyle(AppTheme.mutedText),
             ),
           ),
       ],

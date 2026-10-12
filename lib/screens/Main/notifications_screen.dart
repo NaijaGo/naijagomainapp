@@ -19,9 +19,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/tech_glow_background.dart';
 
 const Color whiteBackground = Colors.white;
-const Color brandSoftText = Color(0xFFF4F8FF);
-const Color brandMutedText = Color(0xFFD5E0F2);
-const Color highlightGreen = Color(0xFF61F3AE);
+const Color brandSoftText = AppTheme.softGrey;
+const Color brandMutedText = AppTheme.sageAccent;
+const Color highlightGreen = AppTheme.sageAccent;
 
 class NotificationsScreen extends StatefulWidget {
   final List<dynamic> notifications;
@@ -484,7 +484,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                             _buildTag(
                               label: _formatDate(createdAt),
-                              backgroundColor: const Color(0xFFF3F6FA),
+                              backgroundColor: AppTheme.sageSurface,
                               textColor: AppTheme.mutedText,
                             ),
                             if (!isRead)

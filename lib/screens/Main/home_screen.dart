@@ -32,6 +32,7 @@ import '../../theme/app_tokens.dart';
 import '../../widgets/product_social_proof.dart';
 import '../../widgets/deals_home_section.dart';
 import '../../widgets/shopping_assistant_identity.dart';
+import '../../widgets/vendor_logo_strip.dart';
 import 'shopping_assistant_screen.dart';
 import 'categories_screen.dart'
     hide
@@ -121,11 +122,11 @@ class FlashSalesScreen extends StatelessWidget {
             )
           : GridView.builder(
               padding: const EdgeInsets.all(AppSpacing.md),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: AppSpacing.md,
                 mainAxisSpacing: AppSpacing.md,
-                mainAxisExtent: ProductCard.standardCardHeight,
+                mainAxisExtent: ProductCard.height(context),
               ),
               itemCount: flashSales.length,
               itemBuilder: (context, index) {
@@ -819,13 +820,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: AppSpacing.md,
-                          mainAxisSpacing: AppSpacing.md,
-                          mainAxisExtent: ProductCard.standardCardHeight,
-                        ),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: AppSpacing.md,
+                      mainAxisSpacing: AppSpacing.md,
+                      mainAxisExtent: ProductCard.height(context),
+                    ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final product = _searchResults[index];
                       return ProductCard(
@@ -881,7 +881,10 @@ class _SearchScreenState extends State<SearchScreen> {
         for (final vendor in _matchingVendors)
           Card(
             child: ListTile(
-              leading: const Icon(Icons.storefront_outlined),
+              leading: VendorLogo(
+                name: vendor['name']?.toString() ?? 'Vendor',
+                logoUrl: vendor['logoUrl']?.toString(),
+              ),
               title: Text(vendor['name']?.toString() ?? 'Vendor'),
               subtitle: Text(vendor['address']?.toString() ?? ''),
               trailing: const Icon(Icons.chevron_right),
@@ -2374,7 +2377,7 @@ class _HomeScreenState extends State<HomeScreen>
               heroTag: 'home-cart',
               tooltip: 'Open cart',
               onPressed: widget.onCartTapped,
-              backgroundColor: const Color(0xFF16A34A),
+              backgroundColor: AppTheme.accentGreen,
               foregroundColor: Colors.white,
               child: const Icon(Icons.shopping_cart_rounded),
             ),
@@ -2441,6 +2444,25 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             SliverToBoxAdapter(child: _buildServiceShortcuts()),
             SliverToBoxAdapter(child: _buildBannerCarousel()),
+            SliverToBoxAdapter(
+              child: VendorLogoStrip(
+                vendors: VendorLogoEntry.fromProducts([
+                  ..._recommended,
+                  ..._newArrivals,
+                  ..._flashSales,
+                  ..._restaurants,
+                ]),
+                onOpen: (vendor) => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SearchScreen(
+                      initialQuery: '',
+                      vendorId: vendor.id,
+                      vendorName: vendor.name,
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
             SliverToBoxAdapter(child: _buildFoodDiscoveryBars()),
             SliverToBoxAdapter(
@@ -2674,7 +2696,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 colors: [
                                   Color(0x10000000),
                                   Color(0x08000000),
-                                  Color(0xCC07152F),
+                                  Color(0xCC103D25),
                                 ],
                               ),
                             ),
@@ -2699,7 +2721,7 @@ class _HomeScreenState extends State<HomeScreen>
                                             vertical: 5,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFADFF2F),
+                                            color: AppTheme.sageAccent,
                                             borderRadius: BorderRadius.circular(
                                               7,
                                             ),
@@ -2707,7 +2729,7 @@ class _HomeScreenState extends State<HomeScreen>
                                           child: const Text(
                                             'NAIJAGO',
                                             style: TextStyle(
-                                              color: Color(0xFF102B5C),
+                                              color: AppTheme.primaryNavy,
                                               fontSize: 9,
                                               fontWeight: FontWeight.w900,
                                             ),
@@ -2818,11 +2840,11 @@ class _HomeScreenState extends State<HomeScreen>
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFADFF2F).withValues(alpha: 0.90),
+                    color: AppTheme.sageAccent.withValues(alpha: 0.90),
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFADFF2F).withValues(alpha: 0.24),
+                        color: AppTheme.sageAccent.withValues(alpha: 0.24),
                         blurRadius: 14,
                       ),
                     ],
@@ -2870,7 +2892,7 @@ class _HomeScreenState extends State<HomeScreen>
               message: mealMessage,
               icon: Icons.room_service_rounded,
               background: primaryNavy,
-              accent: const Color(0xFFADFF2F),
+              accent: AppTheme.sageAccent,
               imageUrl: campaign?.imageUrl,
               routeMotion: false,
             ),
@@ -3116,7 +3138,7 @@ class _HomeScreenState extends State<HomeScreen>
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF4169E1).withValues(alpha: 0.20),
+                  color: AppTheme.accentBlue.withValues(alpha: 0.20),
                   blurRadius: 26,
                   offset: const Offset(0, 12),
                 ),
@@ -3131,7 +3153,7 @@ class _HomeScreenState extends State<HomeScreen>
                     'assets/lowcost_world.jpeg',
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) =>
-                        Container(color: const Color(0xFF12214A)),
+                        Container(color: AppTheme.deepForest),
                   ),
                   const DecoratedBox(
                     decoration: BoxDecoration(
@@ -3139,9 +3161,9 @@ class _HomeScreenState extends State<HomeScreen>
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Color(0xE611214A),
-                          Color(0x9911214A),
-                          Color(0x2211214A),
+                          Color(0xE6103D25),
+                          Color(0x99103D25),
+                          Color(0x22103D25),
                         ],
                       ),
                     ),
@@ -3158,7 +3180,7 @@ class _HomeScreenState extends State<HomeScreen>
                               const Text(
                                 'LOW COST WORLD',
                                 style: TextStyle(
-                                  color: Color(0xFFADFF2F),
+                                  color: AppTheme.sageAccent,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 1.4,
@@ -3190,12 +3212,12 @@ class _HomeScreenState extends State<HomeScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFADFF2F),
+                            color: AppTheme.sageAccent,
                             borderRadius: BorderRadius.circular(15),
                           ),
                           child: const Icon(
                             Icons.arrow_forward_rounded,
-                            color: Color(0xFF12214A),
+                            color: AppTheme.deepForest,
                           ),
                         ),
                       ],
@@ -3744,12 +3766,12 @@ class _CollapsingSearchHeader extends SliverPersistentHeaderDelegate {
                   decoration: InputDecoration(
                     hintText: 'Search trusted vendors, gadgets, groceries...',
                     hintStyle: const TextStyle(
-                      color: Color(0xFF8A94A6),
+                      color: AppTheme.mutedText,
                       fontWeight: FontWeight.w500,
                     ),
                     prefixIcon: const Icon(
                       Icons.search_rounded,
-                      color: Color(0xFF667085),
+                      color: AppTheme.mutedText,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
@@ -3871,7 +3893,7 @@ class ProductListHorizontal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: ProductCard.standardCardHeight,
+      height: ProductCard.height(context),
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         scrollDirection: Axis.horizontal,
@@ -3935,11 +3957,11 @@ class ProductListGrid extends StatelessWidget {
     return SliverPadding(
       padding: const EdgeInsets.all(AppSpacing.md),
       sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: AppSpacing.md,
           mainAxisSpacing: AppSpacing.md,
-          mainAxisExtent: ProductCard.standardCardHeight,
+          mainAxisExtent: ProductCard.height(context),
         ),
         delegate: SliverChildBuilderDelegate((context, index) {
           final product = products[index];
@@ -4146,8 +4168,14 @@ class ProductListGrid extends StatelessWidget {
 // }
 
 class ProductCard extends StatelessWidget {
-  static const double standardCardHeight = 344;
-  static const double standardImageHeight = 122;
+  static const double standardCardHeight = 366;
+  static const double standardImageHeight = 140;
+
+  static double height(BuildContext context) =>
+      standardImageHeight +
+      MediaQuery.textScalerOf(
+        context,
+      ).scale(standardCardHeight - standardImageHeight);
 
   final Product product;
   final String heroTag;
@@ -4216,9 +4244,9 @@ class ProductCard extends StatelessWidget {
       cursor: SystemMouseCursors.click,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(16),
           splashColor: primaryNavy.withValues(alpha: 0.05),
           highlightColor: Colors.transparent,
           onTap: () {
@@ -4239,21 +4267,21 @@ class ProductCard extends StatelessWidget {
               gradient: const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.white, Color(0xFFF8FAFF)],
+                colors: [Colors.white, Colors.white],
               ),
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                color: AppTheme.deepForest.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
+                  color: AppTheme.deepForest.withValues(alpha: 0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
                 BoxShadow(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-                  blurRadius: 36,
+                  color: AppTheme.deepForest.withValues(alpha: 0),
+                  blurRadius: 0,
                   offset: const Offset(0, 16),
                 ),
               ],
@@ -4267,7 +4295,7 @@ class ProductCard extends StatelessWidget {
                       tag: heroTag,
                       child: ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(24),
+                          top: Radius.circular(16),
                         ),
                         child: Stack(
                           children: [
@@ -4275,7 +4303,7 @@ class ProductCard extends StatelessWidget {
                               imageUrl: _resolvedImageUrl(product),
                               height: standardImageHeight,
                               width: double.infinity,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               placeholder: (context, url) => Shimmer.fromColors(
                                 baseColor: Colors.grey[300]!,
                                 highlightColor: Colors.grey[100]!,
@@ -4304,7 +4332,7 @@ class ProductCard extends StatelessWidget {
                                       colors: [
                                         Colors.white.withValues(alpha: 0.06),
                                         Colors.transparent,
-                                        Colors.black.withValues(alpha: 0.10),
+                                        Colors.transparent,
                                       ],
                                       stops: const [0.0, 0.35, 1.0],
                                     ),
@@ -4325,7 +4353,7 @@ class ProductCard extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.36),
+                          color: AppTheme.forestGreen,
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.12),
@@ -4413,7 +4441,7 @@ class ProductCard extends StatelessWidget {
                                       ? const Color(0xFF9A4B00)
                                       : isMedicine
                                       ? const Color(0xFF08756F)
-                                      : const Color(0xFF667085),
+                                      : AppTheme.mutedText,
                                   height: 1.25,
                                 ),
                               ),
@@ -4428,7 +4456,7 @@ class ProductCard extends StatelessWidget {
                             const Icon(
                               Icons.location_on_outlined,
                               size: 12,
-                              color: Color(0xFF667085),
+                              color: AppTheme.mutedText,
                             ),
                             const SizedBox(width: 3),
                             Expanded(
@@ -4439,7 +4467,7 @@ class ProductCard extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 10.8,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF667085),
+                                  color: AppTheme.mutedText,
                                   height: 1.2,
                                 ),
                               ),
@@ -4454,7 +4482,7 @@ class ProductCard extends StatelessWidget {
                                 const Icon(
                                   Icons.near_me_outlined,
                                   size: 12,
-                                  color: Color(0xFF667085),
+                                  color: AppTheme.mutedText,
                                 ),
                                 const SizedBox(width: 3),
                                 Expanded(
@@ -4465,7 +4493,7 @@ class ProductCard extends StatelessWidget {
                                     style: const TextStyle(
                                       fontSize: 10.8,
                                       fontWeight: FontWeight.w700,
-                                      color: Color(0xFF667085),
+                                      color: AppTheme.mutedText,
                                       height: 1.2,
                                     ),
                                   ),
@@ -4570,6 +4598,10 @@ class ProductCard extends StatelessWidget {
                                   }
                                 : null,
                             style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               animationDuration: const Duration(
                                 milliseconds: 200,
                               ),

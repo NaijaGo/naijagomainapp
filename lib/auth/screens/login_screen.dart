@@ -41,8 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color mutedText = AppTheme.mutedText;
   static const Color borderGrey = AppTheme.borderGrey;
   static const Color white = AppTheme.cardWhite;
-  static const Color brandSoftText = Color(0xFFF4F8FF);
-  static const Color brandMutedText = Color(0xFFD5E0F2);
+  static const Color brandSoftText = AppTheme.softGrey;
+  static const Color brandMutedText = AppTheme.sageAccent;
 
   bool _isLoading = false;
   bool _isPasswordVisible = false;
@@ -468,7 +468,7 @@ class _LoginScreenState extends State<LoginScreen> {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FA),
+        color: AppTheme.sageSurface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: const Row(

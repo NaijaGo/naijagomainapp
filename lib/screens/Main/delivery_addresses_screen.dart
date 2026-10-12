@@ -263,7 +263,7 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
             'Delivery addresses',
             style: TextStyle(color: greenYellow),
           ),
-          backgroundColor: const Color(0xFFF5F7FB),
+          backgroundColor: AppTheme.softGrey,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(color: greenYellow),

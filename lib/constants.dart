@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 // lib/constants.dart
 // This file holds constant values, such as your backend API base URL.
 
@@ -24,9 +25,9 @@ const String cloudinaryUploadPreset =
     'unsigned_preset_here'; // Replace with your actual unsigned preset
 
 // Colors
-const Color primaryNavy = Color(0xFF001F3F);
-const Color secondaryBlack = Color(0xFF1C1C1C);
+const Color primaryNavy = AppTheme.primaryNavy;
+const Color secondaryBlack = AppTheme.secondaryBlack;
 const Color accentGreen = Color(0xFF2ECC40);
-const Color softGrey = Color(0xFFF5F5F5);
+const Color softGrey = AppTheme.softGrey;
 const Color lightGrey = Color(0xFF9E9E9E);
 const Color white = Colors.white;

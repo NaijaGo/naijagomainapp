@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -9,8 +10,8 @@ import 'dart:async'; // Import for Timer
 
 import '../../constants.dart';
 
-const Color deepNavyBlue = Color(0xFF001F54);
-const Color greenYellow = Color(0xFFADFF2F);
+const Color deepNavyBlue = AppTheme.forestGreen;
+const Color greenYellow = AppTheme.sageAccent;
 const Color whiteBackground = Color(0xFFFFFFFF);
 
 class WithdrawScreen extends StatefulWidget {

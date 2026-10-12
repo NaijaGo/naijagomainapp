@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
@@ -10,8 +11,8 @@ import 'create_dispute_screen.dart';
 import 'dispute_chat_screen.dart';
 
 // Color constants
-const Color deepNavyBlue = Color(0xFF000080);
-const Color greenYellow = Color(0xFFADFF2F);
+const Color deepNavyBlue = AppTheme.primaryNavy;
+const Color greenYellow = AppTheme.sageAccent;
 const Color whiteBackground = Colors.white;
 
 class DisputeListScreen extends StatefulWidget {

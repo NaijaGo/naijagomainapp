@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import '../../models/delivery_address_details.dart';
 // lib/screens/Main/add_edit_address_screen.dart
 
@@ -19,12 +20,8 @@ import '../../widgets/tech_glow_background.dart';
 // Import the Address model
 
 // Defined custom colors for consistency and enchantment
-const Color deepNavyBlue = Color(
-  0xFF000080,
-); // Deep Navy Blue - primary for backgrounds, cards
-const Color greenYellow = Color(
-  0xFFADFF2F,
-); // Green Yellow - accent for important text, buttons
+const Color deepNavyBlue = AppTheme.primaryNavy; // Deep Navy Blue - primary for backgrounds, cards
+const Color greenYellow = AppTheme.sageAccent; // Green Yellow - accent for important text, buttons
 const Color whiteBackground = Colors
     .white; // Explicitly defining white for main backgrounds, text on navy
 

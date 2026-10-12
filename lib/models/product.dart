@@ -22,6 +22,7 @@ class Product {
   final String sellerName;
   final String vendorId;
   final String? vendorBusinessName;
+  final String? vendorBusinessLogoUrl;
   final String? vendorLocationAddress;
   final double? vendorLatitude;
   final double? vendorLongitude;
@@ -68,6 +69,7 @@ class Product {
     this.sellerName = 'NaijaGo',
     required this.vendorId,
     this.vendorBusinessName,
+    this.vendorBusinessLogoUrl,
     this.vendorLocationAddress,
     this.vendorLatitude,
     this.vendorLongitude,
@@ -254,6 +256,9 @@ class Product {
           : vendorBusinessName ?? 'Vendor',
       vendorId: vendorId,
       vendorBusinessName: vendorBusinessName,
+      vendorBusinessLogoUrl: json['vendor'] is Map
+          ? (json['vendor'] as Map)['businessLogoUrl']?.toString()
+          : json['vendorBusinessLogoUrl']?.toString(),
       vendorLocationAddress: productLocationAddress ?? vendorLocationAddress,
       vendorLatitude: productLatitude ?? vendorLatitude,
       vendorLongitude: productLongitude ?? vendorLongitude,
@@ -325,6 +330,8 @@ class Product {
     'sellerId': sellerId,
     'sellerName': sellerName,
     'vendor': sellerType == 'vendor' ? vendorId : null,
+    if (vendorBusinessLogoUrl != null)
+      'vendorBusinessLogoUrl': vendorBusinessLogoUrl,
     'vendorLocation': {
       'formattedAddress': vendorLocationAddress,
       'latitude': vendorLatitude,

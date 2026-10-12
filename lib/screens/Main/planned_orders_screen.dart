@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -184,16 +185,16 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
 
   @override
   Widget build(BuildContext context) {
-    const navy = Color(0xFF102B5C);
+    const navy = AppTheme.primaryNavy;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: AppTheme.softGrey,
       appBar: AppBar(
         title: const Text('Plan together'),
         backgroundColor: navy,
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabs,
-          indicatorColor: const Color(0xFFADFF2F),
+          indicatorColor: AppTheme.sageAccent,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
@@ -204,7 +205,7 @@ class _PlannedOrdersScreenState extends State<PlannedOrdersScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _available && !_loading ? _join : null,
-        backgroundColor: const Color(0xFFADFF2F),
+        backgroundColor: AppTheme.sageAccent,
         foregroundColor: navy,
         icon: const Icon(Icons.group_add_outlined),
         label: const Text('Join group'),
@@ -714,10 +715,10 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
         ? (_data!['occurrences'] as List).whereType<Map>().toList()
         : <Map>[];
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: AppTheme.softGrey,
       appBar: AppBar(
         title: Text(root['name']?.toString() ?? 'Planned order'),
-        backgroundColor: const Color(0xFF102B5C),
+        backgroundColor: AppTheme.primaryNavy,
         foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
@@ -927,7 +928,7 @@ class _OrderList extends StatelessWidget {
             Text(
               emptyMessage,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF667085), height: 1.45),
+              style: const TextStyle(color: AppTheme.mutedText, height: 1.45),
             ),
           ],
         ),
@@ -960,8 +961,8 @@ class _OrderList extends StatelessWidget {
                 vertical: 8,
               ),
               leading: CircleAvatar(
-                backgroundColor: const Color(0xFFEAF1FF),
-                foregroundColor: const Color(0xFF102B5C),
+                backgroundColor: AppTheme.sageSurface,
+                foregroundColor: AppTheme.primaryNavy,
                 child: Icon(icon),
               ),
               title: Text(
@@ -1015,13 +1016,13 @@ class _Summary extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF1FF),
+                    color: AppTheme.sageSurface,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     state,
                     style: const TextStyle(
-                      color: Color(0xFF102B5C),
+                      color: AppTheme.primaryNavy,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1031,7 +1032,7 @@ class _Summary extends StatelessWidget {
                   kind == 'group'
                       ? Icons.groups_outlined
                       : Icons.event_repeat_outlined,
-                  color: const Color(0xFF102B5C),
+                  color: AppTheme.primaryNavy,
                 ),
               ],
             ),
@@ -1048,13 +1049,13 @@ class _Summary extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '$scheduleLabel: ${_PlannedOrdersScreenState.date(schedule)}',
-              style: const TextStyle(color: Color(0xFF667085)),
+              style: const TextStyle(color: AppTheme.mutedText),
             ),
             if (kind == 'group' && root['memberCount'] != null) ...[
               const SizedBox(height: 6),
               Text(
                 '${root['memberCount']} participant(s)',
-                style: const TextStyle(color: Color(0xFF667085)),
+                style: const TextStyle(color: AppTheme.mutedText),
               ),
             ],
             const SizedBox(height: 12),
@@ -1099,7 +1100,7 @@ class _Message extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF667085)),
+            style: const TextStyle(color: AppTheme.mutedText),
           ),
           const SizedBox(height: 18),
           OutlinedButton.icon(

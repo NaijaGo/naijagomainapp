@@ -447,7 +447,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: AppTheme.softGrey,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: borderGrey),
         ),
@@ -772,7 +772,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                       decoration: BoxDecoration(
                                         color: isActive
                                             ? primaryNavy.withValues(
-                                                alpha: 0.04,
+                                                alpha: 0.09,
                                               )
                                             : Colors.transparent,
                                         borderRadius: BorderRadius.circular(12),

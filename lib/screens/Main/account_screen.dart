@@ -27,11 +27,9 @@ import '../../theme/app_theme.dart';
 
 // Define your color constants (consistent with vendor registration)
 const Color deepNavyBlue = AppTheme.primaryNavy;
-const Color greenYellow = Color(0xFFADFF2F);
+const Color greenYellow = AppTheme.sageAccent;
 const Color white = Colors.white;
-const Color lightGray = Color(
-  0xFFF5F5F5,
-); // Adding a light gray for subtle backgrounds if needed
+const Color lightGray = AppTheme.softGrey; // Adding a light gray for subtle backgrounds if needed
 
 class AccountScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -575,7 +573,7 @@ class _AccountScreenState extends State<AccountScreen>
       secondary: greenYellow, // Accent color for floating buttons, highlights
       onSecondary: deepNavyBlue, // Text and icons on top of secondary color
       surface: white, // Background for cards, sheets, elevated elements
-      onSurface: Color(0xFF111111), // Account text on the white canvas
+      onSurface: AppTheme.secondaryBlack, // Account text on the white canvas
       error: Colors.red, // Error states
       onError: white, // Text and icons on top of error color
       brightness: Brightness.light, // Overall theme brightness
@@ -644,12 +642,12 @@ class _AccountScreenState extends State<AccountScreen>
             children: [
               _buildProfileSection(color),
               const ColoredBox(
-                color: Color(0xFFF6F6F6),
+                color: AppTheme.softGrey,
                 child: SizedBox(height: 12),
               ),
               _buildBuyerSection(color),
               const ColoredBox(
-                color: Color(0xFFF6F6F6),
+                color: AppTheme.softGrey,
                 child: SizedBox(height: 12),
               ),
               _buildCommonToolsSection(color),
@@ -665,7 +663,7 @@ class _AccountScreenState extends State<AccountScreen>
                       label: const Text('Log Out'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: color.onSurface,
-                        side: const BorderSide(color: Color(0xFFE8E8E8)),
+                        side: const BorderSide(color: AppTheme.borderGrey),
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
@@ -726,7 +724,7 @@ class _AccountScreenState extends State<AccountScreen>
           CircleAvatar(
             key: const ValueKey('account-avatar'),
             radius: 48,
-            backgroundColor: const Color(0xFF111111),
+            backgroundColor: AppTheme.secondaryBlack,
             child: hasProfilePhoto
                 ? ClipOval(
                     child: SizedBox.expand(
@@ -789,7 +787,7 @@ class _AccountScreenState extends State<AccountScreen>
                 child: VerticalDivider(
                   width: 24,
                   thickness: 1,
-                  color: Color(0xFFE8E8E8),
+                  color: AppTheme.borderGrey,
                 ),
               ),
               Expanded(
@@ -1226,7 +1224,7 @@ class _AccountScreenState extends State<AccountScreen>
           thickness: 0.7,
           indent: 24,
           endIndent: 24,
-          color: Color(0xFFE8E8E8),
+          color: AppTheme.borderGrey,
         ),
       ],
     );

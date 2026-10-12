@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 // lib/screens/Main/EditProfileScreen.dart
 
 import 'package:flutter/material.dart';
@@ -13,8 +14,8 @@ import '../../constants.dart';
 import '../../models/user.dart';
 
 // Defined custom colors for consistency
-const Color deepNavyBlue = Color(0xFF000080);
-const Color greenYellow = Color(0xFFADFF2F);
+const Color deepNavyBlue = AppTheme.primaryNavy;
+const Color greenYellow = AppTheme.sageAccent;
 const Color whiteBackground = Colors.white;
 
 class EditProfileScreen extends StatefulWidget {

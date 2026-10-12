@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'services/google_auth_service.dart';
 // lib/main.dart
 
@@ -22,57 +23,13 @@ import 'services/product_request_service.dart';
 import 'services/planned_order_service.dart';
 import './splash_screen.dart';
 
-const Color _lightPrimaryColor = Color.fromARGB(255, 3, 2, 76);
-const Color _lightSecondaryColor = Color(0xFFADFF2F);
-const Color _lightAccentColor = Color(0xFFF0F2F5);
-
-const Color _darkPrimaryColor = Color.fromARGB(255, 144, 202, 249);
-const Color _darkSecondaryColor = Color(0xFF64FFDA);
-const Color _darkBackgroundColor = Color(0xFF121212);
-const Color _darkSurfaceColor = Color(0xFF1E1E1E);
+const Color _darkPrimaryColor = AppTheme.sageAccent;
+const Color _darkSecondaryColor = AppTheme.sageAccent;
+const Color _darkBackgroundColor = AppTheme.deepForest;
+const Color _darkSurfaceColor = Color(0xFF193C2A);
 final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
 
-final ThemeData _lightTheme = ThemeData(
-  useMaterial3: true,
-  scaffoldBackgroundColor: Colors.white,
-  appBarTheme: const AppBarTheme(
-    backgroundColor: _lightPrimaryColor,
-    foregroundColor: Colors.white,
-    elevation: 0,
-    iconTheme: IconThemeData(color: Colors.white),
-  ),
-  colorScheme: const ColorScheme.light(
-    primary: _lightPrimaryColor,
-    onPrimary: Colors.white,
-    secondary: _lightSecondaryColor,
-    onSecondary: _lightPrimaryColor,
-    surface: Colors.white,
-    onSurface: _lightPrimaryColor,
-    error: Colors.red,
-    onError: Colors.white,
-  ),
-  cardColor: _lightAccentColor,
-  elevatedButtonTheme: ElevatedButtonThemeData(
-    style: ElevatedButton.styleFrom(
-      backgroundColor: _lightPrimaryColor,
-      foregroundColor: Colors.white,
-    ),
-  ),
-  textTheme: const TextTheme(
-    bodyLarge: TextStyle(color: _lightPrimaryColor),
-    bodyMedium: TextStyle(color: _lightPrimaryColor),
-    titleLarge: TextStyle(color: _lightPrimaryColor),
-    headlineLarge: TextStyle(
-      color: Colors.white,
-      fontSize: 28,
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-  iconTheme: const IconThemeData(color: _lightPrimaryColor),
-  splashColor: _lightSecondaryColor.withValues(alpha: 0.5),
-  highlightColor: _lightSecondaryColor.withValues(alpha: 0.3),
-  fontFamily: 'Roboto',
-);
+final ThemeData _lightTheme = AppTheme.lightTheme;
 
 final ThemeData _darkTheme = ThemeData(
   useMaterial3: true,

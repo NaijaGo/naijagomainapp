@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
@@ -303,7 +304,7 @@ class _ProductRequestScreenState extends State<ProductRequestScreen>
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Icon(Icons.travel_explore, size: 44, color: Color(0xff4169e1)),
+          const Icon(Icons.travel_explore, size: 44, color: AppTheme.accentBlue),
           const SizedBox(height: 12),
           Text(
             row?['query']?.toString() ?? widget.query,

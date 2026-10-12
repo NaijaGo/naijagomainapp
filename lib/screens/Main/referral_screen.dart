@@ -11,9 +11,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/tech_glow_background.dart';
 
 const Color whiteBackground = Colors.white;
-const Color brandSoftText = Color(0xFFF4F8FF);
-const Color brandMutedText = Color(0xFFD5E0F2);
-const Color highlightGreen = Color(0xFF61F3AE);
+const Color brandSoftText = AppTheme.softGrey;
+const Color brandMutedText = AppTheme.sageAccent;
+const Color highlightGreen = AppTheme.sageAccent;
 
 class ReferralScreen extends StatefulWidget {
   const ReferralScreen({super.key});

@@ -1,3 +1,5 @@
+import 'package:naija_go/theme/app_theme.dart';
+import '../../widgets/customer_bottom_navigation.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -37,17 +39,17 @@ import 'explore_screen.dart';
 import 'explore_comments_screen.dart';
 
 class AppUi {
-  static const Color primaryNavy = Color(0xFF102B5C);
-  static const Color deepNavy = Color(0xFF081A3A);
-  static const Color accentBlue = Color(0xFF3B82F6);
-  static const Color accentGreen = Color(0xFF16A34A);
+  static const Color primaryNavy = AppTheme.primaryNavy;
+  static const Color deepNavy = AppTheme.deepNavy;
+  static const Color accentBlue = AppTheme.accentBlue;
+  static const Color accentGreen = AppTheme.accentGreen;
   static const Color dangerRed = Color(0xFFEF4444);
 
-  static const Color softGrey = Color(0xFFF5F7FB);
+  static const Color softGrey = AppTheme.softGrey;
   static const Color white = Colors.white;
-  static const Color secondaryBlack = Color(0xFF111827);
-  static const Color mutedText = Color(0xFF6B7280);
-  static const Color borderGrey = Color(0xFFE5E7EB);
+  static const Color secondaryBlack = AppTheme.secondaryBlack;
+  static const Color mutedText = AppTheme.mutedText;
+  static const Color borderGrey = AppTheme.borderGrey;
 }
 
 class GuestPlaceholderScreen extends StatelessWidget {
@@ -131,7 +133,7 @@ class GuestPlaceholderScreen extends StatelessWidget {
                       vertical: 12,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF3F6FA),
+                      color: AppTheme.sageSurface,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Row(
@@ -849,68 +851,10 @@ class _MainAppNavigatorState extends State<MainAppNavigator>
     );
   }
 
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppUi.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, -6),
-          ),
-        ],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-          backgroundColor: AppUi.white,
-          selectedItemColor: AppUi.primaryNavy,
-          unselectedItemColor: AppUi.mutedText,
-          selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
-          ),
-          items: <BottomNavigationBarItem>[
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_cart_outlined),
-              activeIcon: Icon(Icons.shopping_cart),
-              label: 'Cart',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view_outlined),
-              activeIcon: Icon(Icons.grid_view),
-              label: 'Categories',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.explore_outlined),
-              activeIcon: Icon(Icons.explore),
-              label: 'Explore',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Account',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomNav() => CustomerBottomNavigation(
+    currentIndex: _selectedIndex,
+    onTap: _onItemTapped,
+  );
 
   @override
   Widget build(BuildContext context) {

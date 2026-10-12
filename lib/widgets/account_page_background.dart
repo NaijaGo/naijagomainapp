@@ -1,3 +1,4 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 /// Quiet canvas for account pages; keeps content and actions in the foreground.
@@ -7,5 +8,5 @@ class AccountPageBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      ColoredBox(color: const Color(0xFFF5F7FB), child: child);
+      ColoredBox(color: AppTheme.softGrey, child: child);
 }

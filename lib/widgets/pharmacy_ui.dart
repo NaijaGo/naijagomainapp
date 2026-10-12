@@ -1,7 +1,8 @@
+import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class PharmacyUi {
-  static const Color deepNavy = Color(0xFF031B4E);
+  static const Color deepNavy = AppTheme.primaryNavy;
   static const Color teal = Color(0xFF138C7A);
   static const Color mint = Color(0xFFD9F6EE);
   static const Color surface = Color(0xFFF4FAF8);

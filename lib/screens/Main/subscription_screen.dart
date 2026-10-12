@@ -35,7 +35,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         'Free delivery within your zone',
         'Built for weekly essentials',
       ],
-      accent: Color(0xFF16A34A),
+      accent: AppTheme.accentGreen,
     ),
     _SubscriptionPlan(
       id: 'standard',
@@ -807,7 +807,7 @@ class _SubscriptionPlan {
           .map((benefit) => benefit.toString())
           .toList(),
       accent: switch (id) {
-        'student' => const Color(0xFF16A34A),
+        'student' => AppTheme.accentGreen,
         'premium' => const Color(0xFF7C3AED),
         _ => const Color(0xFF2563EB),
       },

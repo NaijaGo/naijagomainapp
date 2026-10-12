@@ -223,7 +223,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
             'My reviews',
             style: TextStyle(color: greenYellow), // AppBar title green yellow
           ),
-          backgroundColor: const Color(0xFFF5F7FB),
+          backgroundColor: AppTheme.softGrey,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           iconTheme: const IconThemeData(

@@ -7,25 +7,33 @@ class AppTheme {
   static const Color logoBlue = Color(0xFF0000FE);
   static const Color logoGreen = Color(0xFF008953);
 
-  // Brand colors
-  static const Color primaryNavy = Color(0xFF102B5C);
-  static const Color deepNavy = Color(0xFF081A3A);
-  static const Color accentBlue = Color(0xFF3B82F6);
-  static const Color accentGreen = Color(0xFF16A34A);
+  // Customer marketplace palette. Legacy token names remain compatible.
+  static const Color forestGreen = Color(0xFF215C36);
+  static const Color deepForest = Color(0xFF103D25);
+  static const Color leafGreen = Color(0xFF407B39);
+  static const Color sageSurface = Color(0xFFEDF3E3);
+  static const Color sageAccent = Color(0xFFDDEBBD);
+  static const Color warmGold = Color(0xFFD7AC50);
+  static const Color primaryNavy = forestGreen;
+  static const Color deepNavy = deepForest;
+  static const Color accentBlue = Color(0xFF3E7558);
+  static const Color accentGreen = leafGreen;
   static const Color dangerRed = Color(0xFFEF4444);
 
   // Neutral colors
-  static const Color secondaryBlack = Color(0xFF111827);
-  static const Color softGrey = Color(0xFFF5F7FB);
+  static const Color secondaryBlack = Color(0xFF1B2B20);
+  static const Color softGrey = Color(0xFFF7F8F2);
   static const Color cardWhite = Colors.white;
-  static const Color borderGrey = Color(0xFFE5E7EB);
-  static const Color mutedText = Color(0xFF6B7280);
+  static const Color borderGrey = Color(0xFFE4E8DC);
+  static const Color mutedText = Color(0xFF677064);
 
   static ThemeData get lightTheme {
     final base = ThemeData.light(useMaterial3: true);
 
     return base.copyWith(
       brightness: Brightness.light,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
       scaffoldBackgroundColor: softGrey,
       primaryColor: primaryNavy,
       splashColor: accentBlue.withValues(alpha: 0.08),
@@ -40,6 +48,7 @@ class AppTheme {
         error: dangerRed,
         onError: Colors.white,
         surface: cardWhite,
+        surfaceContainerHighest: sageSurface,
         onSurface: secondaryBlack,
       ),
 
@@ -47,6 +56,8 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         foregroundColor: secondaryBlack,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
         iconTheme: IconThemeData(color: secondaryBlack),
         titleTextStyle: TextStyle(
@@ -92,7 +103,9 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: cardWhite,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
+          side: const BorderSide(color: borderGrey),
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         margin: EdgeInsets.zero,
@@ -107,12 +120,16 @@ class AppTheme {
           foregroundColor: Colors.white,
           disabledBackgroundColor: const Color(0xFFE5E7EB),
           disabledForegroundColor: const Color(0xFF9CA3AF),
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
 
@@ -120,18 +137,26 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryNavy,
           side: const BorderSide(color: borderGrey),
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(64, 50),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryNavy,
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
 
@@ -167,7 +192,7 @@ class AppTheme {
       ),
 
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFFF3F6FA),
+        backgroundColor: sageSurface,
         disabledColor: const Color(0xFFE5E7EB),
         selectedColor: primaryNavy,
         secondarySelectedColor: primaryNavy,
@@ -199,6 +224,29 @@ class AppTheme {
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         side: const BorderSide(color: borderGrey),
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? forestGreen : null,
+        ),
+      ),
+
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: forestGreen,
+        foregroundColor: Colors.white,
+        elevation: 2,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: cardWhite,
+        selectedItemColor: forestGreen,
+        unselectedItemColor: mutedText,
+        elevation: 0,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: cardWhite,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
       ),
 
       bottomSheetTheme: const BottomSheetThemeData(
