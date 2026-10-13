@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -187,7 +188,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.blue,
+                            AppColors.royalBlue,
                           ),
                         ),
                       )

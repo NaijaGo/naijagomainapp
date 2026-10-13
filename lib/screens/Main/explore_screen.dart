@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -326,7 +327,7 @@ class _ExploreUploadScreenState extends State<ExploreUploadScreen> {
         ),
       ),
       const SizedBox(height: 18),
-      InkWell(onTap: _publishing ? null : _chooseVideo, borderRadius: BorderRadius.circular(20), child: Container(height: 220, decoration: BoxDecoration(color: const Color(0xFFF2F5FA), borderRadius: BorderRadius.circular(20)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.video_library_outlined, size: 46), const SizedBox(height: 10), Text(_video?.name ?? 'Choose a video')]))),
+      InkWell(onTap: _publishing ? null : _chooseVideo, borderRadius: BorderRadius.circular(20), child: Container(height: 220, decoration: BoxDecoration(color: AppColors.lightBlue, borderRadius: BorderRadius.circular(20)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.video_library_outlined, size: 46), const SizedBox(height: 10), Text(_video?.name ?? 'Choose a video')]))),
       TextButton.icon(onPressed: _publishing ? null : _chooseVideoFile,
         icon: const Icon(Icons.folder_open), label: const Text('Choose a video file')),
       const Text('No 90-second limit. Videos can be up to 90 MB; common gallery formats are supported.'),

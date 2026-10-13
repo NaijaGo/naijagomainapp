@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../../constants.dart';
 import '../../models/product.dart';
+import '../../widgets/product_color_selection.dart';
 import '../../widgets/product_social_proof.dart';
 import '../../widgets/product_video_section.dart';
 import '../../providers/cart_provider.dart';
@@ -36,6 +38,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _isSaved = false;
   bool _isLoadingSave = false;
   dynamic _selectedSize;
+  String? _selectedColor;
   final TextEditingController _commentController = TextEditingController();
   int _userRating = 0;
   bool _isSubmittingReview = false;
@@ -321,7 +324,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               responseData['message'] ??
                   (_isSaved ? 'Product saved!' : 'Product unsaved.'),
             ),
-            backgroundColor: _isSaved ? Colors.green : Colors.orange,
+            backgroundColor: _isSaved ? AppColors.green : Colors.orange,
           ),
         );
       } else {
@@ -980,6 +983,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       );
       return;
     }
+    if (widget.product.hasColors && _selectedColor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a colour first')),
+      );
+      return;
+    }
     if (widget.product.hasSizes && _selectedSize == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -993,6 +1002,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final added = cartProvider.addProduct(
       widget.product,
       selectedSize: _selectedSize,
+      selectedColor: _selectedColor,
     );
     if (!added) {
       final conflict = cartProvider.restaurantVendorConflict(widget.product);
@@ -1037,7 +1047,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ? '${widget.product.name} ($displaySize) added to cart!'
               : '${widget.product.name} added to cart!',
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.green,
       ),
     );
   }
@@ -1055,7 +1065,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildBottomAddToCartButton() {
     final isOutOfStock = widget.product.stockQuantity <= 0;
-    final needsSizeSelection = widget.product.hasSizes && _selectedSize == null;
+    final needsSizeSelection =
+        (widget.product.hasSizes && _selectedSize == null) ||
+        (widget.product.hasColors && _selectedColor == null);
     final requiresConsultation = !widget.product.canBuyDirectly;
     final restaurantClosed =
         widget.product.isRestaurantItem &&
@@ -1099,7 +1111,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       : isOutOfStock
                       ? 'Out of Stock'
                       : needsSizeSelection
-                      ? 'Select Size First'
+                      ? 'Choose Options First'
                       : 'Add to Cart',
                   style: const TextStyle(
                     fontSize: 16,
@@ -1263,21 +1275,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
-                color: Colors.green,
+                color: AppColors.successText,
               ),
             ),
             const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.15),
+                color: AppColors.green.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 widget.product.stockQuantity > 0 ? 'In Stock' : 'Out of Stock',
                 style: TextStyle(
                   color: widget.product.stockQuantity > 0
-                      ? Colors.green.shade700
+                      ? AppColors.successText
                       : Colors.red.shade700,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -1444,7 +1456,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final requiresConsultation = widget.product.isRestrictedMedicine;
     final accent = requiresConsultation
         ? const Color(0xFF08756F)
-        : Colors.green.shade700;
+        : AppColors.successText;
 
     return Card(
       elevation: 4,
@@ -1652,7 +1664,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.green,
+                      color: AppColors.successText,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1662,6 +1674,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: ElevatedButton(
                       onPressed: canAddToCart
                           ? () {
+                              if (product.hasSelectableOptions) {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailScreen(
+                                      product: product,
+                                      heroTag: 'options-${product.id}',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
                               final added = cartProvider.addProduct(product);
                               if (!added) {
                                 final conflict = cartProvider
@@ -1685,7 +1708,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   content: Text(
                                     '${product.name} added to cart',
                                   ),
-                                  backgroundColor: Colors.green,
+                                  backgroundColor: AppColors.green,
                                 ),
                               );
                             }
@@ -1893,6 +1916,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 children: [
                   _buildPriceAndName(),
                   const SizedBox(height: 20),
+                  if (widget.product.hasColors)
+                    ProductColorSelection(
+                      colors: widget.product.availableColors,
+                      selectedColor: _selectedColor,
+                      onChanged: (color) =>
+                          setState(() => _selectedColor = color),
+                    ),
                   if (widget.product.hasSizes) _buildSizeSelection(),
                   _buildMedicineAccessCard(),
                   if (widget.product.isMedicine) const SizedBox(height: 12),

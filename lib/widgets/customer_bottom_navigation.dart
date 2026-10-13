@@ -14,7 +14,7 @@ class CustomerBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      color: AppTheme.cardWhite,
+      color: Theme.of(context).colorScheme.surface,
       border: const Border(top: BorderSide(color: AppTheme.borderGrey)),
       boxShadow: [
         BoxShadow(
@@ -28,9 +28,13 @@ class CustomerBottomNavigation extends StatelessWidget {
       currentIndex: currentIndex,
       onTap: onTap,
       type: BottomNavigationBarType.fixed,
-      backgroundColor: AppTheme.cardWhite,
-      selectedItemColor: AppTheme.forestGreen,
-      unselectedItemColor: AppTheme.mutedText,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      selectedItemColor: Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.secondary
+          : AppTheme.forestGreen,
+      unselectedItemColor: Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.onSurfaceVariant
+          : AppTheme.mutedText,
       elevation: 0,
       selectedFontSize: 11,
       unselectedFontSize: 11,

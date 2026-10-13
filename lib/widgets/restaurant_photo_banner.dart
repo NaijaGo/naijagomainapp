@@ -3,7 +3,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../constants.dart' show baseUrl;
 import '../models/product.dart';
-import '../theme/app_theme.dart';
 
 /// Original photos from the already loaded public restaurant catalogue.
 class RestaurantPhotoBanner extends StatefulWidget {
@@ -109,6 +108,7 @@ class _RestaurantPhotoBannerState extends State<RestaurantPhotoBanner> {
   Widget build(BuildContext context) {
     final products = _products;
     if (products.isEmpty) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
       child: ClipRRect(
@@ -128,88 +128,100 @@ class _RestaurantPhotoBannerState extends State<RestaurantPhotoBanner> {
                 child: GestureDetector(
                   key: ValueKey('restaurant-photo-${product.id}'),
                   onTap: () => widget.onOpen(product),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: RestaurantPhotoBanner.photoUrl(product)!,
-                        fit: BoxFit.cover,
-                        placeholder: (_, _) =>
-                            const ColoredBox(color: AppTheme.sageSurface),
-                        errorWidget: (_, _, _) => const ColoredBox(
-                          color: AppTheme.sageSurface,
-                          child: Center(
-                            child: Icon(
-                              Icons.restaurant_outlined,
-                              color: AppTheme.forestGreen,
+                  child: ColoredBox(
+                    color: colors.surfaceContainerHighest,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Positioned.fill(
+                            // Fit the original photo inside its own inset frame;
+                            // the wide banner must not crop or cover the dish.
+                            left: constraints.maxWidth * .40,
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: CachedNetworkImage(
+                                imageUrl: RestaurantPhotoBanner.photoUrl(
+                                  product,
+                                )!,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.center,
+                                placeholder: (_, _) => ColoredBox(
+                                  color: colors.surfaceContainerHighest,
+                                ),
+                                errorWidget: (_, _, _) => ColoredBox(
+                                  color: colors.surfaceContainerHighest,
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.restaurant_outlined,
+                                      color: colors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Color(0xE61D2D47)],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 14,
-                        right: 14,
-                        bottom: 12,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
+                          Positioned(
+                            left: 14,
+                            top: 12,
+                            bottom: 12,
+                            width: constraints.maxWidth * .40 - 14,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
                                     product.name,
-                                    maxLines: 1,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 17,
+                                    style: TextStyle(
+                                      color: colors.onSurface,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                  Text(
-                                    product.displayRestaurantName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        product.displayRestaurantName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: colors.onSurfaceVariant,
+                                          fontSize: 11,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.arrow_forward_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (products.length > 1)
-                        Positioned(
-                          top: 8,
-                          right: 10,
-                          child: Text(
-                            '${index + 1}/${products.length}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.arrow_forward_rounded,
+                                      color: colors.primary,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                    ],
+                          if (products.length > 1)
+                            Positioned(
+                              top: 8,
+                              right: 10,
+                              child: Text(
+                                '${index + 1}/${products.length}',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               );

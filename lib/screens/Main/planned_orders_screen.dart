@@ -432,6 +432,7 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
         if (item['offer'] != null) 'offer': item['offer'],
         if (item['variantId'] != null) 'variantId': item['variantId'],
         if (item['selectedSize'] != null) 'selectedSize': item['selectedSize'],
+        if (item['selectedColor'] != null) 'selectedColor': item['selectedColor'],
         'quantity': item['quantity'],
         if (item['customerNote'] != null) 'customerNote': item['customerNote'],
       };

@@ -1,3 +1,4 @@
+import '../theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
@@ -201,7 +202,7 @@ class OrderTrackingWidget extends StatelessWidget {
       _buildBadge(
         label: order['isPaid'] == true ? 'Paid' : 'Awaiting payment',
         icon: Icons.account_balance_wallet_outlined,
-        color: order['isPaid'] == true ? Colors.green : Colors.orange,
+        color: order['isPaid'] == true ? AppColors.green : Colors.orange,
       ),
     ];
 
@@ -210,7 +211,7 @@ class OrderTrackingWidget extends StatelessWidget {
         _buildBadge(
           label: _displayStatus(shipmentStatus),
           icon: Icons.route_outlined,
-          color: Colors.blue,
+          color: AppColors.royalBlue,
         ),
       );
     }
@@ -280,7 +281,7 @@ class OrderTrackingWidget extends StatelessWidget {
                     height: 34,
                     decoration: BoxDecoration(
                       color: stage.isCompleted
-                          ? Colors.green
+                          ? AppColors.green
                           : stage.isCurrent
                           ? color.primary
                           : Colors.white,
@@ -301,7 +302,7 @@ class OrderTrackingWidget extends StatelessWidget {
                       height: 30,
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       color: stage.isCompleted
-                          ? Colors.green
+                          ? AppColors.green
                           : Colors.grey.shade300,
                     ),
                 ],
@@ -453,7 +454,7 @@ class OrderTrackingWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF7FBFF),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.12)),
+        border: Border.all(color: AppColors.royalBlue.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,7 +537,7 @@ class OrderTrackingWidget extends StatelessWidget {
                           height: 44,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: isStale ? Colors.orange : Colors.green,
+                              color: isStale ? Colors.orange : AppColors.green,
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
@@ -580,9 +581,9 @@ class OrderTrackingWidget extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.08),
+        color: AppColors.green.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.18)),
+        border: Border.all(color: AppColors.green.withValues(alpha: 0.18)),
       ),
       child: Row(
         children: [
@@ -592,9 +593,9 @@ class OrderTrackingWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.green.withValues(alpha: 0.18)),
+              border: Border.all(color: AppColors.green.withValues(alpha: 0.18)),
             ),
-            child: const Icon(Icons.lock_outline, color: Colors.green),
+            child: const Icon(Icons.lock_outline, color: AppColors.green),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -621,7 +622,7 @@ class OrderTrackingWidget extends StatelessWidget {
           Text(
             _deliveryOtp,
             style: const TextStyle(
-              color: Colors.green,
+              color: AppColors.successText,
               fontSize: 24,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.2,
@@ -701,13 +702,13 @@ class OrderTrackingWidget extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.08),
+                          color: AppColors.royalBlue.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           shipmentStatus,
                           style: const TextStyle(
-                            color: Colors.blue,
+                            color: AppColors.royalBlue,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),

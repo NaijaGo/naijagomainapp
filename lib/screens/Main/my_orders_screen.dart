@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 // my_orders_screen.dart - FIXED VERSION
 import 'package:flutter/material.dart';
 
@@ -907,7 +908,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   'Delivered: ${_formatDateTime(order['deliveredAt']?.toString())}',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.green.shade700,
+                    color: AppColors.successText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -923,10 +924,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     switch (status.toLowerCase()) {
       case 'delivered':
       case 'completed':
-        return Colors.green;
+        return AppColors.green;
       case 'shipped':
       case 'out_for_delivery':
-        return Colors.blue;
+        return AppColors.royalBlue;
       case 'processing':
         return Colors.orange;
       case 'cancelled':
@@ -1185,6 +1186,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
     final price = (item['price'] as num?)?.toDouble() ?? 0.0;
     final selectedSize = item['selectedSize'];
+    final selectedColor = item['selectedColor']?.toString();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1256,6 +1258,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     ),
                   ],
                 ),
+                if (selectedColor != null && selectedColor.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Colour: $selectedColor',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
                 if (selectedSize != null) ...[
                   const SizedBox(height: 4),
                   Container(
@@ -1264,9 +1275,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
+                      color: AppColors.lightBlue,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.blue.shade100),
+                      border: Border.all(color: AppColors.lightBlue),
                     ),
                     child: _buildSizeDisplay(selectedSize),
                   ),
@@ -1285,7 +1296,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         'Size: $selectedSize',
         style: TextStyle(
           fontSize: 12,
-          color: Colors.blue.shade800,
+          color: AppColors.darkRoyalBlue,
           fontWeight: FontWeight.w500,
         ),
       );
@@ -1301,7 +1312,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           'Size: $label',
           style: TextStyle(
             fontSize: 12,
-            color: Colors.blue.shade800,
+            color: AppColors.darkRoyalBlue,
             fontWeight: FontWeight.w500,
           ),
         );
@@ -1310,7 +1321,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           'Dimensions: ${length ?? '0'}×${width ?? '0'}×${height ?? '0'} $unit',
           style: TextStyle(
             fontSize: 12,
-            color: Colors.blue.shade800,
+            color: AppColors.darkRoyalBlue,
             fontWeight: FontWeight.w500,
           ),
         );
@@ -1321,7 +1332,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       'Custom Size',
       style: TextStyle(
         fontSize: 12,
-        color: Colors.blue.shade800,
+        color: AppColors.darkRoyalBlue,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -1477,7 +1488,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                         Icons.check_circle,
                                         color:
                                             (order['isPaid'] as bool?) == true
-                                            ? Colors.green
+                                            ? AppColors.green
                                             : Colors.grey,
                                         size: 20,
                                       ),

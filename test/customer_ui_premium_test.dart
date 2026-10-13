@@ -288,7 +288,7 @@ Future<void> mountProduct(
 
 void main() {
   test(
-    'shared palette uses muted blue and accessible text/button contrast',
+    'shared palette uses Royal Blue and accessible text/button contrast',
     () {
       double contrast(Color a, Color b) {
         final aa = a.computeLuminance(), bb = b.computeLuminance();
@@ -296,7 +296,7 @@ void main() {
       }
 
       expect(AppTheme.logoBlue, const Color(0xFF0000FE));
-      expect(AppTheme.brandBlue, const Color(0xFF365D9B));
+      expect(AppTheme.brandBlue, const Color(0xFF4169E1));
       expect(AppTheme.primaryNavy, AppTheme.brandBlue);
       expect(AppTheme.forestGreen, AppTheme.brandBlue);
       expect(AppTheme.deepForest, AppTheme.deepBlue);
@@ -356,7 +356,7 @@ void main() {
       theme.bottomNavigationBarTheme.selectedItemColor,
       AppTheme.brandBlue,
     );
-    expect(theme.chipTheme.selectedColor, AppTheme.brandBlue);
+    expect(theme.chipTheme.selectedColor, AppTheme.blueSurface);
     expect(
       (theme.inputDecorationTheme.focusedBorder! as OutlineInputBorder)
           .borderSide
@@ -386,11 +386,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(activeTheme!.brightness, Brightness.dark);
       expect(activeTheme!.cardColor, AppTheme.darkSurface);
-      expect(activeTheme!.colorScheme.primary, AppTheme.blueAccent);
-      expect(activeTheme!.scaffoldBackgroundColor, AppTheme.deepBlue);
+      expect(activeTheme!.colorScheme.primary, AppTheme.brandBlue);
+      expect(activeTheme!.scaffoldBackgroundColor, AppTheme.secondaryBlack);
       final primary = activeTheme!.colorScheme.primary.computeLuminance();
       final onPrimary = activeTheme!.colorScheme.onPrimary.computeLuminance();
-      expect((primary + .05) / (onPrimary + .05), greaterThanOrEqualTo(4.5));
+      expect(
+        ((primary > onPrimary ? primary : onPrimary) + .05) /
+            ((primary < onPrimary ? primary : onPrimary) + .05),
+        greaterThanOrEqualTo(4.5),
+      );
       tester
           .state<ThemeChangerState>(find.byType(ThemeChanger))
           .changeTheme(ThemeMode.light);

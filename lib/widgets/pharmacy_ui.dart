@@ -1,15 +1,16 @@
+import '../theme/app_colors.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class PharmacyUi {
   static const Color deepNavy = AppTheme.primaryNavy;
-  static const Color teal = Color(0xFF138C7A);
-  static const Color mint = Color(0xFFD9F6EE);
-  static const Color surface = Color(0xFFF4FAF8);
+  static const Color teal = AppColors.royalBlue;
+  static const Color mint = AppColors.lightBlue;
+  static const Color surface = AppColors.background;
   static const Color card = Colors.white;
-  static const Color border = Color(0xFFD6E7E3);
-  static const Color mutedText = Color(0xFF5F726E);
-  static const Color success = Color(0xFF1E9B6D);
+  static const Color border = AppColors.border;
+  static const Color mutedText = AppColors.mutedText;
+  static const Color success = AppColors.green;
   static const Color warning = Color(0xFFE2A53A);
   static const Color danger = Color(0xFFC85E5E);
 

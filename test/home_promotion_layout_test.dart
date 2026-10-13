@@ -53,6 +53,73 @@ Future<void> mountFood(
 }
 
 void main() {
+  for (final width in [320.0, 390.0, 600.0]) {
+    for (final dark in [false, true]) {
+      for (final scale in [1.0, 1.5]) {
+        testWidgets(
+          'food framing shows full photo at $width, dark=$dark, text=$scale',
+          (tester) async {
+            tester.view.physicalSize = Size(width, 800);
+            tester.view.devicePixelRatio = 1;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            final product = meal('full-dish');
+            Product? opened;
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: dark ? AppTheme.darkTheme : AppTheme.lightTheme,
+                home: Scaffold(
+                  body: MediaQuery(
+                    data: MediaQueryData(
+                      size: Size(width, 800),
+                      disableAnimations: true,
+                      textScaler: TextScaler.linear(scale),
+                    ),
+                    child: SizedBox(
+                      // Exercise a banner narrower than the viewport too.
+                      width: width > 390 ? 390 : width,
+                      child: RestaurantPhotoBanner(
+                        products: [product],
+                        onOpen: (value) => opened = value,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+            await tester.pump(const Duration(milliseconds: 100));
+            final photo = find.byType(CachedNetworkImage);
+            final image = tester.widget<CachedNetworkImage>(photo);
+            expect(image.fit, BoxFit.contain);
+            expect(image.alignment, Alignment.center);
+            expect(image.imageUrl, product.imageUrls.first);
+            final banner = tester.getRect(
+              find.byKey(const ValueKey('restaurant-photo-full-dish')),
+            );
+            final photoBounds = tester.getRect(photo);
+            expect(photoBounds.right, closeTo(banner.right - 10, .01));
+            expect(photoBounds.top, closeTo(banner.top + 10, .01));
+            expect(photoBounds.bottom, closeTo(banner.bottom - 10, .01));
+            expect(
+              tester.getRect(find.text(product.name)).right,
+              lessThan(photoBounds.left),
+            );
+            final title = tester.widget<Text>(find.text(product.name));
+            expect(
+              title.style!.color,
+              (dark ? AppTheme.darkTheme : AppTheme.lightTheme)
+                  .colorScheme
+                  .onSurface,
+            );
+            expect(tester.takeException(), isNull);
+            await tester.tap(photo);
+            expect(opened, same(product));
+            await tester.pumpWidget(const SizedBox.shrink());
+          },
+        );
+      }
+    }
+  }
   test(
     'food banner uses original URLs, excludes unavailable items and deduplicates',
     () {
@@ -126,7 +193,10 @@ void main() {
       (_) {},
       reduceMotion: false,
     );
-    await tester.pump(const Duration(seconds: 3));
+    // Complete the MaterialApp theme transition before measuring the timer.
+    // Its inherited theme updates can restart the banner's dependencies.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 6));
     await tester.pump(const Duration(milliseconds: 500));
     expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 1);
     await tester.pumpWidget(const SizedBox.shrink());

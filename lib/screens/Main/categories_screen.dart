@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 import '../../services/catalog_category_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -1123,7 +1124,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                   width: tileImageSize,
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(14),
-                                    color: const Color(0xFFF4F7FB),
+                                    color: AppColors.background,
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(14),

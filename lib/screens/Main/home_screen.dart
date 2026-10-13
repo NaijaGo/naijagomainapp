@@ -4321,6 +4321,17 @@ class ProductCard extends StatelessWidget {
                                 ? null
                                 : product.stockQuantity > 0
                                 ? () {
+                                    if (product.hasSelectableOptions) {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => ProductDetailScreen(
+                                            product: product,
+                                            heroTag: 'options-${product.id}',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     final added = cartProvider.addProduct(
                                       product,
                                     );

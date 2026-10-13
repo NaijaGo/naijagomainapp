@@ -23,55 +23,11 @@ import 'services/product_request_service.dart';
 import 'services/planned_order_service.dart';
 import './splash_screen.dart';
 
-const Color _darkPrimaryColor = AppTheme.sageAccent;
-const Color _darkSecondaryColor = AppTheme.sageAccent;
-const Color _darkBackgroundColor = AppTheme.deepForest;
-const Color _darkSurfaceColor = AppTheme.darkSurface;
 final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
 
 final ThemeData _lightTheme = AppTheme.lightTheme;
 
-final ThemeData _darkTheme = ThemeData(
-  useMaterial3: true,
-  scaffoldBackgroundColor: _darkBackgroundColor,
-  cardColor: _darkSurfaceColor,
-  appBarTheme: const AppBarTheme(
-    backgroundColor: _darkSurfaceColor,
-    foregroundColor: Colors.white,
-    elevation: 0,
-    iconTheme: IconThemeData(color: Colors.white),
-  ),
-  colorScheme: const ColorScheme.dark(
-    primary: _darkPrimaryColor,
-    onPrimary: _darkBackgroundColor,
-    secondary: _darkSecondaryColor,
-    onSecondary: _darkBackgroundColor,
-    surface: _darkSurfaceColor,
-    onSurface: Colors.white,
-    error: Colors.redAccent,
-    onError: _darkBackgroundColor,
-  ),
-  elevatedButtonTheme: ElevatedButtonThemeData(
-    style: ElevatedButton.styleFrom(
-      backgroundColor: _darkPrimaryColor,
-      foregroundColor: _darkBackgroundColor,
-    ),
-  ),
-  textTheme: const TextTheme(
-    bodyLarge: TextStyle(color: Colors.white),
-    bodyMedium: TextStyle(color: Colors.white70),
-    titleLarge: TextStyle(color: Colors.white),
-    headlineLarge: TextStyle(
-      color: Colors.white,
-      fontSize: 28,
-      fontWeight: FontWeight.bold,
-    ),
-  ),
-  iconTheme: const IconThemeData(color: Colors.white),
-  splashColor: _darkSecondaryColor.withValues(alpha: 0.5),
-  highlightColor: _darkSecondaryColor.withValues(alpha: 0.3),
-  fontFamily: 'Roboto',
-);
+final ThemeData _darkTheme = AppTheme.darkTheme;
 
 class ThemeChanger extends StatefulWidget {
   final Widget child;

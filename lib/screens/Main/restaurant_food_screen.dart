@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -799,7 +800,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                         left: 10,
                         child: _statusPill(
                           product.restaurantOpenStatusLabel,
-                          closed ? Colors.grey.shade800 : Colors.green.shade700,
+                          closed ? Colors.grey.shade800 : AppColors.successText,
                         ),
                       ),
                     ],
@@ -904,6 +905,17 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                                   outsideRadius
                               ? null
                               : () {
+                                  if (product.hasSelectableOptions) {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => ProductDetailScreen(
+                                          product: product,
+                                          heroTag: 'options-${product.id}',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   final added = cart.addProduct(product);
                                   if (!added) {
                                     final conflict = cart
@@ -1030,7 +1042,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                             ? 'Open now'
                             : lead.restaurantOpenStatusLabel,
                         group.isOpen
-                            ? Colors.green.shade700
+                            ? AppColors.successText
                             : Colors.grey.shade800,
                       ),
                     ),

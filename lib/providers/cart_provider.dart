@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 
@@ -5,55 +6,58 @@ class CartItem {
   final Product product;
   int quantity;
   final dynamic selectedSize;
+  final String? selectedColor;
+  CartItem({
+    required this.product,
+    this.quantity = 1,
+    this.selectedSize,
+    this.selectedColor,
+  });
 
-  CartItem({required this.product, this.quantity = 1, this.selectedSize});
-
-  Map<String, dynamic> toJson() {
-    debugPrint(
-      'CartItem.toJson() - selectedSize type: ${selectedSize.runtimeType}',
-    );
-    debugPrint('CartItem.toJson() - selectedSize value: $selectedSize');
-
-    return {
-      'product': product.id,
-      if (product.offerId != null) 'offer': product.offerId,
-      'name': product.name,
-      'image': product.imageUrls.isNotEmpty
-          ? product.imageUrls[0]
-          : 'https://placehold.co/100x100/CCCCCC/000000?text=No+Image',
-      'quantity': quantity,
-      'price': product.price,
-      'sellerType': product.sellerType,
-      'sellerId': product.sellerId,
-      'sellerName': product.sellerName,
-      'vendor': product.sellerType == 'vendor' ? product.vendorId : null,
-      'selectedSize': selectedSize,
-    };
-  }
-
+  Map<String, dynamic> toJson() => {
+    'product': product.id,
+    if (product.offerId != null) 'offer': product.offerId,
+    'name': product.name,
+    'image': product.imageUrls.isNotEmpty
+        ? product.imageUrls.first
+        : 'https://placehold.co/100x100/CCCCCC/000000?text=No+Image',
+    'quantity': quantity,
+    'price': product.price,
+    'sellerType': product.sellerType,
+    'sellerId': product.sellerId,
+    'sellerName': product.sellerName,
+    'vendor': product.sellerType == 'vendor' ? product.vendorId : null,
+    'selectedSize': selectedSize,
+    'selectedColor': ?selectedColor,
+  };
   String get displayName {
-    if (selectedSize != null) {
-      if (selectedSize is String) {
-        return '${product.name} ($selectedSize)';
-      } else if (selectedSize is Map<String, dynamic>) {
-        final sizeMap = selectedSize as Map<String, dynamic>;
-        final dynamic labelDynamic = sizeMap['label'];
-        final String label = labelDynamic?.toString() ?? '';
-        if (label.isNotEmpty) {
-          return '${product.name} ($label)';
-        }
-        return product.name;
-      }
-    }
-    return product.name;
+    final size = selectedSize is Map
+        ? (selectedSize['label'] ??
+                  selectedSize['value'] ??
+                  'Custom dimensions')
+              .toString()
+        : selectedSize?.toString();
+    final options = [
+      ?selectedColor,
+      if (size != null && size.isNotEmpty) size,
+    ];
+    return options.isEmpty
+        ? product.name
+        : '${product.name} (${options.join(', ')})';
   }
 }
 
 class CartProvider with ChangeNotifier {
   final Map<String, CartItem> _items = {};
+  Map<String, CartItem> get items => {..._items};
+  int get itemCount =>
+      _items.values.fold(0, (sum, item) => sum + item.quantity);
+  double get totalAmount => _items.values.fold(
+    0,
+    (sum, item) => sum + item.quantity * item.product.price,
+  );
   String _restaurantOrderNote = '';
 
-  Map<String, CartItem> get items => {..._items};
   String get restaurantOrderNote => _restaurantOrderNote;
 
   void setRestaurantOrderNote(String value) {
@@ -79,158 +83,119 @@ class CartProvider with ChangeNotifier {
     return null;
   }
 
-  int get itemCount {
-    return _items.values.fold(0, (sum, item) => sum + item.quantity);
+  static String _key(String productId, dynamic size, String? color) {
+    if (size == null && color == null) return productId;
+    final normalized = size is Map
+        ? (size.keys.map((key) => key.toString()).toList()..sort()).asMap().map(
+            (_, key) => MapEntry(key, size[key]),
+          )
+        : size;
+    return '$productId:${jsonEncode([normalized, color])}';
   }
 
-  double get totalAmount {
-    return _items.values.fold(
-      0.0,
-      (sum, item) => sum + (item.product.price * item.quantity),
-    );
-  }
-
-  bool addProduct(Product product, {dynamic selectedSize}) {
-    if (restaurantVendorConflict(product) != null) {
-      debugPrint(
-        'Cannot mix restaurant items from different vendors in one cart.',
-      );
+  bool addProduct(
+    Product product, {
+    dynamic selectedSize,
+    String? selectedColor,
+  }) {
+    if (product.hasColors && !product.availableColors.contains(selectedColor)) {
       return false;
     }
-
-    String itemKey = product.id;
-
-    if (product.hasSizes && selectedSize != null) {
-      String sizeString;
-      if (selectedSize is String) {
-        sizeString = selectedSize;
-      } else if (selectedSize is Map<String, dynamic>) {
-        final sizeMap = selectedSize;
-        final dynamic labelDynamic = sizeMap['label'];
-        sizeString = labelDynamic?.toString() ?? 'custom';
-      } else {
-        sizeString = selectedSize.toString();
-      }
-      itemKey = '${product.id}_$sizeString';
+    if (!product.hasColors && selectedColor != null) return false;
+    if (product.hasSizes && selectedSize == null) return false;
+    if (product.hasSizes && !product.isCustomDimensions) {
+      final size = selectedSize is Map ? selectedSize['value'] : selectedSize;
+      if (!product.availableSizes.contains(size)) return false;
     }
-
-    if (_items.containsKey(itemKey)) {
-      // Preserve the existing one-line-per-product cart while preventing a
-      // different seller's offer from being merged into an existing purchase.
-      if (_items[itemKey]!.product.offerId != product.offerId ||
-          _items[itemKey]!.product.sellerId != product.sellerId) return false;
-      _items.update(itemKey, (existingItem) {
-        if (existingItem.quantity < product.stockQuantity) {
-          existingItem.quantity++;
-        } else {
-          debugPrint('Cannot add more. Max stock reached for ${product.name}');
-        }
-        return existingItem;
-      });
-    } else {
-      if (product.stockQuantity > 0) {
-        _items.putIfAbsent(
-          itemKey,
-          () => CartItem(
-            product: product,
-            quantity: 1,
-            selectedSize: selectedSize,
-          ),
-        );
-      } else {
-        debugPrint('Product ${product.name} is out of stock.');
+    if (product.isCustomDimensions && selectedSize != null) {
+      final dimensions = product.sizeData?['customDimensions'] as List? ?? [];
+      if (selectedSize is! Map ||
+          !dimensions.any(
+            (dim) =>
+                dim is Map &&
+                ['length', 'width', 'height', 'unit', 'label'].every(
+                  (field) =>
+                      '${dim[field] ?? ''}' == '${selectedSize[field] ?? ''}',
+                ),
+          )) {
         return false;
       }
+    }
+    if (restaurantVendorConflict(product) != null) return false;
+    if (_items.values.any(
+      (item) =>
+          item.product.id == product.id &&
+          (item.product.offerId != product.offerId ||
+              item.product.sellerId != product.sellerId),
+    )) {
+      return false;
+    }
+    final alreadyAdded = _items.values
+        .where((item) => item.product.id == product.id)
+        .fold(0, (sum, item) => sum + item.quantity);
+    if (alreadyAdded >= product.stockQuantity) return false;
+    final key = _key(product.id, selectedSize, selectedColor);
+    final existing = _items[key];
+    if (existing != null) {
+      if (existing.product.offerId != product.offerId ||
+          existing.product.sellerId != product.sellerId) {
+        return false;
+      }
+      existing.quantity++;
+    } else {
+      _items[key] = CartItem(
+        product: product,
+        selectedSize: selectedSize,
+        selectedColor: selectedColor,
+      );
     }
     notifyListeners();
     return true;
   }
 
-  void removeSingleItem(String productId, {dynamic selectedSize}) {
-    String itemKey = productId;
-    if (selectedSize != null) {
-      String sizeString;
-      if (selectedSize is String) {
-        sizeString = selectedSize;
-      } else if (selectedSize is Map<String, dynamic>) {
-        final sizeMap = selectedSize;
-        final dynamic labelDynamic = sizeMap['label'];
-        sizeString = labelDynamic?.toString() ?? 'custom';
-      } else {
-        sizeString = selectedSize.toString();
-      }
-      itemKey = '${productId}_$sizeString';
-    }
-
-    if (!_items.containsKey(itemKey)) {
-      final existingKey = _items.keys.firstWhere(
-        (key) => key.startsWith(productId),
-        orElse: () => '',
-      );
-
-      if (existingKey.isEmpty) return;
-      itemKey = existingKey;
-    }
-
-    if (_items[itemKey]!.quantity > 1) {
-      _items.update(
-        itemKey,
-        (existingItem) => CartItem(
-          product: existingItem.product,
-          quantity: existingItem.quantity - 1,
-          selectedSize: existingItem.selectedSize,
-        ),
-      );
+  void removeSingleItem(
+    String productId, {
+    dynamic selectedSize,
+    String? selectedColor,
+  }) {
+    final key = _items.containsKey(productId)
+        ? productId
+        : _key(productId, selectedSize, selectedColor);
+    final item = _items[key];
+    if (item == null) return;
+    if (item.quantity > 1) {
+      item.quantity--;
     } else {
-      _items.remove(itemKey);
+      _items.remove(key);
     }
     notifyListeners();
   }
 
-  void removeItem(String productId, {dynamic selectedSize}) {
-    String itemKey = productId;
-    if (selectedSize != null) {
-      String sizeString;
-      if (selectedSize is String) {
-        sizeString = selectedSize;
-      } else if (selectedSize is Map<String, dynamic>) {
-        final sizeMap = selectedSize;
-        final dynamic labelDynamic = sizeMap['label'];
-        sizeString = labelDynamic?.toString() ?? 'custom';
-      } else {
-        sizeString = selectedSize.toString();
-      }
-      itemKey = '${productId}_$sizeString';
-    }
-
-    if (!_items.containsKey(itemKey)) {
-      final keysToRemove = _items.keys
-          .where((key) => key.startsWith(productId))
-          .toList();
-
-      for (final key in keysToRemove) {
-        _items.remove(key);
-      }
+  void removeItem(
+    String productId, {
+    dynamic selectedSize,
+    String? selectedColor,
+  }) {
+    if (_items.containsKey(productId)) {
+      _items.remove(productId);
+    } else if (selectedSize != null || selectedColor != null) {
+      _items.remove(_key(productId, selectedSize, selectedColor));
     } else {
-      _items.remove(itemKey);
+      _items.removeWhere((_, item) => item.product.id == productId);
     }
     notifyListeners();
   }
 
-  List<CartItem> getItemsForProduct(String productId) {
-    return _items.values.where((item) => item.product.id == productId).toList();
-  }
-
-  bool hasSizeInCart(String productId, String size) {
-    final key = '${productId}_$size';
-    return _items.containsKey(key);
-  }
-
-  int getQuantityForSize(String productId, String size) {
-    final key = '${productId}_$size';
-    return _items[key]?.quantity ?? 0;
-  }
-
+  List<CartItem> getItemsForProduct(String productId) =>
+      _items.values.where((item) => item.product.id == productId).toList();
+  bool hasSizeInCart(String productId, String size) => _items.values.any(
+    (item) => item.product.id == productId && item.selectedSize == size,
+  );
+  int getQuantityForSize(String productId, String size) => _items.values
+      .where(
+        (item) => item.product.id == productId && item.selectedSize == size,
+      )
+      .fold(0, (sum, item) => sum + item.quantity);
   void clearCart() {
     _items.clear();
     _restaurantOrderNote = '';

@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
 import '../../models/review.dart';
@@ -68,7 +69,7 @@ class _ProductReviewsScreenState extends State<ProductReviewsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [Expanded(child: Text(review.userName ?? 'Customer', style: const TextStyle(fontWeight: FontWeight.w700))),
               IconButton(tooltip: 'Report review', onPressed: () => _report(review), icon: const Icon(Icons.flag_outlined))]),
-            if (review.verifiedPurchase) const Text('Verified purchase', style: TextStyle(color: Colors.green)),
+            if (review.verifiedPurchase) const Text('Verified purchase', style: TextStyle(color: AppColors.green)),
             Row(children: List.generate(5, (index) => Icon(index < review.rating ? Icons.star : Icons.star_border, color: Colors.amber, size: 20))),
             const SizedBox(height: 8), Text(review.comment), const SizedBox(height: 10), ReviewPhotos(urls: review.photos),
           ]))),

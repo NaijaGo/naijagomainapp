@@ -47,6 +47,7 @@ class Product {
   final bool isActive;
   final bool isFlashsale;
   final Map<String, dynamic>? sizeData; // NEW
+  final List<String> availableColors;
   final List<String> availableSizes; // NEW
 
   Product({
@@ -93,6 +94,7 @@ class Product {
     this.isActive = true,
     this.isFlashsale = false,
     this.sizeData, // NEW
+    this.availableColors = const [],
     this.availableSizes = const [], // NEW
   });
 
@@ -208,7 +210,11 @@ class Product {
       if (json['availableSizes'] is List) {
         final availableList = List<dynamic>.from(json['availableSizes']);
         parsedAvailableSizes = availableList
-            .map((e) => e.toString())
+            .map(
+              (e) => e is Map
+                  ? (e['value'] ?? e['label'] ?? '').toString()
+                  : e.toString(),
+            )
             .where((e) => e.isNotEmpty)
             .toList();
       }
@@ -302,7 +308,19 @@ class Product {
       isActive: json['isActive'] ?? true,
       isFlashsale: json['is_flashsale'] ?? false,
       sizeData: parsedSizeData,
-      availableSizes: parsedAvailableSizes,
+      availableColors: (json['availableColors'] as List? ?? const [])
+          .whereType<String>()
+          .where((color) => color.trim().isNotEmpty)
+          .toList(),
+      availableSizes: parsedSizeData?['type'] == 'custom'
+          ? (parsedSizeData?['customDimensions'] as List? ?? [])
+                .map(
+                  (size) => size is Map
+                      ? (size['label'] ?? 'Custom dimensions').toString()
+                      : size.toString(),
+                )
+                .toList()
+          : parsedAvailableSizes,
     );
   }
 
@@ -362,6 +380,7 @@ class Product {
     'numReviews': numReviews,
     'isActive': isActive,
     'is_flashsale': isFlashsale,
+    'availableColors': availableColors,
     'sizeData': sizeData,
   };
 
@@ -384,6 +403,8 @@ class Product {
 
   // NEW: Helper method to check if product has sizes
   bool get hasSizes => availableSizes.isNotEmpty;
+  bool get hasColors => availableColors.isNotEmpty;
+  bool get hasSelectableOptions => hasSizes || hasColors;
 
   // NEW: Get size type for display
   String get sizeType {

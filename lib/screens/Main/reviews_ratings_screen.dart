@@ -1,3 +1,4 @@
+import '../../theme/app_colors.dart';
 // lib/screens/Main/reviews_ratings_screen.dart
 
 import 'package:flutter/material.dart';
@@ -339,7 +340,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                           if (review.verifiedPurchase)
                             const Text(
                               'Verified purchase',
-                              style: TextStyle(color: Colors.green),
+                              style: TextStyle(color: AppColors.green),
                             ),
                           if (review.moderationStatus != 'approved')
                             Text(
