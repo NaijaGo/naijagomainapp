@@ -9,7 +9,7 @@ workflows:
       app_store_connect: naijago_mainapp_key
 
     environment:
-      flutter: 3.32.8
+      flutter: 3.47.6
       xcode: latest
       cocoapods: default
 

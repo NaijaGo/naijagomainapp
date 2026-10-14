@@ -7,9 +7,19 @@ import 'package:http/http.dart' as http;
 import '../../constants.dart';
 import '../../widgets/tech_glow_background.dart';
 import 'email_verification_screen.dart';
+import 'apple_login_screen.dart';
+import '../../services/apple_auth_service.dart';
+import '../../services/apple_customer_session.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class RegistrationScreen extends StatefulWidget {
-  const RegistrationScreen({super.key, this.initialReferralCode});
+  const RegistrationScreen({
+    super.key,
+    this.initialReferralCode,
+    this.onLoginSuccess,
+  });
+  final VoidCallback? onLoginSuccess;
 
   final String? initialReferralCode;
 
@@ -140,6 +150,41 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _signInApple() async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final info = await DeviceInfoPlugin().iosInfo;
+      if (info.identifierForVendor == null) {
+        throw StateError('Device unavailable');
+      }
+      final fingerprint = '${info.identifierForVendor}-${info.model}';
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(
+          builder: (_) => AppleLoginScreen(deviceFingerprint: fingerprint),
+        ),
+      );
+      if (result == null || !mounted) return;
+      await AppleCustomerSession.save(result, fingerprint);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onLoginSuccess?.call();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _errorMessage = 'Unable to confirm Apple sign-in. Please retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -501,10 +546,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               ),
             ),
 
+            if (AppleAuthService.supported) ...[
+              const SizedBox(height: 16),
+              AbsorbPointer(
+                absorbing: _isLoading,
+                child: SignInWithAppleButton(
+                  onPressed: _signInApple,
+                  height: 52,
+                  text: 'Sign in with Apple',
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
               children: [
                 const Text(
                   'Already have an account? ',

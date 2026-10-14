@@ -1,5 +1,6 @@
 import 'package:naija_go/theme/app_theme.dart';
 import 'services/google_auth_service.dart';
+import 'services/apple_customer_session.dart';
 // lib/main.dart
 
 import 'dart:async';
@@ -290,7 +291,10 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
 
     await navigator.push(
       MaterialPageRoute(
-        builder: (_) => RegistrationScreen(initialReferralCode: referralCode),
+        builder: (_) => RegistrationScreen(
+          initialReferralCode: referralCode,
+          onLoginSuccess: handleLoginSuccess,
+        ),
       ),
     );
   }
@@ -326,6 +330,8 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
       if (userData != null) {
         // SDK v5.x FIX: Changed from setExternalUserId() to login()
         await OneSignal.login(userData['id']);
+
+        if (prefs.getString('auth_provider') == 'apple') return;
 
         await OneSignal.User.addTags({
           'user_id': userData['id'],
@@ -387,7 +393,7 @@ class _NaijaGoAppState extends State<NaijaGoApp> {
     ProductRequestIntent.clear();
     PlannedOrderIntent.clear();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
+    await AppleCustomerSession.clear();
     await prefs.remove('order_count');
 
     // SDK v5.x FIX: Changed from removeExternalUserId() to logout()

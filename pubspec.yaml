@@ -2,16 +2,17 @@ name: naija_go
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.28+65
+version: 1.0.28+66
 
 environment:
-  sdk: ">=3.8.1 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
   google_sign_in: 7.2.0
+  sign_in_with_apple: 8.2.0
   cupertino_icons: ^1.0.8
   http: ^1.5.0
   shared_preferences: ^2.2.3

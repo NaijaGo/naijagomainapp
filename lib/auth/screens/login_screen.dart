@@ -15,6 +15,10 @@ import '../../widgets/tech_glow_background.dart';
 import 'google_login_screen.dart';
 import 'forgot_password_screen.dart';
 import 'registration_screen.dart';
+import 'apple_login_screen.dart';
+import '../../services/apple_auth_service.dart';
+import '../../services/apple_customer_session.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -301,6 +305,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwt_token', token);
+    await prefs.setString(
+      'auth_provider',
+      password == null ? 'google' : 'password',
+    );
     await prefs.setString('device_fingerprint', deviceFingerprint);
     await prefs.setString('user', json.encode(userData));
     await prefs.setString('user_email', userEmail);
@@ -367,6 +375,35 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(
           () =>
               _errorMessage = 'Unable to sign in right now. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loginApple() async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final fingerprint = await _getDeviceFingerprint();
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(
+          builder: (_) => AppleLoginScreen(deviceFingerprint: fingerprint),
+        ),
+      );
+      if (result == null || !mounted) return;
+      await AppleCustomerSession.save(result, fingerprint);
+      if (mounted) widget.onLoginSuccess();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _errorMessage = 'Unable to confirm Apple sign-in. Please retry.',
         );
       }
     } finally {
@@ -716,6 +753,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     label: const Text('Continue with Google'),
                                   ),
+                                  if (AppleAuthService.supported) ...[
+                                    const SizedBox(height: 12),
+                                    AbsorbPointer(
+                                      absorbing: _isLoading,
+                                      child: SignInWithAppleButton(
+                                        onPressed: _loginApple,
+                                        height: 52,
+                                        text: 'Sign in with Apple',
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 16),
                                   SizedBox(
                                     height: 52,
@@ -781,8 +830,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ],
                                   const SizedBox(height: 18),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
                                     children: [
                                       const Text(
                                         "Don't have an account? ",
@@ -796,7 +845,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                           Navigator.of(context).push(
                                             MaterialPageRoute(
                                               builder: (context) =>
-                                                  const RegistrationScreen(),
+                                                  RegistrationScreen(
+                                                    onLoginSuccess:
+                                                        widget.onLoginSuccess,
+                                                  ),
                                             ),
                                           );
                                         },
