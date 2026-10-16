@@ -27,6 +27,9 @@ The existing public `formatDealPrice` helper delegates to it too.
 No dependency, backend, database or gateway configuration was changed. After
 verification, the customer app build number was increased from `1.0.28+66` to
 `1.0.28+67` in `pubspec.yaml` at the user's request for the GitHub submission.
+Apple subsequently rejected version `1.0.28` because its approved release train
+was closed. The next submission is `1.0.29+68`, increasing both the app version
+and build number. Runner's Info.plist uses Flutter's version/build variables.
 
 ## Files changed and screens covered
 
@@ -65,7 +68,7 @@ Tests and report:
 - `test/customer_ui_premium_test.dart`: product-card checks for `₦1,500.00`,
   `₦150,000.50` and `₦1,000,000.00`, including unchanged cart totals.
 - `docs/NAIRA_FORMATTING_AUDIT.md` (this report).
-- `pubspec.yaml`: subsequent release metadata change, build 67.
+- `pubspec.yaml`: subsequent release metadata changes, latest `1.0.29+68`.
 
 ## Audit method and scope limits
 
