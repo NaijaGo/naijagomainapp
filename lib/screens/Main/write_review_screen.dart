@@ -1,5 +1,6 @@
 // lib/screens/Main/write_review_screen.dart
 
+import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -232,7 +233,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
-                            '₦${widget.product.price.toStringAsFixed(2)}',
+                            formatNaira(widget.product.price, alwaysShowDecimals: true),
                             style: TextStyle(
                               fontSize: 14,
                               color: color.primary,

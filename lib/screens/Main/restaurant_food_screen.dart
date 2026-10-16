@@ -1,10 +1,10 @@
+import '../../core/formatters/naira.dart';
 import '../../theme/app_colors.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -77,11 +77,6 @@ class RestaurantFoodScreen extends StatefulWidget {
 }
 
 class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
-  final _currency = NumberFormat.currency(
-    locale: 'en_NG',
-    symbol: '₦',
-    decimalDigits: 0,
-  );
   List<Product> _products = [];
   _RestaurantFilter _filter = _RestaurantFilter.all;
   String? _selectedFoodCategory;
@@ -887,7 +882,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        _currency.format(product.price),
+                        formatNaira(product.price),
                         style: const TextStyle(
                           color: primaryNavy,
                           fontSize: 18,

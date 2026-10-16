@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -780,7 +781,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                         const Spacer(),
                       const SizedBox(height: 10),
                       Text(
-                        '₦${product.price.toStringAsFixed(2)}',
+                        formatNaira(product.price, alwaysShowDecimals: true),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,

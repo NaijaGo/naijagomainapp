@@ -1,17 +1,13 @@
+import '../core/formatters/naira.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/deal.dart';
 import '../services/deals_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
 import '../screens/Main/product_detail_screen.dart';
 
-String formatDealPrice(double value) => NumberFormat.currency(
-  locale: 'en_NG',
-  symbol: '₦',
-  decimalDigits: value == value.roundToDouble() ? 0 : 2,
-).format(value);
+String formatDealPrice(double value) => formatNaira(value);
 
 class DealCard extends StatefulWidget {
   const DealCard({

@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'dart:async'; // Added for timeouts
 import '../../models/order_payment_state.dart';
 import '../../models/hosted_checkout.dart';
@@ -14,7 +15,6 @@ import '../../widgets/visible_back_button.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -395,11 +395,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _countryController.dispose();
     _deliveryPromoCodeController.dispose();
     super.dispose();
-  }
-
-  String _formatPriceWithCommas(double price) {
-    final formatter = NumberFormat('#,##0.00', 'en_NG');
-    return '₦${formatter.format(price)}';
   }
 
   Future<void> _fetchAddressesAndWallet() async {
@@ -1766,7 +1761,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      _formatPriceWithCommas(summary.totalPrice),
+                      formatNaira(summary.totalPrice, alwaysShowDecimals: true),
                       style: const TextStyle(
                         color: AppTheme.primaryNavy,
                         fontWeight: FontWeight.w800,
@@ -1785,7 +1780,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             icon: Icons.local_shipping_outlined,
             title: 'Subscription free delivery applied',
             message:
-                'You saved ${_formatPriceWithCommas(summary.subscriptionDeliveryDiscount)} on delivery. ${summary.subscriptionDeliveriesRemaining} free delivery credit${summary.subscriptionDeliveriesRemaining == 1 ? '' : 's'} available before this payment is completed.',
+                'You saved ${formatNaira(summary.subscriptionDeliveryDiscount, alwaysShowDecimals: true)} on delivery. ${summary.subscriptionDeliveriesRemaining} free delivery credit${summary.subscriptionDeliveriesRemaining == 1 ? '' : 's'} available before this payment is completed.',
             accentColor: AppTheme.accentGreen,
           ),
         ] else if (summary.subscriptionReason.isNotEmpty &&
@@ -1804,7 +1799,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             icon: Icons.local_offer_outlined,
             title: 'Free delivery campaign applied',
             message:
-                'You saved ${_formatPriceWithCommas(summary.freeDeliveryCampaignDiscount)} on delivery.',
+                'You saved ${formatNaira(summary.freeDeliveryCampaignDiscount, alwaysShowDecimals: true)} on delivery.',
             accentColor: AppTheme.accentGreen,
           ),
         ] else if (summary.freeDeliveryCampaignReason.isNotEmpty &&
@@ -1839,11 +1834,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         const Divider(height: 24),
         _buildSummaryRow(
           'Items subtotal',
-          _formatPriceWithCommas(summary.totalSubtotal),
+          formatNaira(summary.totalSubtotal, alwaysShowDecimals: true),
         ),
         _buildSummaryRow(
           'Delivery fees',
-          _formatPriceWithCommas(summary.totalShippingPrice),
+          formatNaira(summary.totalShippingPrice, alwaysShowDecimals: true),
         ),
         if (summary.pricingMode == 'road_km' && summary.routeDistanceKm != null)
           _buildSummaryRow(
@@ -1853,23 +1848,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (summary.pricingMode == 'road_km' && summary.deliveryBaseFee != null)
           _buildSummaryRow(
             'Base delivery fee',
-            _formatPriceWithCommas(summary.deliveryBaseFee!),
+            formatNaira(summary.deliveryBaseFee!, alwaysShowDecimals: true),
           ),
         if (summary.pricingMode == 'road_km' &&
             summary.deliveryDistanceFee != null)
           _buildSummaryRow(
             'Road distance charge',
-            _formatPriceWithCommas(summary.deliveryDistanceFee!),
+            formatNaira(summary.deliveryDistanceFee!, alwaysShowDecimals: true),
           ),
         if (summary.subscriptionFreeDeliveryApplied &&
             summary.subscriptionDeliveryDiscount > 0)
           _buildSummaryRow(
             'Subscription saved',
-            '-${_formatPriceWithCommas(summary.subscriptionDeliveryDiscount)}',
+            '-${formatNaira(summary.subscriptionDeliveryDiscount, alwaysShowDecimals: true)}',
             valueColor: AppTheme.accentGreen,
           ),
         if (summary.taxPrice > 0)
-          _buildSummaryRow('Tax', _formatPriceWithCommas(summary.taxPrice)),
+          _buildSummaryRow(
+            'Tax',
+            formatNaira(summary.taxPrice, alwaysShowDecimals: true),
+          ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(
@@ -1882,7 +1880,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           child: _buildTotalRow(
             'Grand total',
-            _formatPriceWithCommas(summary.totalPrice),
+            formatNaira(summary.totalPrice, alwaysShowDecimals: true),
           ),
         ),
       ],
@@ -2145,13 +2143,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 14),
           _buildSummaryRow(
             'Item subtotal',
-            _formatPriceWithCommas(shipment.subtotal),
+            formatNaira(shipment.subtotal, alwaysShowDecimals: true),
           ),
           _buildSummaryRow(
             shipment.fulfillmentMethod == 'pickup'
                 ? 'Pickup fee'
                 : 'Delivery fee',
-            _formatPriceWithCommas(shipment.shippingPrice),
+            formatNaira(shipment.shippingPrice, alwaysShowDecimals: true),
           ),
         ],
       ),
@@ -2567,7 +2565,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             value: 'Wallet',
             title: 'Wallet balance',
             subtitle:
-                'Available balance: ${_formatPriceWithCommas(_walletBalance)}',
+                'Available balance: ${formatNaira(_walletBalance, alwaysShowDecimals: true)}',
             helperText: walletShortfall
                 ? 'Your wallet balance is below the current order total.'
                 : 'Use your NaijaGo wallet for a faster checkout.',
@@ -2753,7 +2751,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 12),
                   _buildSummaryRow(
                     'Items subtotal',
-                    _formatPriceWithCommas(cartProvider.totalAmount),
+                    formatNaira(
+                      cartProvider.totalAmount,
+                      alwaysShowDecimals: true,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -2850,7 +2851,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        _formatPriceWithCommas(total),
+                        formatNaira(total, alwaysShowDecimals: true),
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,

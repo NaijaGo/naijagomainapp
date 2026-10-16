@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
@@ -538,7 +539,7 @@ Future<void> _requestOtp() async {
                             if (amount == null ||
                                 amount <= 0 ||
                                 amount > widget.userWalletBalance) {
-                              return 'Enter a valid amount (Max: ₦${widget.userWalletBalance.toStringAsFixed(2)}).';
+                              return 'Enter a valid amount (Max: ${formatNaira(widget.userWalletBalance, alwaysShowDecimals: true)}).';
                             }
                             return null;
                           },

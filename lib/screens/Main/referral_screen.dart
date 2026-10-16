@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -24,16 +25,6 @@ class ReferralScreen extends StatefulWidget {
 
 class _ReferralScreenState extends State<ReferralScreen> {
   final ReferralService _referralService = ReferralService();
-  final NumberFormat _wholeCurrencyFormatter = NumberFormat.currency(
-    locale: 'en_NG',
-    symbol: '₦',
-    decimalDigits: 0,
-  );
-  final NumberFormat _decimalCurrencyFormatter = NumberFormat.currency(
-    locale: 'en_NG',
-    symbol: '₦',
-    decimalDigits: 2,
-  );
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -266,7 +257,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
               ),
               child: Text(
-                '${_formatCurrency(summary.rewardPerReferral)} after a referred user completes a first purchase',
+                '${formatNaira(summary.rewardPerReferral)} after a referred user completes a first purchase',
                 style: const TextStyle(
                   color: whiteBackground,
                   fontSize: 12.5,
@@ -286,7 +277,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
               ),
               _buildHeroMetric(
                 label: 'Total earned',
-                value: _formatCurrency(summary.totalEarned),
+                value: formatNaira(summary.totalEarned),
               ),
             ],
           ),
@@ -411,7 +402,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
       ),
       _ReferralStat(
         label: 'Earned',
-        value: _formatCurrency(summary.totalEarned),
+        value: formatNaira(summary.totalEarned),
         icon: Icons.payments_outlined,
         accent: const Color(0xFF10B981),
       ),
@@ -619,7 +610,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
             step: '3',
             title: 'Track rewards here',
             description: summary.rewardPerReferral > 0
-                ? 'Each referred user who completes a first purchase can unlock ${_formatCurrency(summary.rewardPerReferral)} in rewards, and this screen will keep your totals updated.'
+                ? 'Each referred user who completes a first purchase can unlock ${formatNaira(summary.rewardPerReferral)} in rewards, and this screen will keep your totals updated.'
                 : 'This dashboard keeps your invite progress, reward totals, and recent activity in one place.',
           ),
         ],
@@ -811,7 +802,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
           if (invite.rewardAmount > 0) ...[
             const SizedBox(width: 12),
             Text(
-              _formatCurrency(invite.rewardAmount),
+              formatNaira(invite.rewardAmount),
               style: const TextStyle(
                 color: AppTheme.accentGreen,
                 fontSize: 13.5,
@@ -1006,13 +997,6 @@ class _ReferralScreenState extends State<ReferralScreen> {
       return;
     }
     _showSnack(message);
-  }
-
-  String _formatCurrency(double amount) {
-    if (amount % 1 == 0) {
-      return _wholeCurrencyFormatter.format(amount);
-    }
-    return _decimalCurrencyFormatter.format(amount);
   }
 
   String _formatInviteDate(DateTime? date) {

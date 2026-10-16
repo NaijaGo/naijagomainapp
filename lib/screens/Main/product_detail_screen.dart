@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import '../../theme/app_colors.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../../constants.dart';
@@ -1242,15 +1242,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  String _formatPrice(double price) {
-    final formatter = NumberFormat.currency(
-      locale: 'en_NG',
-      symbol: '₦',
-      decimalDigits: 2,
-    );
-    return formatter.format(price);
-  }
-
   Widget _buildPriceAndName() {
     const Color deepNavyBlue = AppTheme.primaryNavy;
     return Column(
@@ -1271,7 +1262,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
-              _formatPrice(widget.product.price),
+              formatNaira(widget.product.price, alwaysShowDecimals: true),
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
@@ -1660,7 +1651,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ProductSocialProof(product: product),
                   const SizedBox(height: 4),
                   Text(
-                    _formatPrice(product.price),
+                    formatNaira(product.price, alwaysShowDecimals: true),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,

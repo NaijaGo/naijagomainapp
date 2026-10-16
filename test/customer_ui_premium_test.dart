@@ -18,11 +18,15 @@ import 'package:naija_go/widgets/naijago_wordmark.dart';
 import 'package:naija_go/widgets/shopping_assistant_identity.dart';
 import 'package:naija_go/widgets/tech_glow_background.dart';
 
-Product fixtureProduct({int stock = 5, bool medicine = false}) => Product(
+Product fixtureProduct({
+  int stock = 5,
+  bool medicine = false,
+  double price = 200,
+}) => Product(
   id: 'local-ui-fixture',
   name: medicine ? 'Prescription fixture' : 'Original vendor photo',
   description: 'Local layout fixture',
-  price: 200,
+  price: price,
   category: medicine ? 'Cosmetics & Beauty' : 'Groceries',
   subcategory: medicine ? 'Medicine' : 'Fresh Produce',
   stockQuantity: stock,
@@ -445,6 +449,25 @@ void main() {
       });
     },
   );
+  for (final amount in [1500.0, 150000.5, 1000000.0]) {
+    testWidgets('product card groups $amount without changing cart values', (
+      tester,
+    ) async {
+      final labels = {
+        1500.0: '₦1,500.00',
+        150000.5: '₦150,000.50',
+        1000000.0: '₦1,000,000.00',
+      };
+      await mountProduct(tester, (cart) async {
+        expect(find.text(labels[amount]!), findsOneWidget);
+        await tester.tap(find.text('Add to Cart'));
+        await tester.pump();
+        expect(cart.totalAmount, amount);
+        expect(cart.itemCount, 1);
+        expect(tester.takeException(), isNull);
+      }, product: fixtureProduct(price: amount));
+    });
+  }
   testWidgets('sold-out and medicine consultation protections remain visible', (
     tester,
   ) async {

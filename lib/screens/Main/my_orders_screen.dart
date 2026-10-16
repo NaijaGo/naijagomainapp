@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import '../../theme/app_colors.dart';
 // my_orders_screen.dart - FIXED VERSION
 import 'package:flutter/material.dart';
@@ -969,20 +970,24 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         children: [
           _buildSummaryRow(
             'Items (${_getTotalItemCount(order)})',
-            '₦${subtotal.toStringAsFixed(2)}',
+            formatNaira(subtotal, alwaysShowDecimals: true),
             color,
           ),
           _buildSummaryRow(
             'Delivery Fee',
-            '₦${shipping.toStringAsFixed(2)}',
+            formatNaira(shipping, alwaysShowDecimals: true),
             color,
           ),
           if (tax > 0)
-            _buildSummaryRow('Tax', '₦${tax.toStringAsFixed(2)}', color),
+            _buildSummaryRow(
+              'Tax',
+              formatNaira(tax, alwaysShowDecimals: true),
+              color,
+            ),
           const Divider(height: 24),
           _buildSummaryRow(
             'Total Amount',
-            '₦${total.toStringAsFixed(2)}',
+            formatNaira(total, alwaysShowDecimals: true),
             color,
             isTotal: true,
           ),
@@ -1242,14 +1247,14 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Qty: $quantity × ₦${price.toStringAsFixed(2)}',
+                      'Qty: $quantity × ${formatNaira(price, alwaysShowDecimals: true)}',
                       style: TextStyle(
                         fontSize: 14,
                         color: color.onSurface.withValues(alpha: 0.8),
                       ),
                     ),
                     Text(
-                      '₦${(quantity * price).toStringAsFixed(2)}',
+                      formatNaira(quantity * price, alwaysShowDecimals: true),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,

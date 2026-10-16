@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
@@ -240,7 +241,7 @@ class _CreateDisputeScreenState extends State<CreateDisputeScreen> {
                         color: whiteSmoke,
                         padding: const EdgeInsets.all(8.0),
                         child: Text(
-                          "Order ${order['_id']} - ₦${order['totalPrice']}",
+                          "Order ${order['_id']} - ${formatNaira(order['totalPrice'])}",
                           style: const TextStyle(color: deepNavyBlue),
                         ),
                       ),

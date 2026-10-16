@@ -1,9 +1,9 @@
+import '../../core/formatters/naira.dart';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
@@ -236,15 +236,6 @@ class _CartScreenState extends State<CartScreen> {
     });
   }
 
-  String _formatPrice(double price) {
-    final formatter = NumberFormat.currency(
-      locale: 'en_NG',
-      symbol: '₦',
-      decimalDigits: 2,
-    );
-    return formatter.format(price);
-  }
-
   Widget _buildEmptyState() {
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -454,7 +445,10 @@ class _CartScreenState extends State<CartScreen> {
                   ],
                   const SizedBox(height: 8),
                   Text(
-                    _formatPrice(cartItem.product.price),
+                    formatNaira(
+                      cartItem.product.price,
+                      alwaysShowDecimals: true,
+                    ),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -887,7 +881,10 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ),
                 Text(
-                  _formatPrice(cartProvider.totalAmount),
+                  formatNaira(
+                    cartProvider.totalAmount,
+                    alwaysShowDecimals: true,
+                  ),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -1043,15 +1040,6 @@ class _RecentlyViewedProductCard extends StatelessWidget {
     required this.heroTag,
   });
 
-  String _formatPrice(double price) {
-    final formatter = NumberFormat.currency(
-      locale: 'en_NG',
-      symbol: '₦',
-      decimalDigits: 2,
-    );
-    return formatter.format(price);
-  }
-
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
@@ -1133,7 +1121,7 @@ class _RecentlyViewedProductCard extends StatelessWidget {
                       ProductSocialProof(product: product),
                       const SizedBox(height: 8),
                       Text(
-                        _formatPrice(product.price),
+                        formatNaira(product.price, alwaysShowDecimals: true),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,

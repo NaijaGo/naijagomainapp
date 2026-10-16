@@ -1,10 +1,10 @@
+import '../../core/formatters/naira.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
@@ -19,8 +19,6 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   static const String _draftKey = 'naijago_subscription_draft';
-
-  final _money = NumberFormat.currency(locale: 'en_NG', symbol: '₦');
 
   List<_SubscriptionPlan> _plans = const [
     _SubscriptionPlan(
@@ -436,7 +434,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 label: Text(
                   _isActivating
                       ? 'Activating...'
-                      : 'Activate with wallet (${_money.format(_selectedPlan.price)})',
+                      : 'Activate with wallet (${formatNaira(_selectedPlan.price, alwaysShowDecimals: true)})',
                 ),
               ),
             ),
@@ -544,7 +542,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ],
               ),
               Text(
-                '${_money.format(plan.price)}/month',
+                '${formatNaira(plan.price, alwaysShowDecimals: true)}/month',
                 style: TextStyle(
                   color: plan.accent,
                   fontSize: 20,
@@ -558,7 +556,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 children: [
                   _PlanPill('${plan.deliveries} free deliveries'),
                   _PlanPill(
-                    'Min order ${_money.format(plan.minimumOrderValue)}',
+                    'Min order ${formatNaira(plan.minimumOrderValue, alwaysShowDecimals: true)}',
                   ),
                   _PlanPill(plan.deliveryScope),
                   _PlanPill(plan.validHours),
@@ -722,7 +720,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ),
           const SizedBox(height: 10),
           _SummaryRow(label: 'Plan', value: plan.name),
-          _SummaryRow(label: 'Monthly fee', value: _money.format(plan.price)),
+          _SummaryRow(
+            label: 'Monthly fee',
+            value: formatNaira(plan.price, alwaysShowDecimals: true),
+          ),
           _SummaryRow(
             label: 'Free deliveries',
             value: '${plan.deliveries} per month',
@@ -734,7 +735,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 : (_selectedPreferences.toList()..sort()).join(', '),
           ),
           const SizedBox(height: 10),
-          _SummaryRow(label: 'Wallet', value: _money.format(_walletBalance)),
+          _SummaryRow(
+            label: 'Wallet',
+            value: formatNaira(_walletBalance, alwaysShowDecimals: true),
+          ),
           _SummaryRow(
             label: 'Backend',
             value: _isLoadingRemote ? 'Syncing...' : 'Connected',

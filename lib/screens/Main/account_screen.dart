@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -773,7 +774,7 @@ class _AccountScreenState extends State<AccountScreen>
             children: [
               Expanded(
                 child: Text(
-                  'Wallet balance: ₦${_userWalletBalance.toStringAsFixed(2)}',
+                  'Wallet balance: ${formatNaira(_userWalletBalance, alwaysShowDecimals: true)}',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -904,7 +905,7 @@ class _AccountScreenState extends State<AccountScreen>
           color,
           Icons.account_balance_wallet_outlined,
           'My Wallet / Payment Methods',
-          'Wallet balance: ₦${_userWalletBalance.toStringAsFixed(2)}',
+          'Wallet balance: ${formatNaira(_userWalletBalance, alwaysShowDecimals: true)}',
           () async {
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (context) => const MyWalletScreen()),

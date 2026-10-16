@@ -1,4 +1,5 @@
 // lib/screens/Main/my_wallet_screen.dart
+import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -323,7 +324,7 @@ class _MyWalletScreenState extends State<MyWalletScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              '₦${_userWalletBalance.toStringAsFixed(2)}',
+              formatNaira(_userWalletBalance, alwaysShowDecimals: true),
               style: const TextStyle(
                 color: deepNavyBlue,
                 fontSize: 44,

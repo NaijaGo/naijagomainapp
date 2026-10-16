@@ -1,5 +1,5 @@
+import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../services/shopping_assistant_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shopping_assistant_identity.dart';
@@ -84,12 +84,13 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                       maxLength: 500,
                       minLines: 2,
                       maxLines: 5,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.white,
                         labelText: 'What are you looking for?',
-                        hintText: 'Find me a phone charger under ₦15k',
-                        border: OutlineInputBorder(),
+                        hintText:
+                            'Find me a phone charger under ${formatNaira(15000)}',
+                        border: const OutlineInputBorder(),
                       ),
                       textInputAction: TextInputAction.newline,
                     ),
@@ -98,8 +99,8 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                       runSpacing: 8,
                       children:
                           [
-                                'I have ₦10,000. I need food for 3 people tonight.',
-                                'Find me a phone charger under ₦15k.',
+                                'I have ${formatNaira(10000)}. I need food for 3 people tonight.',
+                                'Find me a phone charger under ${formatNaira(15000)}.',
                                 "I need a birthday gift for my girlfriend.",
                               ]
                               .map(
@@ -188,7 +189,7 @@ class _ShoppingAssistantScreenState extends State<ShoppingAssistantScreen> {
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
-                            'Maximum per suggestion: ${NumberFormat.currency(locale: 'en_NG', symbol: '₦', decimalDigits: 2).format(result.maxPrice)} · delivery excluded',
+                            'Maximum per suggestion: ${formatNaira(result.maxPrice, alwaysShowDecimals: true)} · delivery excluded',
                           ),
                         ),
                       Padding(

@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'package:naija_go/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -505,7 +506,7 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '₦${NumberFormat('#,##0.00').format(total)}',
+                formatNaira(total, alwaysShowDecimals: true),
                 style: const TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
@@ -516,8 +517,8 @@ class _PlannedOrderDetailScreenState extends State<PlannedOrderDetailScreen> {
                 'Prices, stock, fees and delivery were checked again. The quote expires shortly.',
               ),
               const SizedBox(height: 8),
-              Text('Products: ₦${NumberFormat('#,##0.00').format(quote['totalSubtotal'] ?? 0)}'),
-              Text('Delivery: ₦${NumberFormat('#,##0.00').format(quote['totalShippingPrice'] ?? 0)}'),
+              Text('Products: ${formatNaira(quote['totalSubtotal'] ?? 0, alwaysShowDecimals: true)}'),
+              Text('Delivery: ${formatNaira(quote['totalShippingPrice'] ?? 0, alwaysShowDecimals: true)}'),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: method,

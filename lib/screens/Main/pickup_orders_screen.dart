@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -161,7 +162,7 @@ class _PickupOrdersScreenState extends State<PickupOrdersScreen> {
               (item) => ListTile(
                 title: Text('${item['name'] ?? 'Product'}'),
                 subtitle: Text('Quantity: ${item['qty'] ?? 1}'),
-                trailing: Text('₦${item['price'] ?? 0}'),
+                trailing: Text(formatNaira(item['price'] ?? 0)),
               ),
             )),
           ],

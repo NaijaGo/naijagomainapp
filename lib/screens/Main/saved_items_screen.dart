@@ -1,5 +1,6 @@
 // lib/screens/Main/saved_items_screen.dart
 
+import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -277,7 +278,10 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                                 ProductSocialProof(product: product),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '₦${product.price.toStringAsFixed(2)}',
+                                  formatNaira(
+                                    product.price,
+                                    alwaysShowDecimals: true,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,

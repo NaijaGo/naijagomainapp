@@ -1,3 +1,4 @@
+import '../../core/formatters/naira.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -8,7 +9,6 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
@@ -3953,15 +3953,6 @@ class ProductCard extends StatelessWidget {
     this.onReturnToDashboard,
   });
 
-  String _formatPrice(double price) {
-    final formatter = NumberFormat.currency(
-      locale: 'en_NG',
-      symbol: '₦',
-      decimalDigits: 2,
-    );
-    return formatter.format(price);
-  }
-
   String _resolvedImageUrl(Product product) {
     if (product.imageUrls.isEmpty) {
       return 'https://placehold.co/400x300/CCCCCC/000000?text=No+Image';
@@ -4293,7 +4284,7 @@ class ProductCard extends StatelessWidget {
                           const Spacer(),
                         const SizedBox(height: 8),
                         Text(
-                          _formatPrice(product.price),
+                          formatNaira(product.price, alwaysShowDecimals: true),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,

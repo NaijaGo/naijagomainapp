@@ -177,7 +177,7 @@ void main() {
       ]) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
-      expect(find.text('Wallet balance: \u20a61250.00'), findsNWidgets(2));
+      expect(find.text('Wallet balance: \u20a61,250.00'), findsNWidgets(2));
       expect(find.text('Coupons & Gift cards'), findsNothing);
       expect(tester.takeException(), isNull);
     });
