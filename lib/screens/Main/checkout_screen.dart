@@ -1379,7 +1379,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _showSnackBar(_errorMessage!, isError: true);
         }
       } else {
-        // External payment (Flutterwave)
+        // The backend selects the online payment provider.
         final userEmail = prefs.getString('email') ?? 'customer@example.com';
         final fullName = prefs.getString('fullName') ?? 'Test User';
         final phone = prefs.getString('phoneNumber') ?? '08012345678';
@@ -1391,7 +1391,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             'Authorization': 'Bearer $token',
           },
           body: jsonEncode({
-            'supported_payment_providers': ['korapay', 'squad', 'flutterwave'],
+            'supported_payment_providers': ['korapay', 'flutterwave'],
           }),
         );
         final intentData = _safeJson(intentResp.body);

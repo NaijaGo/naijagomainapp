@@ -75,7 +75,7 @@ class OrderPaymentCoordinator {
           Uri.parse('$baseUrl/api/orders/$orderId/payment-intent'),
           headers: headers,
           body: jsonEncode({
-            'supported_payment_providers': ['korapay', 'squad', 'flutterwave'],
+            'supported_payment_providers': ['korapay', 'flutterwave'],
           }),
         )
         .timeout(const Duration(seconds: 35));
