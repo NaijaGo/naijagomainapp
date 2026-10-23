@@ -1,7 +1,7 @@
 import '../../core/formatters/naira.dart';
 import 'dart:convert';
 
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -581,7 +581,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                   ),
                   child: Stack(
                     children: [
-                      CachedNetworkImage(
+                      AppNetworkImage(
                         imageUrl: _resolvedImageUrl(product),
                         height: 138,
                         width: double.infinity,

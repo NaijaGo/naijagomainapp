@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
@@ -19,6 +18,7 @@ import '../../widgets/order_payment_review_notice.dart';
 import '../../services/socket_service.dart';
 import '../../widgets/order_tracking_widget.dart';
 import '../../widgets/tech_glow_background.dart';
+import '../../widgets/app_network_image.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
@@ -1136,7 +1136,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: CachedNetworkImage(
+                      child: AppNetworkImage(
                         imageUrl: imageUrl,
                         width: 100,
                         height: 100,
@@ -1206,7 +1206,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: CachedNetworkImage(
+            child: AppNetworkImage(
               imageUrl: imageUrl,
               width: 80,
               height: 80,

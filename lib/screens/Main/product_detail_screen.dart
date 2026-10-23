@@ -7,7 +7,7 @@ import '../../widgets/visible_back_button.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
@@ -1172,7 +1172,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             borderRadius: const BorderRadius.vertical(
               bottom: Radius.circular(18),
             ),
-            child: CachedNetworkImage(
+            child: AppNetworkImage(
               imageUrl: imageUrl,
               fit: BoxFit.contain,
               placeholder: (context, url) => Container(color: Colors.grey[200]),
@@ -1212,7 +1212,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               onTap: () => _openImageGallery(index + 1),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8.0),
-                child: CachedNetworkImage(
+                child: AppNetworkImage(
                   imageUrl: imageUrl,
                   width: 80,
                   height: 80,
@@ -1612,7 +1612,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),
-                child: CachedNetworkImage(
+                child: AppNetworkImage(
                   imageUrl: imageUrl,
                   height: 130,
                   width: double.infinity,

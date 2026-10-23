@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cached_network_image/cached_network_image.dart'; // ✅ Added
 import '../../constants.dart';
 // Import your main.dart file to access the ThemeChanger and SettingsScreen classes
 // import '../../admin/screens/admin_panel_screen.dart'; // Import for Admin Panel
@@ -25,6 +24,7 @@ import 'faq_screen.dart';
 import 'referral_screen.dart';
 import 'subscription_screen.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_network_image.dart';
 
 // Define your color constants (consistent with vendor registration)
 const Color deepNavyBlue = AppTheme.primaryNavy;
@@ -729,7 +729,7 @@ class _AccountScreenState extends State<AccountScreen>
             child: hasProfilePhoto
                 ? ClipOval(
                     child: SizedBox.expand(
-                      child: CachedNetworkImage(
+                      child: AppNetworkImage(
                         imageUrl: _profilePicUrl,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Center(child: fallback),

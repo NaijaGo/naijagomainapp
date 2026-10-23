@@ -1,7 +1,7 @@
 import '../../core/formatters/naira.dart';
 import 'dart:convert';
 
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -349,7 +349,7 @@ class _CartScreenState extends State<CartScreen> {
               },
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: CachedNetworkImage(
+                child: AppNetworkImage(
                   imageUrl: imageUrl,
                   width: 92,
                   height: 92,
@@ -1076,7 +1076,7 @@ class _RecentlyViewedProductCard extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(AppRadius.lg),
                   ),
-                  child: CachedNetworkImage(
+                  child: AppNetworkImage(
                     imageUrl: product.imageUrls.isNotEmpty
                         ? product.imageUrls.first
                         : 'https://placehold.co/400x300/CCCCCC/000000?text=No+Image',

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'app_network_image.dart';
 import 'package:flutter/material.dart';
 import '../constants.dart' show baseUrl;
 import '../models/product.dart';
@@ -140,7 +140,7 @@ class _RestaurantPhotoBannerState extends State<RestaurantPhotoBanner> {
                             left: constraints.maxWidth * .40,
                             child: Padding(
                               padding: const EdgeInsets.all(10),
-                              child: CachedNetworkImage(
+                              child: AppNetworkImage(
                                 imageUrl: RestaurantPhotoBanner.photoUrl(
                                   product,
                                 )!,

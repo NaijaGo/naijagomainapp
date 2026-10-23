@@ -9,9 +9,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../constants.dart';
 import '../../models/user.dart';
+import '../../widgets/app_network_image.dart';
 
 // Defined custom colors for consistency
 const Color deepNavyBlue = AppTheme.primaryNavy;
@@ -285,7 +285,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                         _pickedImage!,
                                         fit: BoxFit.cover,
                                       )
-                                    : CachedNetworkImage(
+                                    : AppNetworkImage(
                                         imageUrl: _currentProfilePicUrl,
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import '../constants.dart';
+import 'app_network_image.dart';
 
 class ProductVideoSection extends StatefulWidget {
   const ProductVideoSection({super.key, required this.productId, this.assetId});
@@ -122,12 +123,12 @@ class _ProductVideoSectionState extends State<ProductVideoSection> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Image.network(
-                        video['posterUrl'].toString(),
+                      AppNetworkImage(
+                        imageUrl: video['posterUrl'].toString(),
                         width: double.infinity,
                         height: 200,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
+                        errorWidget: (_, _, _) =>
                             Container(height: 200, color: Colors.black87),
                       ),
                       const CircleAvatar(

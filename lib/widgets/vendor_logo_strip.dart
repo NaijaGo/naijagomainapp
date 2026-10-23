@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'app_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../theme/app_theme.dart';
@@ -75,7 +75,7 @@ class VendorLogo extends StatelessWidget {
           border: Border.all(color: AppTheme.borderGrey),
         ),
         child: valid
-            ? CachedNetworkImage(
+            ? AppNetworkImage(
                 imageUrl: logoUrl!,
                 fit: BoxFit.contain,
                 placeholder: (_, _) => fallback(),

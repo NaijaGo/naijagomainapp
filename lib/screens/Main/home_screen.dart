@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter, lerpDouble;
 
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -1685,7 +1685,7 @@ class _HomeScreenState extends State<HomeScreen>
                       child: campaign.imageUrl.isNotEmpty
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(15),
-                              child: CachedNetworkImage(
+                              child: AppNetworkImage(
                                 imageUrl: campaign.imageUrl,
                                 fit: BoxFit.cover,
                                 errorWidget: (_, _, _) => const Icon(
@@ -3029,7 +3029,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildCarouselImage(HomeCarouselSlide slide) {
     if (slide.isRemoteImage) {
-      return CachedNetworkImage(
+      return AppNetworkImage(
         imageUrl: slide.imageUrl,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildCarouselImageFallback(isLoading: true),
@@ -3790,7 +3790,7 @@ class ProductListGrid extends StatelessWidget {
 //                   tag: heroTag,
 //                   child: ClipRRect(
 //                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-//                     child: CachedNetworkImage(
+//                     child: AppNetworkImage(
 //                       imageUrl: product.imageUrls.isNotEmpty
 //                           ? product.imageUrls[0]
 //                           : 'https://placehold.co/400x300/CCCCCC/000000?text=No+Image',
@@ -4047,7 +4047,7 @@ class ProductCard extends StatelessWidget {
                         ),
                         child: Stack(
                           children: [
-                            CachedNetworkImage(
+                            AppNetworkImage(
                               imageUrl: _resolvedImageUrl(product),
                               height: standardImageHeight,
                               width: double.infinity,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_network_image.dart';
 
 class ReviewPhotos extends StatelessWidget {
   const ReviewPhotos({super.key, required this.urls});
@@ -15,8 +16,8 @@ class ReviewPhotos extends StatelessWidget {
               onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close))),
         ]))),
         child: ClipRRect(borderRadius: BorderRadius.circular(10),
-          child: Image.network(url, width: 84, height: 84, fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => const SizedBox(
+          child: AppNetworkImage(imageUrl: url, width: 84, height: 84, fit: BoxFit.cover,
+            errorWidget: (context, url, error) => const SizedBox(
                 width: 84, height: 84, child: Icon(Icons.image_not_supported_outlined))))),
   ]);
 }

@@ -10,6 +10,7 @@ import '../../services/explore_service.dart';
 import 'explore_comments_screen.dart';
 import 'home_screen.dart' show ProductService;
 import 'product_detail_screen.dart';
+import '../../widgets/app_network_image.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key, this.canPublish = false, this.publisherLabel = 'Creator', this.loadProducts, this.loadFeed});
@@ -184,11 +185,11 @@ class _ExploreVideoFeedCardState extends State<ExploreVideoFeedCard> {
   Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
     if (_videoReady) FittedBox(fit: BoxFit.cover, child: SizedBox(width: _player.value.size.width, height: _player.value.size.height, child: VideoPlayer(_player)))
     else if (_videoFailed) const ColoredBox(color: AppTheme.deepNavy, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 44), SizedBox(height: 12), Text('This video is unavailable.', style: TextStyle(color: Colors.white70))])))
-    else if (widget.video.posterUrl != null) Image.network(widget.video.posterUrl!, fit: BoxFit.cover)
+    else if (widget.video.posterUrl != null) AppNetworkImage(imageUrl: widget.video.posterUrl!, fit: BoxFit.cover)
     else const ColoredBox(color: AppTheme.deepNavy, child: Center(child: CircularProgressIndicator(color: Colors.white70))),
     GestureDetector(behavior: HitTestBehavior.opaque, onTap: _videoReady ? () { if (_player.value.isPlaying) { _player.pause(); } else { _player.play(); } } : null),
     Positioned(left: 18, right: 90, bottom: 28, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [CircleAvatar(radius: 18, backgroundImage: widget.video.creatorAvatarUrl == null ? null : NetworkImage(widget.video.creatorAvatarUrl!), child: widget.video.creatorAvatarUrl == null ? const Icon(Icons.storefront, size: 19) : null), const SizedBox(width: 9), Text(widget.video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))]),
+      Row(children: [CircleAvatar(radius: 18, backgroundImage: widget.video.creatorAvatarUrl == null ? null : appNetworkImageProvider(context, widget.video.creatorAvatarUrl!, logicalSize: 36), child: widget.video.creatorAvatarUrl == null ? const Icon(Icons.storefront, size: 19) : null), const SizedBox(width: 9), Text(widget.video.creatorName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))]),
       const SizedBox(height: 8), Text(widget.video.caption, style: const TextStyle(color: Colors.white, fontSize: 14)),
       if (widget.video.productName != null) Padding(padding: const EdgeInsets.only(top: 12), child: ActionChip(avatar: const Icon(Icons.shopping_bag_outlined, size: 17), label: Text(widget.video.productName!), onPressed: widget.video.productId != null && widget.onProductTap != null ? () => widget.onProductTap!(widget.video.productId!) : null)),
     ])),

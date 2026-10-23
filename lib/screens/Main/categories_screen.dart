@@ -1,6 +1,6 @@
 import '../../theme/app_colors.dart';
 import '../../services/catalog_category_service.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -554,7 +554,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         },
       );
     } else {
-      return CachedNetworkImage(
+      return AppNetworkImage(
         imageUrl: imagePath,
         width: width,
         height: height,

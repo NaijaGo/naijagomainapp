@@ -1,5 +1,5 @@
 import '../core/formatters/naira.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'app_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/deal.dart';
 import '../services/deals_service.dart';
@@ -97,7 +97,7 @@ class _DealCardState extends State<DealCard> {
                                 size: 36,
                               ),
                             )
-                          : CachedNetworkImage(
+                          : AppNetworkImage(
                               imageUrl: deal.imageUrls.first,
                               fit: BoxFit.cover,
                               placeholder: (_, _) =>

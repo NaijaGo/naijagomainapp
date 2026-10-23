@@ -4,7 +4,6 @@ import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
@@ -13,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants.dart';
 import '../../models/product.dart'; // Import Product model to get product details
 import '../../widgets/tech_glow_background.dart';
+import '../../widgets/app_network_image.dart';
 
 class WriteReviewScreen extends StatefulWidget {
   final Product product; // The product for which the review is being written
@@ -211,7 +211,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                         ListTile(
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
+                            child: AppNetworkImage(
                               imageUrl: widget.product.imageUrls.isNotEmpty
                                   ? widget.product.imageUrls[0]
                                   : 'https://placehold.co/60x60/CCCCCC/000000?text=No+Image',

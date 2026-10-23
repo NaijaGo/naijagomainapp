@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'app_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/home_carousel_slide.dart';
 import '../services/deals_service.dart';
@@ -42,7 +42,7 @@ class DealsHomeSection extends StatelessWidget {
               aspectRatio: 2.6,
               child: ExcludeSemantics(
                 child: slide?.isRemoteImage == true
-                    ? CachedNetworkImage(
+                    ? AppNetworkImage(
                         imageUrl: slide!.imageUrl,
                         fit: BoxFit.contain,
                         placeholder: (_, _) => fallback(),

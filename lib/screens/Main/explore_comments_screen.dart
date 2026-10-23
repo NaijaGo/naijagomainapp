@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/explore_service.dart';
+import '../../widgets/app_network_image.dart';
 
 Future<String?> chooseExploreReport(BuildContext context) => showModalBottomSheet<String>(
   context: context,
@@ -161,7 +162,7 @@ class _ExploreCommentsPanelState extends State<_ExploreCommentsPanel> {
                   final user = comment['user'] is Map ? Map<String, dynamic>.from(comment['user']) : <String, dynamic>{};
                   final avatar = user['avatarUrl']?.toString();
                   return ListTile(
-                    leading: CircleAvatar(backgroundImage: avatar == null ? null : NetworkImage(avatar), child: avatar == null ? const Icon(Icons.person_outline) : null),
+                    leading: CircleAvatar(backgroundImage: avatar == null ? null : appNetworkImageProvider(context, avatar, logicalSize: 40), child: avatar == null ? const Icon(Icons.person_outline) : null),
                     title: Row(children: [Expanded(child: Text(user['name']?.toString() ?? 'NaijaGo user', style: const TextStyle(fontWeight: FontWeight.w700))), Text(_timestamp(comment['createdAt']), style: Theme.of(context).textTheme.bodySmall)]),
                     subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text(comment['text']?.toString() ?? '')),
                     trailing: comment['isMine'] == true

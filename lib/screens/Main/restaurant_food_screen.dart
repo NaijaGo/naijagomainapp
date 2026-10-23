@@ -1,6 +1,6 @@
 import '../../core/formatters/naira.dart';
 import '../../theme/app_colors.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
@@ -774,7 +774,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                   ),
                   child: Stack(
                     children: [
-                      CachedNetworkImage(
+                      AppNetworkImage(
                         imageUrl: _imageUrl(product),
                         height: 128,
                         width: double.infinity,
@@ -1013,7 +1013,7 @@ class _RestaurantFoodScreenState extends State<RestaurantFoodScreen> {
                 ),
                 child: Stack(
                   children: [
-                    CachedNetworkImage(
+                    AppNetworkImage(
                       imageUrl: _imageUrl(lead),
                       height: 138,
                       width: double.infinity,

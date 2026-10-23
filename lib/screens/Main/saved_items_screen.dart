@@ -4,7 +4,7 @@ import '../../core/formatters/naira.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/visible_back_button.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/app_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -229,7 +229,7 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(15),
                               ),
-                              child: CachedNetworkImage(
+                              child: AppNetworkImage(
                                 imageUrl: product.imageUrls.isNotEmpty
                                     ? product.imageUrls[0]
                                     : 'https://placehold.co/200x150/CCCCCC/000000?text=No+Image',
